@@ -10,19 +10,23 @@ Small independent mods for [Herdr App](https://github.com/herdrdev/herdr-app). C
 
 ## Quick install
 
-Install [Herdr App](https://github.com/herdrdev/herdr-app#install) first. Run **on the computer hosting the Herdr App GUI** (not just a remote herdr-core server). From this repository folder:
+Install [Herdr App](https://github.com/herdrdev/herdr-app#install) first. Run **on the computer hosting the Herdr App GUI** (not just a remote herdr-core server). **No clone or Python required.**
 
-**macOS / Linux**
+**macOS / Linux — one line:**
 
 ~~~sh
-sh scripts/install.sh
+curl -fsSL https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/bootstrap.sh | sh
 ~~~
 
-**Windows PowerShell**
+**Windows PowerShell — one line:**
 
 ~~~powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
+irm https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/bootstrap.ps1 | iex
 ~~~
+
+These commands download a temporary source archive, install the files, and delete the temporary archive. The scripts are [readable here](scripts/bootstrap.sh) and [here](scripts/bootstrap.ps1); review any downloaded script before execution. Requires curl and tar (macOS/Linux) or built-in PowerShell download/ZIP commands (Windows).
+
+**If you already downloaded the repository**, run `sh scripts/install.sh` on macOS/Linux or `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1` on Windows.
 
 No Python, Node, jq, sudo, or additional dependency required for installation. Both scripts install the Mod and a ready-made **personal layout**, leaving all existing Herdr layouts untouched.
 
@@ -32,19 +36,7 @@ No Python, Node, jq, sudo, or additional dependency required for installation. B
 herdr-app do layout.switch --name project-open
 ~~~
 
-### After publishing to GitHub
-
-The clone-and-install shell commands will be:
-
-~~~sh
-git clone https://github.com/YOUR-ACCOUNT/herdr-mods.git && cd herdr-mods && sh scripts/install.sh
-~~~
-
-~~~powershell
-git clone https://github.com/YOUR-ACCOUNT/herdr-mods.git; if ($LASTEXITCODE -eq 0) { Set-Location herdr-mods; powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 }
-~~~
-
-**Replace YOUR-ACCOUNT with the actual GitHub owner**. No remote repository has been published yet. Downloading and extracting a ZIP then running the installer also works.
+The source is available at **https://github.com/hheei/herdr-mods**. Direct-install commands always use the repository's `main` branch; inspect the script first or use a pinned release archive when you need a reproducible build.
 
 ### Update
 
