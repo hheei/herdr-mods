@@ -1,0 +1,28 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  shell-and-mod:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Static checks
+        run: |
+          node --check mods/project-open/main.js
+          node --check tests/project-open.test.cjs
+          node -e "const f=require('fs'); JSON.parse(f.readFileSync('mods/project-open/mod.json')); JSON.parse(f.readFileSync('layouts/project-open.json'))"
+          sh -n scripts/install.sh
+          sh -n scripts/install-mod.sh
+      - name: Behavior tests
+        run: node tests/project-open.test.cjs
+      - name: Installer test
+        run: sh tests/install-smoke.sh
+  powershell-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Installer test
+        shell: pwsh
+        run: ./tests/install-smoke.ps1

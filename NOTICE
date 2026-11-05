@@ -1,0 +1,9 @@
+Herdr Mods
+Copyright 2026 Herdr Mods contributors
+
+This project is independent of and not endorsed by the Herdr maintainers.
+
+layouts/project-open.json is adapted from herdrdev/herdr-app/defaults/layouts/main.json under Apache License 2.0.
+Source: https://github.com/herdrdev/herdr-app/blob/master/defaults/layouts/main.json
+License: https://github.com/herdrdev/herdr-app/blob/master/LICENSE
+Change: inserted the project-open sidebar block and normalized formatting.
