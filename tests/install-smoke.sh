@@ -31,4 +31,21 @@ unset HERDR_APP_HOME XDG_CONFIG_HOME
 mkdir -p "$tmp/newhome"
 HOME="$tmp/newhome" sh "$tmp/repo/scripts/install.sh" >/dev/null
 [ -f "$tmp/newhome/.config/herdr-app/layouts/herdr-mods.json" ]
-echo 'PASS: unset env, embedded status, two mods, idempotence and single .bak backups'
+mkdir -p "$tmp/src/herdr-mods-main" "$tmp/pipehome"
+cp -R "$tmp/repo/." "$tmp/src/herdr-mods-main/"
+tar -czf "$tmp/src.tgz" -C "$tmp/src" herdr-mods-main
+HERDR_APP_HOME="$tmp/pipehome" HERDR_MODS_ARCHIVE_URL="file://$tmp/src.tgz" \
+  sh < "$tmp/repo/scripts/install.sh" >/dev/null
+[ -f "$tmp/pipehome/mods/project-open/main.js" ]
+mkdir -p "$tmp/plainhome"
+HERDR_APP_HOME="$tmp/plainhome" sh "$repo/scripts/install.sh" --no-layout >/dev/null
+[ -f "$tmp/plainhome/mods/project-open/main.js" ]
+[ ! -e "$tmp/plainhome/layouts/herdr-mods.json" ]
+mkdir -p "$tmp/customhome/layouts"
+sed 's/"mod": "workspace-status"/"mod": "my-own-status"/' "$repo/layouts/herdr-mods.json" > "$tmp/customhome/layouts/herdr-mods.json"
+cp "$tmp/customhome/layouts/herdr-mods.json" "$tmp/custom-before.json"
+HERDR_APP_HOME="$tmp/customhome" sh "$repo/scripts/install.sh" >/dev/null 2>&1
+[ -f "$tmp/customhome/mods/project-open/main.js" ]
+cmp -s "$tmp/custom-before.json" "$tmp/customhome/layouts/herdr-mods.json"
+[ ! -e "$tmp/customhome/layouts/herdr-mods.json.bak" ]
+echo 'PASS: unset env, embedded status, two mods, idempotence, single .bak backups, piped one-liner, no-layout, custom layout untouched'

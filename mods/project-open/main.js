@@ -21,24 +21,9 @@ function lastAction() {
 
 function target() {
   const f = focused();
-  if (!f) return null;
   const s = spaces().find((space) => space.id === f.space);
-  if (!s) return null;
   const cwd = f.cwd || s.folder;
-  if (!cwd || !cwd.trim()) return null;
-  return { cwd, machine: s.machine };
-}
-
-function remoteUri(machine, cwd) {
-  // VS Code accepts vscode-remote URLs. Encode host/path components, not '/'.
-  const host = encodeURIComponent(machine);
-  const path = cwd.split("/").map(encodeURIComponent).join("/");
-  return `vscode://vscode-remote/ssh-remote+${host}${path.startsWith("/") ? path : "/" + path}`;
-}
-
-function localUri(cwd) {
-  const path = cwd.split("/").map(encodeURIComponent).join("/");
-  return `vscode://file${path.startsWith("/") ? path : "/" + path}`;
+  return cwd ? { cwd, machine: s.machine } : null;
 }
 
 async function launch(action, t) {
@@ -52,34 +37,16 @@ async function launch(action, t) {
       });
       return;
     }
-    const argv = platform === "macos" ? ["open", [t.cwd]]
-      : platform === "windows" ? ["explorer.exe", [t.cwd]]
-      : ["xdg-open", [t.cwd]];
-    const result = await exec(argv[0], argv[1]);
-    if (result.code !== 0) throw new Error(result.stderr || `${argv[0]} exited with ${result.code}`);
+    const opener = platform === "macos" ? "open"
+      : platform === "windows" ? "explorer.exe"
+      : "xdg-open";
+    const result = await exec(opener, [t.cwd]);
+    if (result.code !== 0) throw new Error(result.stderr || `${opener} exited with ${result.code}`);
     return;
   }
-
-  // First try VS Code's CLI, which uses argv (no shell interpolation) and
-  // properly supports Remote SSH without relying on URL scheme registration.
-  const args = t.machine
-    ? ["--remote", `ssh-remote+${t.machine}`, t.cwd]
-    : [t.cwd];
-  try {
-    const result = await exec("code", args);
-    if (result.code === 0) return;
-  } catch (_) {
-    // On macOS/Linux the CLI may not be installed in PATH. Try URL scheme.
-  }
-  const uri = t.machine ? remoteUri(t.machine, t.cwd) : localUri(t.cwd);
-  if (platform === "windows") {
-    throw new Error("VS Code 'code' CLI was unavailable. Add it to PATH.");
-  }
-  const opener = platform === "macos" ? "open" : "xdg-open";
-  const result = await exec(opener, [uri]);
-  if (result.code !== 0) {
-    throw new Error(result.stderr || `${opener} cannot open VS Code URI`);
-  }
+  const args = t.machine ? ["--remote", `ssh-remote+${t.machine}`, t.cwd] : [t.cwd];
+  const result = await exec("code", args);
+  if (result.code !== 0) throw new Error(result.stderr || `code exited with ${result.code}`);
 }
 
 async function openAction(action) {
@@ -101,7 +68,7 @@ export default class ProjectOpen extends View {
   // Keep the official workspace-status content and layout, with a single
   // extra icon inside the same status bar (no separate layout block).
   hint() {
-    const mac = window()?.platform === "macos";
+    const mac = window().platform === "macos";
     const mod = { cmd: mac ? "⌘" : "Ctrl+", ctrl: mac ? "⌃" : "Ctrl+", shift: mac ? "⇧" : "Shift+", alt: mac ? "⌥" : "Alt+", option: mac ? "⌥" : "Alt+" };
     const b = keys().find((k) => k.section === "global" && k.action === "app.palette");
     const parts = b && b.keys.endsWith("--") ? [...b.keys.slice(0, -2).split("-"), "-"] : b?.keys.split("-");

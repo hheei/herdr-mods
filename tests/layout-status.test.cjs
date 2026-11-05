@@ -56,4 +56,13 @@ work.children[idx] = {
   ],
 };
 checkStatus(patch(JSON.stringify(oldSplit, null, 2) + "\n"));
-console.log("PASS: single status block, old split-row/sidebar migration, idempotence, other mods.");
+// A customized status bar is left byte-identical instead of being rewritten.
+const custom = JSON.parse(base);
+const customWork = custom.children.find(x => x.id === "work");
+customWork.children.find(x => x.id === "status").content.mod = "my-own-status";
+const customText = JSON.stringify(custom, null, 2) + "\n";
+const customResult = spawnSync("awk", ["-f", awk], { input: customText, encoding: "utf8" });
+assert.equal(customResult.status, 3, customResult.stderr);
+assert.equal(customResult.stdout, customText, "custom status layout must be untouched");
+
+console.log("PASS: single status block, old split-row/sidebar migration, idempotence, other mods, custom layout untouched.");

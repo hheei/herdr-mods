@@ -15,10 +15,8 @@ jobs:
         run: |
           node --check mods/project-open/main.js
           node --check tests/project-open.test.cjs
-          node -e "const f=require('fs'); JSON.parse(f.readFileSync('mods/project-open/mod.json')); JSON.parse(f.readFileSync('layouts/project-open.json'))"
+          node -e "const f=require('fs'); JSON.parse(f.readFileSync('mods/project-open/mod.json')); JSON.parse(f.readFileSync('layouts/herdr-mods.json'))"
           sh -n scripts/install.sh
-          sh -n scripts/install-mod.sh
-          sh -n scripts/bootstrap.sh
           awk -f scripts/patch-status.awk layouts/herdr-mods.json > /dev/null
       - name: Behavior and layout tests
         run: |

@@ -1,15 +1,17 @@
 # Patch Project Open into the existing status block without adding layout space.
-# Handles stock status block and the old split-row implementation; also removes
-# the old sidebar button. Fails closed if custom status structure is unknown.
+# Handles the stock status block and the old split-row implementation; also
+# removes the old sidebar button. When the status area is customized the layout
+# is printed unchanged and the exit status is 3, so existing layouts are safe.
 function brace_delta(line, x, a, b) {
   x=line; a=gsub(/\{/, "", x)
   x=line; b=gsub(/\}/, "", x)
   return a-b
 }
-function fail(message) {
+function skip(message) {
   print "Status integration: " message > "/dev/stderr"
-  bad=1
+  skipped=1
 }
+function bail(   i) { for (i=1; i<=NR; i++) print lines[i]; exit 3 }
 function indent(line, x) { x=line; sub(/[^ \t].*$/, "", x); return x }
 { lines[NR]=$0 }
 END {
@@ -18,7 +20,7 @@ END {
     if (lines[i] ~ /^[ \t]*"id"[ \t]*:[ \t]*"status"[ \t]*,?[ \t]*$/) {
       count++
       start=i-1
-      if (lines[start] !~ /^[ \t]*\{[ \t]*$/) {fail("unsupported status opening"); break}
+      if (lines[start] !~ /^[ \t]*\{[ \t]*$/) {skip("unsupported status opening"); break}
       depth=0
       for (j=start; j<=NR; j++) {
         depth+=brace_delta(lines[j])
@@ -26,13 +28,13 @@ END {
       }
     }
   }
-  if (count!=1 || !stop) fail("expected exactly one complete status node")
-  if (bad) exit 2
+  if (count!=1 || !stop) skip("expected exactly one complete status node")
+  if (skipped) bail()
 
   oldSidebarStart=oldSidebarEnd=0
   for (i=1; i<start; i++) {
     if (lines[i] ~ /"id"[ \t]*:[ \t]*"project-open"/) {
-      if (oldSidebarStart) {fail("multiple old sidebar blocks"); break}
+      if (oldSidebarStart) {skip("multiple old sidebar blocks"); break}
       if (lines[i] ~ /^[ \t]*\{"id":"project-open"/) {
         oldSidebarStart=oldSidebarEnd=i
       } else if (i>1 && lines[i-1] ~ /^[ \t]*\{[ \t]*$/) {
@@ -42,11 +44,11 @@ END {
           depth+=brace_delta(lines[j])
           if (depth==0) {oldSidebarEnd=j; break}
         }
-        if (!oldSidebarEnd) fail("invalid old sidebar block")
-      } else fail("unrecognized old sidebar button")
+        if (!oldSidebarEnd) skip("invalid old sidebar block")
+      } else skip("unrecognized old sidebar button")
     }
   }
-  if (bad) exit 2
+  if (skipped) bail()
 
   isRow=isBlock=hasOriginal=hasProject=hasWorkspace=0
   for (i=start; i<=stop; i++) {
@@ -57,13 +59,11 @@ END {
     if (lines[i] ~ /"mod"[ \t]*:[ \t]*"workspace-status"/) hasWorkspace=1
   }
   if (isRow) {
-    if (!hasOriginal || !hasProject || !hasWorkspace) {
-      fail("cannot collapse customized status row safely")
-    }
+    if (!hasOriginal || !hasProject || !hasWorkspace) skip("customized status row left unchanged")
   } else if (!isBlock || (!hasWorkspace && !hasProject)) {
-    fail("unexpected status content; expected workspace-status block")
+    skip("status bar is customized; leaving it unchanged")
   }
-  if (bad) exit 2
+  if (skipped) bail()
 
   for (i=1; i<=NR; i++) {
     if (oldSidebarStart && i>=oldSidebarStart && i<=oldSidebarEnd) continue

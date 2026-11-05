@@ -28,7 +28,40 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
 
 This installs the Mod under **~/.config/herdr-app/mods/project-open/** and creates/patches the shared personal layout **~/.config/herdr-app/layouts/herdr-mods.json**. It backs up existing layouts before changes, does not duplicate the button, and never modifies the shipped main layout. Select **herdr-mods** in the layout picker once; future Mods are added to the same layout.
 
-To patch an existing personal layout instead, run `sh scripts/install.sh --layout=my-layout` or PowerShell `-Layout my-layout`. The installer backs up the personal Layout to a single `*.bak` file, then **changes the `status` block to use the Project Open status renderer**, which includes the original status content plus the icon. Older Sidebar entries and split-row status versions are migrated automatically. The original shipped `workspace-status` mod is not modified. Clone a shipped layout first if needed:
+The installer looks before it writes. An already-integrated status bar is left alone, and a status bar that has been customized (any `content.mod` other than the stock `workspace-status`) is left **byte-identical**: the Mod files are still installed and you are asked to wire it in by hand. Sidebar Mods are only appended when their id is absent, so existing entries and file formatting survive.
+
+### Install without touching any layout
+
+Add `--no-layout` (shell) or `-NoLayout` (PowerShell) to copy the Mod files only, then wire it into your own layout by hand.
+
+~~~sh
+sh scripts/install.sh --no-layout
+~~~
+
+~~~powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -NoLayout
+~~~
+
+The Mod **replaces** the status bar renderer, so change the existing `status` node instead of adding a second block. In **~/.config/herdr-app/layouts/your-layout.json**, inside the `work` column, the node looks like this:
+
+~~~json
+{
+  "id": "status",
+  "type": "block",
+  "size": { "px": 28 },
+  "content": { "mod": "workspace-status" }
+}
+~~~
+
+Change one line:
+
+~~~json
+  "content": { "mod": "project-open" }
+~~~
+
+Keep a copy of the file first, switch to that layout in Herdr App, then validate with `herdr-app check`. Machine, branch, agent count and the Commands hint stay because the Mod renders them itself. A sidebar entry also works, but the whole status row then renders inside the sidebar.
+
+The installer backs up the personal Layout to a single `*.bak` file, then **changes the `status` block to use the Project Open status renderer**, which includes the original status content plus the icon. To keep a different personal layout, install with `--no-layout` and see the manual section below. Older Sidebar entries and split-row status versions are migrated automatically. The original shipped `workspace-status` mod is not modified. Clone a shipped layout first if needed:
 
 ~~~sh
 herdr-app do layout.clone '{"name":"main","as":"my-project-layout"}'
@@ -44,12 +77,12 @@ The target is the focused Terminal's **cwd**, falling back to the Space folder. 
 
 | Space | VS Code | Finder / file manager |
 | --- | --- | --- |
-| Local | code command, or VS Code URL scheme on macOS/Linux | macOS open, Linux xdg-open, Windows explorer.exe |
+| Local | `code` on PATH (install it via VS Code: *Shell Command: Install 'code' command in PATH*) | macOS open, Linux xdg-open, Windows explorer.exe |
 | Remote SSH | Local VS Code Remote SSH, using Herdr machine name and remote cwd | Warn; cannot automatically open unmounted remote paths |
 
 For remote VS Code, install the **Remote - SSH** extension and configure an SSH Host alias matching the Herdr Machine name on the local computer. The Mod calls Herdr's official exec() without a remote on option, so it launches the GUI application **locally**.
 
-On macOS, VS Code offers **Shell Command: Install 'code' command in PATH**. URL fallback requires the VS Code URL handler to be registered.
+If the `code` command is missing, the click fails with a notification; no URL-scheme fallback is attempted.
 
 ## Preference and troubleshooting
 
@@ -67,7 +100,7 @@ The test suite checks simulated behavior, but actual Herdr App GUI rendering and
 
 ## Update/uninstall
 
-Update via **sh scripts/install.sh project-open --update** or PowerShell install.ps1 -Update. Existing Mod is backed up to `project-open.bak`, and the shared layout is updated only when needed, including migrating the old Sidebar or split-row placement. The installer also cleans up its older timestamped backup files after a successful update. To uninstall, switch to another layout and remove the Mod directory; to keep your shared personal layout while removing its button, restore a pre-install Layout backup or edit the personal Layout. This does not affect running herdr-core sessions.
+Update via **sh scripts/install.sh project-open --update** or PowerShell install.ps1 -Update. Existing Mod is backed up to `project-open.bak`, and the shared layout is updated only when needed, including migrating the old Sidebar or split-row placement. To uninstall, switch to another layout and remove the Mod directory; to keep your shared personal layout while removing its button, restore a pre-install Layout backup or edit the personal Layout. This does not affect running herdr-core sessions.
 
 ## Upstream documentation
 
