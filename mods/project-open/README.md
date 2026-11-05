@@ -1,14 +1,14 @@
 # Project Open
 
-Minimal one-icon launcher for Herdr App.
+Minimal one-icon launcher for Herdr App, positioned at the **right end of the bottom Status Bar** (green rectangle in the screenshot). The existing status bar information is kept.
 
 | Gesture | Action |
 | --- | --- |
 | Left-click | Open the focused Terminal directory with the last chosen tool |
 | Right-click | Select Open in VS Code or Open in Finder (File Manager on Linux/Windows) |
-| Choose tool | Launch immediately, remember globally, update icon and preserve across app restarts |
+| Choose tool | **Only** remember the default and update its icon. Click the main icon later to open. |
 
-Initial choice is **VS Code**. Icon size is 30×30 pixels with no permanent label or arrow. Long-press is not included because Herdr's documented GPUI API does not guarantee a long-press recognizer.
+Initial choice is **VS Code**. The button is 24×24 px inside a 32 px Status Bar slot, with no permanent label, arrow, tooltip, or hover highlight. Long-press is not included because Herdr's documented GPUI API does not guarantee a long-press recognizer.
 
 ## Install
 
@@ -28,17 +28,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
 
 This installs the Mod under **~/.config/herdr-app/mods/project-open/** and creates/patches the shared personal layout **~/.config/herdr-app/layouts/herdr-mods.json**. It backs up existing layouts before changes, does not duplicate the button, and never modifies the shipped main layout. Select **herdr-mods** in the layout picker once; future Mods are added to the same layout.
 
-To patch an existing custom sidebar layout instead, run `sh scripts/install.sh --layout=my-layout` or PowerShell `-Layout my-layout`; the installer will back it up and insert the button. You can still manually use [the example block](../../examples/sidebar-project-open.json). Clone a shipped layout first if needed:
+To patch an existing personal layout instead, run `sh scripts/install.sh --layout=my-layout` or PowerShell `-Layout my-layout`. The installer backs it up and **wraps the existing `status` block in a row**, keeping the original `workspace-status` display to the left and inserting the 32 px Project Open block on the right. It also migrates the previous Project Open Sidebar entry to Status Bar. Clone a shipped layout first if needed:
 
 ~~~sh
 herdr-app do layout.clone '{"name":"main","as":"my-project-layout"}'
 ~~~
 
-Then insert this block above sidebar-footer:
-
-~~~json
-{"id":"project-open","type":"block","size":{"px":38},"content":{"mod":"project-open"}}
-~~~
+There is no need to modify JSON by hand. The installer performs the Status Bar patch and takes a backup before each change.
 
 Do **not** edit Herdr's shipped layouts. Shipped files are rewritten on app startup and update.
 
@@ -71,7 +67,7 @@ The test suite checks simulated behavior, but actual Herdr App GUI rendering and
 
 ## Update/uninstall
 
-Update via **sh scripts/install.sh project-open --update** or PowerShell install.ps1 -Update. Existing Mod is backed up, and the shared layout is patched only if the button is missing. To remove, switch to a different layout then remove mods/project-open and, optionally, layouts/project-open.json from Herdr App Home. This does not affect running herdr-core sessions.
+Update via **sh scripts/install.sh project-open --update** or PowerShell install.ps1 -Update. Existing Mod is backed up, and the shared layout is updated only when needed, including migrating the old Sidebar placement. To uninstall, switch to another layout and remove the Mod directory; to keep your shared personal layout while removing its button, restore a pre-install Layout backup or edit the personal Layout. This does not affect running herdr-core sessions.
 
 ## Upstream documentation
 

@@ -19,8 +19,11 @@ jobs:
           sh -n scripts/install.sh
           sh -n scripts/install-mod.sh
           sh -n scripts/bootstrap.sh
-      - name: Behavior tests
-        run: node tests/project-open.test.cjs
+          awk -f scripts/patch-status.awk layouts/herdr-mods.json > /dev/null
+      - name: Behavior and layout tests
+        run: |
+          node tests/project-open.test.cjs
+          node tests/layout-status.test.cjs
       - name: Installer test
         run: sh tests/install-smoke.sh
   powershell-installer:

@@ -11,4 +11,4 @@ mkdir -p "$tmp/extracted"
 tar -xzf "$tmp/source.tar.gz" -C "$tmp/extracted"
 installer="$tmp/extracted/herdr-mods-main/scripts/install.sh"
 [ -f "$installer" ] || { echo "Unexpected source archive" >&2; exit 1; }
-sh "$installer" project-open
+sh "$installer" project-open --update

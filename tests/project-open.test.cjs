@@ -68,6 +68,8 @@ async function main() {
   const mod = new box.ProjectOpen();
   let button = mod.render(cx);
   assert.equal(button.kids[0].icon, "mods/project-open/vscode.svg");
+  assert.equal(fullSource.includes(".tooltip("), false, "main icon should not show hover tooltips");
+  assert.equal(fullSource.includes(".hover((s) => s.bg(t.hover).text_color(t.foreground))"), false, "main icon should not show a hover highlight");
   button.handlers.on_click(null, cx);
   await drain();
   assert.ok(calls.some((x) => Array.isArray(x) && x[0] === "code" && x[1][0] === "/home/user/project with spaces"));
@@ -83,12 +85,18 @@ async function main() {
   menu.kids[1].handlers.on_click(null, cx); // file manager
   await drain();
   assert.equal(preferences["project-open.last-action"], "finder");
-  assert.ok(calls.some((x) => Array.isArray(x) && x[0] === "xdg-open"));
+  assert.equal(calls.some((x) => Array.isArray(x) && x[0] === "xdg-open"), false,
+    "right-click choice must not launch an application");
 
   state.props = {};
   button = mod.render(cx);
   assert.equal(button.kids[0].icon, "mods/project-open/finder.svg");
 
+  calls.length = 0;
+  button.handlers.on_click(null, cx);
+  await drain();
+  assert.ok(calls.some((x) => Array.isArray(x) && x[0] === "xdg-open"),
+    "left click should launch selected file manager");
   calls.length = 0;
   state.spaces = [{ id: "s1", folder: "/home/user", machine: "gpu-server" }];
   button.handlers.on_click(null, cx);
@@ -99,6 +107,12 @@ async function main() {
   calls.length = 0;
   state.props = { menu: true, overlay: "overlay-2" };
   mod.render(cx).kids[0].handlers.on_click(null, cx); // VS Code remote
+  await drain();
+  assert.equal(calls.some((x) => Array.isArray(x) && x[0] === "code"), false,
+    "choosing VS Code in context menu should not launch");
+  assert.equal(preferences["project-open.last-action"], "vscode");
+  state.props = {};
+  mod.render(cx).handlers.on_click(null, cx);
   await drain();
   assert.ok(calls.some((x) => Array.isArray(x) && x[0] === "code"
     && x[1][0] === "--remote" && x[1][1] === "ssh-remote+gpu-server"));

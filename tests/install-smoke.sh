@@ -6,6 +6,7 @@ trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 export HERDR_APP_HOME="$tmp/home"
 mkdir -p "$tmp/repo/mods/another-mod" "$tmp/repo/layouts" "$tmp/repo/scripts"
 cp "$repo/scripts/install.sh" "$tmp/repo/scripts/install.sh"
+cp "$repo/scripts/patch-status.awk" "$tmp/repo/scripts/patch-status.awk"
 cp "$repo/layouts/herdr-mods.json" "$tmp/repo/layouts/herdr-mods.json"
 cp -R "$repo/mods/project-open" "$tmp/repo/mods/"
 printf '%s\n' 'export default class Another {}' > "$tmp/repo/mods/another-mod/main.js"

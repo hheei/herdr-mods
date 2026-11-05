@@ -21,13 +21,15 @@ try {
   & $installer -Mod another-mod
   $layout = Join-Path $env:HERDR_APP_HOME 'layouts/herdr-mods.json'
   $json = Get-Content -LiteralPath $layout -Raw | ConvertFrom-Json
-  $ids = @($json.children | Where-Object id -eq 'sidebar' | ForEach-Object { $_.children.id })
-  if (@($ids | Where-Object { $_ -eq 'project-open' }).Count -ne 1) { throw 'project-open duplicate/missing' }
-  if (@($ids | Where-Object { $_ -eq 'another-mod' }).Count -ne 1) { throw 'another-mod duplicate/missing' }
+  $sidebarIds = @($json.children | Where-Object id -eq 'sidebar' | ForEach-Object { $_.children.id })
+  $statusIds = @($json.children | Where-Object id -eq 'work' | ForEach-Object { $_.children | Where-Object id -eq 'status' | ForEach-Object { $_.children.id } })
+  if (@($statusIds | Where-Object { $_ -eq 'project-open' }).Count -ne 1) { throw 'project-open missing from status bar' }
+  if (@($sidebarIds | Where-Object { $_ -eq 'another-mod' }).Count -ne 1) { throw 'another-mod duplicate/missing' }
+  if (@($sidebarIds | Where-Object { $_ -eq 'project-open' }).Count -ne 0) { throw 'project-open still in sidebar' }
   & $installer -Update
   $json = Get-Content -LiteralPath $layout -Raw | ConvertFrom-Json
-  $ids = @($json.children | Where-Object id -eq 'sidebar' | ForEach-Object { $_.children.id })
-  if (@($ids | Where-Object { $_ -eq 'project-open' }).Count -ne 1) { throw 'duplicated on update' }
+  $statusIds = @($json.children | Where-Object id -eq 'work' | ForEach-Object { $_.children | Where-Object id -eq 'status' | ForEach-Object { $_.children.id } })
+  if (@($statusIds | Where-Object { $_ -eq 'project-open' }).Count -ne 1) { throw 'duplicated on update' }
   if (@(Get-ChildItem (Join-Path $env:HERDR_APP_HOME 'layouts') -Filter 'herdr-mods.json.bak-*').Count -lt 2) { throw 'missing backups' }
   Write-Host 'PASS: PowerShell multi-mod layout and backups'
 } finally {

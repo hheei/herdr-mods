@@ -9,7 +9,7 @@ try {
   Expand-Archive -LiteralPath $zip -DestinationPath (Join-Path $tmp 'extracted')
   $installer = Join-Path $tmp 'extracted/herdr-mods-main/scripts/install.ps1'
   if (!(Test-Path -LiteralPath $installer)) { throw "Unexpected source archive" }
-  & $installer -Mod project-open
+  & $installer -Mod project-open -Update
 } finally {
   Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }

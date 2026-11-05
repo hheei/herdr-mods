@@ -27,29 +27,76 @@ if (!(Test-Path -LiteralPath $layoutDst)) {
   Copy-Item -LiteralPath $base -Destination $layoutDst
   Write-Host "Created personal layout: $layoutDst"
 }
-# JSON-aware patch preserves existing layout nodes; fail closed if target missing.
+# JSON-aware patching; preserve the original status display and existing mods.
 $data = Get-Content -LiteralPath $layoutDst -Raw | ConvertFrom-Json
 $sidebar = @($data.children | Where-Object { $_.id -eq 'sidebar' })
 if ($sidebar.Count -ne 1) { throw "Expected exactly one sidebar in $layoutDst" }
-$children = @($sidebar[0].children)
-if (@($children | Where-Object { $_.id -eq $Mod }).Count -eq 0) {
-  $footer = @($children | Where-Object { $_.id -eq 'sidebar-footer' })
-  if ($footer.Count -ne 1) { throw "Cannot find unique sidebar-footer; original preserved." }
-  $newChildren = @()
-  foreach ($child in $children) {
-    if ($child.id -eq 'sidebar-footer') {
-      $newChildren += [pscustomobject]@{
-        id = $Mod
-        type = 'block'
-        size = [pscustomobject]@{ px = 38 }
-        content = [pscustomobject]@{ mod = $Mod }
-      }
-    }
-    $newChildren += $child
+$changed = $false
+if ($Mod -eq 'project-open') {
+  # Migrate earlier project-open releases from the sidebar.
+  $kept = @($sidebar[0].children | Where-Object { $_.id -ne $Mod })
+  if ($kept.Count -ne @($sidebar[0].children).Count) {
+    $sidebar[0].children = $kept
+    $changed = $true
   }
-  $sidebar[0].children = $newChildren
+  $work = @($data.children | Where-Object { $_.id -eq 'work' })
+  if ($work.Count -ne 1) { throw "Expected one work column." }
+  $status = @($work[0].children | Where-Object { $_.id -eq 'status' })
+  if ($status.Count -ne 1) { throw "Expected one status node." }
+  if ($status[0].type -eq 'block') {
+    # Original status becomes a flexible child. Project Open gets 32 px at the right.
+    $status[0].id = 'status-original'
+    $status[0].size = [pscustomobject]@{ weight = 1 }
+    $button = [pscustomobject]@{
+      id = $Mod; type = 'block'
+      size = [pscustomobject]@{ px = 32 }
+      content = [pscustomobject]@{ mod = $Mod }
+    }
+    $newStatus = [pscustomobject]@{
+      id = 'status'; type = 'row'
+      size = [pscustomobject]@{ px = 28 }
+      children = @($status[0], $button)
+    }
+    $work[0].children = @($work[0].children | ForEach-Object {
+      if ($_.id -eq 'status-original') { $newStatus } else { $_ }
+    })
+    $changed = $true
+  } elseif ($status[0].type -eq 'row') {
+    if (@($status[0].children | Where-Object { $_.id -eq $Mod }).Count -eq 0) {
+      $status[0].children = @($status[0].children) + @(
+        [pscustomobject]@{
+          id = $Mod; type = 'block'
+          size = [pscustomobject]@{ px = 32 }
+          content = [pscustomobject]@{ mod = $Mod }
+        }
+      )
+      $changed = $true
+    }
+  } else {
+    throw "Unsupported status node type: $($status[0].type)"
+  }
+} else {
+  $children = @($sidebar[0].children)
+  if (@($children | Where-Object { $_.id -eq $Mod }).Count -eq 0) {
+    $footer = @($children | Where-Object { $_.id -eq 'sidebar-footer' })
+    if ($footer.Count -ne 1) { throw "Cannot find unique sidebar-footer; original preserved." }
+    $newChildren = @()
+    foreach ($child in $children) {
+      if ($child.id -eq 'sidebar-footer') {
+        $newChildren += [pscustomobject]@{
+          id = $Mod; type = 'block'
+          size = [pscustomobject]@{ px = 38 }
+          content = [pscustomobject]@{ mod = $Mod }
+        }
+      }
+      $newChildren += $child
+    }
+    $sidebar[0].children = $newChildren
+    $changed = $true
+  }
+}
+if ($changed) {
   $rendered = $data | ConvertTo-Json -Depth 100
-  # Validate serialized JSON before mutating the original.
   $null = $rendered | ConvertFrom-Json
   $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
   $backup = "$layoutDst.bak-$stamp-$([guid]::NewGuid().ToString('N'))"

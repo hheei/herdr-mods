@@ -114,7 +114,8 @@ export default class ProjectOpen extends View {
           .hover((s) => s.bg(t.hover))
           .on_click((_e, cx) => {
             closeOverlay(p.overlay);
-            this.run(action, cx);
+            // Context menu changes the default; only a later left click launches.
+            setShared(LAST_ACTION_KEY, action);
           })
           .child(svg(ICON[action]).size(17).flex_none())
           .child(div().text_size(12.5).child(label));
@@ -127,17 +128,15 @@ export default class ProjectOpen extends View {
     }
 
     const action = lastAction();
-    return div().id("project-open-button").size(30).flex_none()
+    return div().id("project-open-button").size(24).flex_none()
       .flex().items_center().justify_center()
-      .rounded(7).text_color(t.muted).cursor_pointer()
-      .tooltip(action === "vscode" ? "Open in VS Code · right-click for options" : "Open in file manager · right-click for options")
-      .hover((s) => s.bg(t.hover).text_color(t.foreground))
+      .text_color(t.muted).cursor_pointer()
       .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
       .on_mouse_down("right", (e, cx) => {
         cx.stop_propagation();
         openOverlay({ mod: "project-open", kind: "popup", at: "pointer", width: 192, height: 86, props: { menu: true } });
       })
       .on_click((_e, cx) => this.run(action, cx))
-      .child(svg(ICON[action]).size(18));
+      .child(svg(ICON[action]).size(16));
   }
 }

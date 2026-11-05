@@ -45,40 +45,57 @@ if [ ! -f "$layout_dst" ]; then
   cp "$base" "$layout_dst"
   echo "Created personal layout: $layout_dst"
 fi
-# A small, narrow text patch avoids jq, Node or Python on user machines.
-# Fail closed on unexpected layouts; never overwrite existing layout content.
-if grep -Eq '"id"[[:space:]]*:[[:space:]]*"'"$mod"'"' "$layout_dst"; then
-  echo "Layout already contains $mod (no duplicate added)."
-else
-  if [ "$(grep -Ec '"id"[[:space:]]*:[[:space:]]*"sidebar-footer"' "$layout_dst")" -ne 1 ]; then
-    echo "Cannot find unique sidebar-footer in $layout_dst; refusing to patch." >&2; exit 1
-  fi
+# Project Open occupies the right end of the status bar, not the sidebar.
+# The patch also migrates older layouts that had it above sidebar-footer.
+if [ "$mod" = project-open ]; then
   tmp="$layout_dst.tmp.$$"
   trap 'rm -f "$tmp"' EXIT HUP INT TERM
-  if ! awk -v name="$mod" '
-    { if ($0 ~ /^[[:space:]]*"id"[[:space:]]*:[[:space:]]*"sidebar-footer"/) {
-        if (prev !~ /^[[:space:]]*\{[[:space:]]*$/) exit 2;
-        lead=prev; sub(/\{[[:space:]]*$/, "", lead);
-        print lead "{\"id\":\"" name "\",\"type\":\"block\",\"size\":{\"px\":38},\"content\":{\"mod\":\"" name "\"}},";
-        count++;
-      }
-      if (NR>1) print prev;
-      prev=$0;
-    }
-    END {print prev; if (count!=1) exit 2}
-  ' "$layout_dst" > "$tmp"; then
-    echo "Layout format not supported; original untouched: $layout_dst" >&2; exit 1
+  if ! awk -f "$script_dir/patch-status.awk" "$layout_dst" > "$tmp"; then
+    echo "Unsupported status layout; original left unchanged." >&2
+    exit 1
   fi
-  # Check syntax when a suitable local validator exists. Not required for users.
-  if command -v jq >/dev/null 2>&1; then
-    jq empty "$tmp" || { echo 'Invalid patched JSON; original untouched.' >&2; exit 1; }
+  if ! cmp -s "$layout_dst" "$tmp"; then
+    if command -v jq >/dev/null 2>&1; then
+      jq empty "$tmp" || { echo "Invalid patched JSON; original unchanged." >&2; exit 1; }
+    fi
+    backup="$layout_dst.bak-$(date +%Y%m%d-%H%M%S)-$$"
+    cp "$layout_dst" "$backup"
+    mv "$tmp" "$layout_dst"
+    echo "Backed up layout: $backup"
+    echo "Placed $mod at the right end of the status bar."
+  else
+    echo "Status bar already contains $mod (no duplicate)."
   fi
-  backup="$layout_dst.bak-$(date +%Y%m%d-%H%M%S)-$$"
-  cp "$layout_dst" "$backup"
-  mv "$tmp" "$layout_dst"
   trap - EXIT HUP INT TERM
-  echo "Backed up layout: $backup"
-  echo "Patched personal layout: $layout_dst"
+else
+  # Other mods use the sidebar. Keep their installations additive.
+  if grep -Eq "\"id\"[[:space:]]*:[[:space:]]*\"$mod\"" "$layout_dst"; then
+    echo "Layout already contains $mod (no duplicate added)."
+  else
+    tmp="$layout_dst.tmp.$$"
+    trap 'rm -f "$tmp"' EXIT HUP INT TERM
+    if ! awk -v name="$mod" '
+      { if ($0 ~ /^[[:space:]]*"id"[[:space:]]*:[[:space:]]*"sidebar-footer"/) {
+          if (prev !~ /^[[:space:]]*\{[[:space:]]*$/) exit 2;
+          lead=prev; sub(/\{[[:space:]]*$/, "", lead);
+          print lead "{\"id\":\"" name "\",\"type\":\"block\",\"size\":{\"px\":38},\"content\":{\"mod\":\"" name "\"}},";
+          count++;
+        }
+        if (NR>1) print prev;
+        prev=$0;
+      }
+      END {print prev; if (count!=1) exit 2}
+    ' "$layout_dst" > "$tmp"; then
+      echo "Sidebar layout format not supported; original untouched." >&2; exit 1
+    fi
+    if command -v jq >/dev/null 2>&1; then jq empty "$tmp" || exit 1; fi
+    backup="$layout_dst.bak-$(date +%Y%m%d-%H%M%S)-$$"
+    cp "$layout_dst" "$backup"
+    mv "$tmp" "$layout_dst"
+    echo "Backed up layout: $backup"
+    echo "Patched sidebar for $mod."
+    trap - EXIT HUP INT TERM
+  fi
 fi
 if [ "$update" = yes ] && { [ -e "$dst" ] || [ -L "$dst" ]; }; then
   backup="$dst.bak-$(date +%Y%m%d-%H%M%S)-$$"

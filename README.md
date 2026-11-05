@@ -6,7 +6,7 @@ Small independent mods for [Herdr App](https://github.com/herdrdev/herdr-app). C
 
 | Mod | Function |
 | --- | --- |
-| [Project Open](mods/project-open/README.md) | One sidebar icon; left-click launches the last selected app; right-click chooses VS Code or Finder/file manager. Remote SSH supported for VS Code. |
+| [Project Open](mods/project-open/README.md) | One icon at the **right end of the status bar**; left-click opens with the last chosen app; right-click changes the default without opening. Remote SSH supported for VS Code. |
 
 ## Quick install
 
@@ -28,7 +28,7 @@ These commands download a temporary source archive, install the files, and delet
 
 **If you already downloaded the repository**, run `sh scripts/install.sh` on macOS/Linux or `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1` on Windows.
 
-No Python, Node, jq, sudo, or additional dependency required for installation. Both scripts install the Mod and **patch a shared personal layout** named `herdr-mods`. On first install, the installer copies the official `main` layout (or the bundled template) to a personal copy; each subsequent Mod is added to the **same layout**, with an automatic timestamped backup before every change. Shipped layouts are never modified.
+No Python, Node, jq, sudo, or additional dependency required for installation. Both scripts install the Mod and **patch a shared personal layout** named `herdr-mods`. **Project Open goes into the bottom Status Bar** (the right side of the window), alongside the existing status information. On first install, the installer copies the official `main` layout (or the bundled template) to a personal copy; each subsequent Mod is added to the **same layout**, with an automatic timestamped backup before every change. Shipped layouts are never modified.
 
 **Next:** in Herdr App switch to layout **herdr-mods** (from the layout picker or command palette); alternatively:
 
@@ -48,7 +48,7 @@ sh scripts/install.sh project-open --update
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -Mod project-open -Update
 ~~~
 
-Updates back up existing mod files. Layout patching is idempotent: existing buttons and customizations are preserved, and an unchanged layout is not rewritten.
+Updates back up existing mod files. Layout patching is idempotent. If a previous version placed Project Open in the Sidebar, the installer moves it to the Status Bar and saves a backup of the previous layout. Right-click changes only the default tool and icon; left-click performs the actual open.
 
 The official Herdr App home is **~/.config/herdr-app**, even on Windows. XDG_CONFIG_HOME changes its config root; HERDR_APP_HOME overrides directly.
 
@@ -69,6 +69,7 @@ Future mods follow the same structure and can be installed by name. Every instal
 
 ~~~sh
 node tests/project-open.test.cjs
+node tests/layout-status.test.cjs
 node --check mods/project-open/main.js
 sh -n scripts/install.sh
 sh tests/install-smoke.sh
