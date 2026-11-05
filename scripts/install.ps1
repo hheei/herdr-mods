@@ -1,9 +1,8 @@
-# Install a Herdr App mod and patch the shared personal layout.
-# Checkout: powershell -File install.ps1 [-Mod name] [-Update] [-NoLayout]
+# Install or refresh a Herdr App mod and patch the shared personal layout.
+# Checkout: powershell -File install.ps1 [-Mod name] [-NoLayout]
 # Piped:    irm .../install.ps1 | iex
 param(
   [Parameter(Position = 0)][string]$Mod = 'project-open',
-  [switch]$Update,
   [switch]$NoLayout
 )
 $ErrorActionPreference = 'Stop'
@@ -26,7 +25,7 @@ if (!$PSScriptRoot) {
   Write-Host '  fetching herdr-mods' -ForegroundColor DarkGray
   Invoke-WebRequest -Uri 'https://github.com/hheei/herdr-mods/archive/refs/heads/main.zip' -OutFile (Join-Path $stage 'source.zip')
   Expand-Archive -LiteralPath (Join-Path $stage 'source.zip') -DestinationPath $stage
-  try { & (Join-Path $stage 'herdr-mods-main/scripts/install.ps1') -Mod $Mod -Update:$Update -NoLayout:$NoLayout }
+  try { & (Join-Path $stage 'herdr-mods-main/scripts/install.ps1') -Mod $Mod -NoLayout:$NoLayout }
   finally { Remove-Item -LiteralPath $stage -Recurse -Force }
   return
 }
@@ -39,7 +38,7 @@ elseif ($env:XDG_CONFIG_HOME) { $homeDir = Join-Path $env:XDG_CONFIG_HOME 'herdr
 else { $homeDir = Join-Path (Join-Path ([Environment]::GetFolderPath('UserProfile')) '.config') 'herdr-app' }
 $dst = Join-Path (Join-Path $homeDir 'mods') $Mod
 $layoutDst = Join-Path (Join-Path $homeDir 'layouts') "$layoutName.json"
-if (!$Update -and (Test-Path -LiteralPath $dst)) { throw "Already installed: $dst (use -Update)" }
+$verb = if (Test-Path -LiteralPath $dst) { 'updated' } else { 'installed' }
 Write-Host ''
 Write-Host "  herdr-mods " -NoNewline -ForegroundColor White
 Write-Host "· $Mod" -ForegroundColor DarkGray
@@ -105,12 +104,12 @@ if (!$NoLayout) {
     }
   }
 }
-if ($Update -and (Test-Path -LiteralPath $dst)) {
+if ($verb -eq 'updated') {
   if (Test-Path -LiteralPath "$dst.bak") { Remove-Item -LiteralPath "$dst.bak" -Recurse -Force }
   Move-Item -LiteralPath $dst -Destination "$dst.bak"
 }
 Copy-Item -LiteralPath $src -Destination $dst -Recurse
-Step "mod installed → $dst"
+Step "mod $verb → $dst"
 if ($NoLayout) {
   Warn 'layout untouched (-NoLayout); add the mod by hand'
 } else {

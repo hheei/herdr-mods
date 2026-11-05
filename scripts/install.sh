@@ -1,17 +1,15 @@
 #!/bin/sh
-# Install a Herdr mod and patch the shared personal layout.
-# Checkout: sh scripts/install.sh [mod] [--update] [--no-layout]
+# Install or refresh a Herdr mod and patch the shared personal layout.
+# Checkout: sh scripts/install.sh [mod] [--no-layout]
 # Piped:    curl -fsSL .../install.sh | sh
 set -eu
 mod=project-open
-update=no
 no_layout=no
 layout=herdr-mods
 for arg do
   case "$arg" in
-    --update) update=yes ;;
     --no-layout) no_layout=yes ;;
-    -h|--help) echo 'usage: install.sh [mod] [--update] [--no-layout]'; exit 0 ;;
+    -h|--help) echo 'usage: install.sh [mod] [--no-layout]'; exit 0 ;;
     -*) echo "install: unknown option: $arg" >&2; exit 2 ;;
     *) mod=$arg ;;
   esac
@@ -55,9 +53,8 @@ src="$repo_dir/mods/$mod"
 home_dir=${HERDR_APP_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/herdr-app}
 dst="$home_dir/mods/$mod"
 layout_dst="$home_dir/layouts/$layout.json"
-if [ "$update" = no ] && [ -e "$dst" ]; then
-  warn "already installed: $dst (use --update)"; exit 1
-fi
+verb=installed
+if [ -e "$dst" ]; then verb=updated; fi
 mkdir -p "$home_dir/mods"
 if [ "$no_layout" = no ]; then
   mkdir -p "$home_dir/layouts"
@@ -96,12 +93,12 @@ if [ "$no_layout" = no ]; then
     warn "layout left unchanged; add \"$mod\" by hand (mods/$mod/README.md)"
   fi
 fi
-if [ "$update" = yes ] && [ -e "$dst" ]; then
+if [ "$verb" = updated ]; then
   rm -rf "$dst.bak"
   mv "$dst" "$dst.bak"
 fi
 cp -R "$src" "$dst"
-step "mod installed ${dim}→ $dst${off}"
+step "mod $verb ${dim}→ $dst${off}"
 if [ "$no_layout" = yes ]; then
   warn "layout untouched (--no-layout); add \"$mod\" by hand"
 else

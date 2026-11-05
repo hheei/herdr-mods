@@ -12,11 +12,13 @@ cp -R "$repo/mods/project-open" "$tmp/repo/mods/"
 printf '%s\n' 'export default class Another {}' > "$tmp/repo/mods/another-mod/main.js"
 printf '%s\n' '{"place":"none"}' > "$tmp/repo/mods/another-mod/mod.json"
 sh "$tmp/repo/scripts/install.sh"
-if sh "$tmp/repo/scripts/install.sh" >"$tmp/duplicate.log" 2>&1; then echo 'FAIL overwrite'; exit 1; fi
+sh "$tmp/repo/scripts/install.sh"
+[ -d "$HERDR_APP_HOME/mods/project-open.bak" ]
+[ "$(find "$HERDR_APP_HOME/mods" -maxdepth 1 -name 'project-open.bak*' | wc -l | tr -d ' ')" -eq 1 ]
 sh "$tmp/repo/scripts/install.sh" another-mod
 [ "$(grep -c '"mod": "project-open"' "$HERDR_APP_HOME/layouts/herdr-mods.json")" -eq 1 ]
 [ "$(grep -c '"id":"another-mod"' "$HERDR_APP_HOME/layouts/herdr-mods.json")" -eq 1 ]
-sh "$tmp/repo/scripts/install.sh" project-open --update
+sh "$tmp/repo/scripts/install.sh" project-open
 [ "$(grep -c '"mod": "project-open"' "$HERDR_APP_HOME/layouts/herdr-mods.json")" -eq 1 ]
 [ "$(grep -c '"id":"another-mod"' "$HERDR_APP_HOME/layouts/herdr-mods.json")" -eq 1 ]
 [ -f "$HERDR_APP_HOME/layouts/herdr-mods.json.bak" ]
@@ -48,4 +50,4 @@ HERDR_APP_HOME="$tmp/customhome" sh "$repo/scripts/install.sh" >/dev/null 2>&1
 [ -f "$tmp/customhome/mods/project-open/main.js" ]
 cmp -s "$tmp/custom-before.json" "$tmp/customhome/layouts/herdr-mods.json"
 [ ! -e "$tmp/customhome/layouts/herdr-mods.json.bak" ]
-echo 'PASS: unset env, embedded status, two mods, idempotence, single .bak backups, piped one-liner, no-layout, custom layout untouched'
+echo 'PASS: unset env, embedded status, two mods, auto-update, idempotence, single .bak backups, piped one-liner, no-layout, custom layout untouched'

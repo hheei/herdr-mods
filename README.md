@@ -42,17 +42,17 @@ The source is available at **https://github.com/hheei/herdr-mods**. Direct-insta
 
 ### Update
 
-Pipe the installer again and pass `--update`:
+Run the same command again: an existing Mod is moved to `project-open.bak` and replaced, and the layout is only touched when it actually changes.
 
 ~~~sh
-curl -fsSL https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/install.sh | sh -s -- --update
+curl -fsSL https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/install.sh | sh
 ~~~
 
 ~~~powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/install.ps1))) -Update
+irm https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/install.ps1 | iex
 ~~~
 
-Updates replace the previous Mod and Layout `.bak` backups rather than creating timestamped archives. Layout patching is idempotent and never overwrites an existing layout: a Mod is only added when its id is absent, and a customized status bar is left byte-identical (the Mod files are still installed, for manual wiring). The installer migrates earlier Sidebar and split-row Status Bar versions into a seamless single Status Bar renderer. Right-click changes only the default tool and icon; left-click performs the actual open.
+Backups are fixed `.bak` names, so each install or update replaces the previous one instead of piling up archives. Layout patching is idempotent and never overwrites an existing layout: a Mod is only added when its id is absent, and a customized status bar is left byte-identical (the Mod files are still installed, for manual wiring). The installer migrates earlier Sidebar and split-row Status Bar versions into a seamless single Status Bar renderer. Right-click changes only the default tool and icon; left-click performs the actual open.
 
 The official Herdr App home is **~/.config/herdr-app**, even on Windows. XDG_CONFIG_HOME changes its config root; HERDR_APP_HOME overrides directly.
 

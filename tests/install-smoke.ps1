@@ -15,9 +15,8 @@ try {
   '{"place":"none"}' | Set-Content -LiteralPath (Join-Path $second 'mod.json')
   $installer = Join-Path $testRepo 'scripts/install.ps1'
   & $installer
-  $rejected = $false
-  try { & $installer } catch { $rejected = $true }
-  if (!$rejected) { throw 'Expected overwrite rejection' }
+  & $installer
+  if (!(Test-Path -LiteralPath (Join-Path $env:HERDR_APP_HOME 'mods/project-open.bak'))) { throw 'missing mod .bak after re-install' }
   & $installer -Mod another-mod
   $layout = Join-Path $env:HERDR_APP_HOME 'layouts/herdr-mods.json'
   $json = Get-Content -LiteralPath $layout -Raw | ConvertFrom-Json
@@ -26,7 +25,7 @@ try {
   if ($status.type -ne 'block' -or $status.content.mod -ne 'project-open') { throw 'project-open is not embedded in status renderer' }
   if (@($sidebarIds | Where-Object { $_ -eq 'another-mod' }).Count -ne 1) { throw 'another-mod duplicate/missing' }
   if (@($sidebarIds | Where-Object { $_ -eq 'project-open' }).Count -ne 0) { throw 'project-open still in sidebar' }
-  & $installer -Update
+  & $installer
   $json = Get-Content -LiteralPath $layout -Raw | ConvertFrom-Json
   $status = @($json.children | Where-Object id -eq 'work' | ForEach-Object { $_.children | Where-Object id -eq 'status' })[0]
   if ($status.type -ne 'block' -or $status.content.mod -ne 'project-open') { throw 'lost status integration on update' }
@@ -34,7 +33,7 @@ try {
   if (@(Get-ChildItem (Join-Path $env:HERDR_APP_HOME 'layouts') -Filter 'herdr-mods.json.bak*').Count -ne 1) { throw 'multiple layout backups' }
   if (!(Test-Path -LiteralPath (Join-Path $env:HERDR_APP_HOME 'mods/project-open.bak'))) { throw 'missing mod .bak' }
   if (@(Get-ChildItem (Join-Path $env:HERDR_APP_HOME 'mods') -Filter 'project-open.bak*').Count -ne 1) { throw 'multiple mod backups' }
-  Write-Host 'PASS: PowerShell multi-mod layout and backups'
+  Write-Host 'PASS: PowerShell multi-mod layout, auto-update and backups'
 } finally {
   $env:HERDR_APP_HOME = $oldHome
   if (Test-Path $tmp) { Remove-Item $tmp -Force -Recurse }
