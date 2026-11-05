@@ -16,12 +16,10 @@ function checkStatus(source) {
   const json = JSON.parse(source);
   const work = json.children.find(x => x.id === "work");
   const status = work.children.find(x => x.id === "status");
-  assert.equal(status.type, "row");
+  assert.equal(status.type, "block");
   assert.equal(status.size.px, 28);
-  assert.equal(status.children[0].id, "status-original");
-  assert.equal(status.children[0].content.mod, "workspace-status");
-  assert.equal(status.children[1].id, "project-open");
-  assert.equal(status.children[1].content.mod, "project-open");
+  assert.equal(status.content.mod, "project-open");
+  assert.equal(status.children, undefined, "no separate status child/slot");
   const sidebar = json.children.find(x => x.id === "sidebar");
   assert.equal(sidebar.children.some(x => x.id === "project-open"), false);
 }
@@ -47,4 +45,15 @@ assert.equal(
   migrated.children.find(x => x.id === "sidebar").children.some(x => x.id === "another-mod"),
   true
 );
-console.log("PASS: status placement, preserved status content, old sidebar migration, idempotence, other mods.");
+
+const oldSplit = JSON.parse(base);
+const work = oldSplit.children.find(x => x.id === "work");
+const idx = work.children.findIndex(x => x.id === "status");
+work.children[idx] = {
+  id: "status", type: "row", size: { px: 28 }, children: [
+    { id: "status-original", type: "block", size: { weight: 1 }, content: { mod: "workspace-status" } },
+    { id: "project-open", type: "block", size: { px: 32 }, content: { mod: "project-open" } },
+  ],
+};
+checkStatus(patch(JSON.stringify(oldSplit, null, 2) + "\n"));
+console.log("PASS: single status block, old split-row/sidebar migration, idempotence, other mods.");

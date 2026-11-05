@@ -45,8 +45,9 @@ if [ ! -f "$layout_dst" ]; then
   cp "$base" "$layout_dst"
   echo "Created personal layout: $layout_dst"
 fi
-# Project Open occupies the right end of the status bar, not the sidebar.
-# The patch also migrates older layouts that had it above sidebar-footer.
+# Project Open renders the entire status bar, preserving the upstream
+# status content and adding its icon inside the same UI container.
+# Previous split-row and sidebar installations are migrated.
 if [ "$mod" = project-open ]; then
   tmp="$layout_dst.tmp.$$"
   trap 'rm -f "$tmp"' EXIT HUP INT TERM
@@ -58,11 +59,15 @@ if [ "$mod" = project-open ]; then
     if command -v jq >/dev/null 2>&1; then
       jq empty "$tmp" || { echo "Invalid patched JSON; original unchanged." >&2; exit 1; }
     fi
-    backup="$layout_dst.bak-$(date +%Y%m%d-%H%M%S)-$$"
-    cp "$layout_dst" "$backup"
+    backup="$layout_dst.bak"
+    [ ! -L "$backup" ] || { echo "Refusing symlink backup: $backup" >&2; exit 1; }
+    cp -f "$layout_dst" "$backup"
     mv "$tmp" "$layout_dst"
+    for old in "$layout_dst".bak-*; do
+      [ ! -f "$old" ] || rm -f "$old"
+    done
     echo "Backed up layout: $backup"
-    echo "Placed $mod at the right end of the status bar."
+    echo "Embedded $mod inside the status bar."
   else
     echo "Status bar already contains $mod (no duplicate)."
   fi
@@ -89,17 +94,29 @@ else
       echo "Sidebar layout format not supported; original untouched." >&2; exit 1
     fi
     if command -v jq >/dev/null 2>&1; then jq empty "$tmp" || exit 1; fi
-    backup="$layout_dst.bak-$(date +%Y%m%d-%H%M%S)-$$"
-    cp "$layout_dst" "$backup"
+    backup="$layout_dst.bak"
+    [ ! -L "$backup" ] || { echo "Refusing symlink backup: $backup" >&2; exit 1; }
+    cp -f "$layout_dst" "$backup"
     mv "$tmp" "$layout_dst"
+    for old in "$layout_dst".bak-*; do
+      [ ! -f "$old" ] || rm -f "$old"
+    done
     echo "Backed up layout: $backup"
     echo "Patched sidebar for $mod."
     trap - EXIT HUP INT TERM
   fi
 fi
 if [ "$update" = yes ] && { [ -e "$dst" ] || [ -L "$dst" ]; }; then
-  backup="$dst.bak-$(date +%Y%m%d-%H%M%S)-$$"
+  backup="$dst.bak"
+  [ ! -L "$backup" ] || { echo "Refusing symlink backup: $backup" >&2; exit 1; }
+  if [ -e "$backup" ]; then
+    [ -d "$backup" ] || { echo "Backup is not a directory: $backup" >&2; exit 1; }
+    rm -rf "$backup"
+  fi
   mv "$dst" "$backup"
+  for old in "$dst".bak-*; do
+    [ ! -d "$old" ] || rm -rf "$old"
+  done
   echo "Backed up mod: $backup"
 fi
 cp -R "$src" "$dst"

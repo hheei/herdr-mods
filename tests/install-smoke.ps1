@@ -22,15 +22,18 @@ try {
   $layout = Join-Path $env:HERDR_APP_HOME 'layouts/herdr-mods.json'
   $json = Get-Content -LiteralPath $layout -Raw | ConvertFrom-Json
   $sidebarIds = @($json.children | Where-Object id -eq 'sidebar' | ForEach-Object { $_.children.id })
-  $statusIds = @($json.children | Where-Object id -eq 'work' | ForEach-Object { $_.children | Where-Object id -eq 'status' | ForEach-Object { $_.children.id } })
-  if (@($statusIds | Where-Object { $_ -eq 'project-open' }).Count -ne 1) { throw 'project-open missing from status bar' }
+  $status = @($json.children | Where-Object id -eq 'work' | ForEach-Object { $_.children | Where-Object id -eq 'status' })[0]
+  if ($status.type -ne 'block' -or $status.content.mod -ne 'project-open') { throw 'project-open is not embedded in status renderer' }
   if (@($sidebarIds | Where-Object { $_ -eq 'another-mod' }).Count -ne 1) { throw 'another-mod duplicate/missing' }
   if (@($sidebarIds | Where-Object { $_ -eq 'project-open' }).Count -ne 0) { throw 'project-open still in sidebar' }
   & $installer -Update
   $json = Get-Content -LiteralPath $layout -Raw | ConvertFrom-Json
-  $statusIds = @($json.children | Where-Object id -eq 'work' | ForEach-Object { $_.children | Where-Object id -eq 'status' | ForEach-Object { $_.children.id } })
-  if (@($statusIds | Where-Object { $_ -eq 'project-open' }).Count -ne 1) { throw 'duplicated on update' }
-  if (@(Get-ChildItem (Join-Path $env:HERDR_APP_HOME 'layouts') -Filter 'herdr-mods.json.bak-*').Count -lt 2) { throw 'missing backups' }
+  $status = @($json.children | Where-Object id -eq 'work' | ForEach-Object { $_.children | Where-Object id -eq 'status' })[0]
+  if ($status.type -ne 'block' -or $status.content.mod -ne 'project-open') { throw 'lost status integration on update' }
+  if (!(Test-Path -LiteralPath "$layout.bak")) { throw 'missing layout .bak' }
+  if (@(Get-ChildItem (Join-Path $env:HERDR_APP_HOME 'layouts') -Filter 'herdr-mods.json.bak*').Count -ne 1) { throw 'multiple layout backups' }
+  if (!(Test-Path -LiteralPath (Join-Path $env:HERDR_APP_HOME 'mods/project-open.bak'))) { throw 'missing mod .bak' }
+  if (@(Get-ChildItem (Join-Path $env:HERDR_APP_HOME 'mods') -Filter 'project-open.bak*').Count -ne 1) { throw 'multiple mod backups' }
   Write-Host 'PASS: PowerShell multi-mod layout and backups'
 } finally {
   $env:HERDR_APP_HOME = $oldHome

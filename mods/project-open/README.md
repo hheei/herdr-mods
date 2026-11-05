@@ -1,6 +1,6 @@
 # Project Open
 
-Minimal one-icon launcher for Herdr App, positioned at the **right end of the bottom Status Bar** (green rectangle in the screenshot). The existing status bar information is kept.
+Minimal one-icon launcher for Herdr App, **embedded directly inside the bottom Status Bar renderer** after the Commands hint. It uses the original Status Bar background, border, machine/branch details, agent count and palette hint, without allocating a separate layout block.
 
 | Gesture | Action |
 | --- | --- |
@@ -8,7 +8,7 @@ Minimal one-icon launcher for Herdr App, positioned at the **right end of the bo
 | Right-click | Select Open in VS Code or Open in Finder (File Manager on Linux/Windows) |
 | Choose tool | **Only** remember the default and update its icon. Click the main icon later to open. |
 
-Initial choice is **VS Code**. The button is 24×24 px inside a 32 px Status Bar slot, with no permanent label, arrow, tooltip, or hover highlight. Long-press is not included because Herdr's documented GPUI API does not guarantee a long-press recognizer.
+Initial choice is **VS Code**. The icon is 15 px inside a 22 px button integrated into the original Status Bar row, with no permanent label, arrow, tooltip, hover highlight or separated background. Long-press is not included because Herdr's documented GPUI API does not guarantee a long-press recognizer.
 
 ## Install
 
@@ -28,13 +28,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
 
 This installs the Mod under **~/.config/herdr-app/mods/project-open/** and creates/patches the shared personal layout **~/.config/herdr-app/layouts/herdr-mods.json**. It backs up existing layouts before changes, does not duplicate the button, and never modifies the shipped main layout. Select **herdr-mods** in the layout picker once; future Mods are added to the same layout.
 
-To patch an existing personal layout instead, run `sh scripts/install.sh --layout=my-layout` or PowerShell `-Layout my-layout`. The installer backs it up and **wraps the existing `status` block in a row**, keeping the original `workspace-status` display to the left and inserting the 32 px Project Open block on the right. It also migrates the previous Project Open Sidebar entry to Status Bar. Clone a shipped layout first if needed:
+To patch an existing personal layout instead, run `sh scripts/install.sh --layout=my-layout` or PowerShell `-Layout my-layout`. The installer backs up the personal Layout to a single `*.bak` file, then **changes the `status` block to use the Project Open status renderer**, which includes the original status content plus the icon. Older Sidebar entries and split-row status versions are migrated automatically. The original shipped `workspace-status` mod is not modified. Clone a shipped layout first if needed:
 
 ~~~sh
 herdr-app do layout.clone '{"name":"main","as":"my-project-layout"}'
 ~~~
 
-There is no need to modify JSON by hand. The installer performs the Status Bar patch and takes a backup before each change.
+There is no need to modify JSON by hand. The installer performs the Status Bar patch and maintains just one `.bak` backup per file/directory, overwriting earlier `.bak` versions.
 
 Do **not** edit Herdr's shipped layouts. Shipped files are rewritten on app startup and update.
 
@@ -67,7 +67,7 @@ The test suite checks simulated behavior, but actual Herdr App GUI rendering and
 
 ## Update/uninstall
 
-Update via **sh scripts/install.sh project-open --update** or PowerShell install.ps1 -Update. Existing Mod is backed up, and the shared layout is updated only when needed, including migrating the old Sidebar placement. To uninstall, switch to another layout and remove the Mod directory; to keep your shared personal layout while removing its button, restore a pre-install Layout backup or edit the personal Layout. This does not affect running herdr-core sessions.
+Update via **sh scripts/install.sh project-open --update** or PowerShell install.ps1 -Update. Existing Mod is backed up to `project-open.bak`, and the shared layout is updated only when needed, including migrating the old Sidebar or split-row placement. The installer also cleans up its older timestamped backup files after a successful update. To uninstall, switch to another layout and remove the Mod directory; to keep your shared personal layout while removing its button, restore a pre-install Layout backup or edit the personal Layout. This does not affect running herdr-core sessions.
 
 ## Upstream documentation
 

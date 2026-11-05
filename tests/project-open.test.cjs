@@ -11,7 +11,7 @@ const source = fullSource.slice(fullSource.indexOf("const LAST_ACTION_KEY"))
 // Models enough of the chainable GPUI nodes to exercise event handlers.
 function node() {
   const handlers = {};
-  const state = { kids: [], handlers, icon: null };
+  const state = { kids: [], handlers, icon: null, nodeId: null };
   let proxy;
   proxy = new Proxy(state, {
     get(target, name) {
@@ -19,6 +19,8 @@ function node() {
       if (name === "on_click" || name === "on_mouse_down") {
         return (...args) => { handlers[name + (args.length === 2 ? ":" + args[0] : "")] = args.at(-1); return proxy; };
       }
+      if (name === "id") return (value) => { target.nodeId = value; return proxy; };
+      if (name === "when") return (condition, callback) => { if (condition) callback(proxy); return proxy; };
       if (name === "child") return (child) => { target.kids.push(child); return proxy; };
       if (name === "children") return (children) => { target.kids.push(...children); return proxy; };
       return () => proxy;
@@ -35,7 +37,7 @@ const cx = {
 };
 const state = {
   focused: { space: "s1", cwd: "/home/user/project with spaces" },
-  spaces: [{ id: "s1", folder: "/home/user", machine: null }],
+  spaces: [{ id: "s1", folder: "/home/user", machine: null, active: true }],
   platform: "linux",
   props: {},
 };
@@ -47,6 +49,9 @@ const box = {
   window: () => ({ platform: state.platform }),
   focused: () => state.focused,
   spaces: () => state.spaces,
+  agents: () => [],
+  keys: () => [],
+  run: (action) => calls.push(["run", action]),
   exec: async (...args) => { calls.push(args); return { code: 0, stdout: "", stderr: "" }; },
   shared: (k) => preferences[k],
   setShared: (k, v) => { preferences[k] = v; },
@@ -64,9 +69,22 @@ async function drain() {
   }
 }
 
+function findButton(node) {
+  if (!node || typeof node !== "object") return null;
+  if (node.nodeId === "project-open-button") return node;
+  for (const child of node.kids || []) {
+    const found = findButton(child);
+    if (found) return found;
+  }
+  return null;
+}
+
 async function main() {
   const mod = new box.ProjectOpen();
-  let button = mod.render(cx);
+  const status = mod.render(cx);
+  assert.ok(status.kids.length >= 5, "integrated status bar should include labels, agents, palette and icon");
+  let button = findButton(status);
+  assert.ok(button, "button must be nested inside status bar, not a separate layout block");
   assert.equal(button.kids[0].icon, "mods/project-open/vscode.svg");
   assert.equal(fullSource.includes(".tooltip("), false, "main icon should not show hover tooltips");
   assert.equal(fullSource.includes(".hover((s) => s.bg(t.hover).text_color(t.foreground))"), false, "main icon should not show a hover highlight");
@@ -89,7 +107,7 @@ async function main() {
     "right-click choice must not launch an application");
 
   state.props = {};
-  button = mod.render(cx);
+  button = findButton(mod.render(cx));
   assert.equal(button.kids[0].icon, "mods/project-open/finder.svg");
 
   calls.length = 0;
@@ -98,7 +116,7 @@ async function main() {
   assert.ok(calls.some((x) => Array.isArray(x) && x[0] === "xdg-open"),
     "left click should launch selected file manager");
   calls.length = 0;
-  state.spaces = [{ id: "s1", folder: "/home/user", machine: "gpu-server" }];
+  state.spaces = [{ id: "s1", folder: "/home/user", machine: "gpu-server", active: true }];
   button.handlers.on_click(null, cx);
   await drain();
   assert.ok(calls.some((x) => Array.isArray(x) && x[0] === "notify" && x[1].title === "Remote folder"));
@@ -112,7 +130,7 @@ async function main() {
     "choosing VS Code in context menu should not launch");
   assert.equal(preferences["project-open.last-action"], "vscode");
   state.props = {};
-  mod.render(cx).handlers.on_click(null, cx);
+  findButton(mod.render(cx)).handlers.on_click(null, cx);
   await drain();
   assert.ok(calls.some((x) => Array.isArray(x) && x[0] === "code"
     && x[1][0] === "--remote" && x[1][1] === "ssh-remote+gpu-server"));

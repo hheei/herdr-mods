@@ -28,7 +28,7 @@ These commands download a temporary source archive, install the files, and delet
 
 **If you already downloaded the repository**, run `sh scripts/install.sh` on macOS/Linux or `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1` on Windows.
 
-No Python, Node, jq, sudo, or additional dependency required for installation. Both scripts install the Mod and **patch a shared personal layout** named `herdr-mods`. **Project Open goes into the bottom Status Bar** (the right side of the window), alongside the existing status information. On first install, the installer copies the official `main` layout (or the bundled template) to a personal copy; each subsequent Mod is added to the **same layout**, with an automatic timestamped backup before every change. Shipped layouts are never modified.
+No Python, Node, jq, sudo, or additional dependency required for installation. Both scripts install the Mod and **patch a shared personal layout** named `herdr-mods`. **Project Open is embedded inside the bottom Status Bar renderer**, immediately after the Commands hint, with the same background and border (not a separate 32px layout block). It preserves machine, agent count, and Commands information. On first install, the installer copies the official `main` layout (or the bundled template) to a personal copy; each subsequent Mod is added to the **same layout**, with a single fixed **`.bak`** backup per changed file/directory (the previous `.bak` is replaced on each update). Shipped layouts are never modified.
 
 **Next:** in Herdr App switch to layout **herdr-mods** (from the layout picker or command palette); alternatively:
 
@@ -48,7 +48,7 @@ sh scripts/install.sh project-open --update
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -Mod project-open -Update
 ~~~
 
-Updates back up existing mod files. Layout patching is idempotent. If a previous version placed Project Open in the Sidebar, the installer moves it to the Status Bar and saves a backup of the previous layout. Right-click changes only the default tool and icon; left-click performs the actual open.
+Updates replace the previous Mod and Layout `.bak` backups rather than creating timestamped archives; previously generated timestamped backups are cleaned up after a successful change. Layout patching is idempotent. The installer migrates earlier Sidebar and split-row Status Bar versions into a seamless single Status Bar renderer. Right-click changes only the default tool and icon; left-click performs the actual open.
 
 The official Herdr App home is **~/.config/herdr-app**, even on Windows. XDG_CONFIG_HOME changes its config root; HERDR_APP_HOME overrides directly.
 

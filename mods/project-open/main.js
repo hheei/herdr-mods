@@ -3,7 +3,7 @@
 import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import {
-  theme, window, focused, spaces, exec, shared, setShared,
+  theme, window, focused, spaces, agents, keys, run, exec, shared, setShared,
   notify, openOverlay, closeOverlay, props,
 } from "herdr";
 
@@ -98,6 +98,17 @@ async function openAction(action) {
 }
 
 export default class ProjectOpen extends View {
+  // Keep the official workspace-status content and layout, with a single
+  // extra icon inside the same status bar (no separate layout block).
+  hint() {
+    const mac = window()?.platform === "macos";
+    const mod = { cmd: mac ? "⌘" : "Ctrl+", ctrl: mac ? "⌃" : "Ctrl+", shift: mac ? "⇧" : "Shift+", alt: mac ? "⌥" : "Alt+", option: mac ? "⌥" : "Alt+" };
+    const b = keys().find((k) => k.section === "global" && k.action === "app.palette");
+    const parts = b && b.keys.endsWith("--") ? [...b.keys.slice(0, -2).split("-"), "-"] : b?.keys.split("-");
+    const key = parts && parts.map((p) => mod[p.toLowerCase()] ?? p.toUpperCase()).join("");
+    return key ? `${key}  commands` : "commands";
+  }
+
   run(action, cx) {
     // Async work belongs to a Herdr-managed task, not the UI render cycle.
     cx.spawn(async () => { await openAction(action); });
@@ -128,7 +139,7 @@ export default class ProjectOpen extends View {
     }
 
     const action = lastAction();
-    return div().id("project-open-button").size(24).flex_none()
+    const button = div().id("project-open-button").size(22).flex_none()
       .flex().items_center().justify_center()
       .text_color(t.muted).cursor_pointer()
       .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
@@ -137,6 +148,26 @@ export default class ProjectOpen extends View {
         openOverlay({ mod: "project-open", kind: "popup", at: "pointer", width: 192, height: 86, props: { menu: true } });
       })
       .on_click((_e, cx) => this.run(action, cx))
-      .child(svg(ICON[action]).size(16));
+      .child(svg(ICON[action]).size(15));
+
+    const space = spaces().find((s) => s.active);
+    const list = agents();
+    const needs = list.filter((a) => a.status === "blocked").length;
+    const label = (icon, text) => h_flex().gap(6).items_center()
+      .child(svg(`mods/workspace-chrome/${icon}.svg`).size(13))
+      .child(text);
+    return h_flex().size_full().px(14).gap(16).items_center()
+      .bg(t.chrome).border_t(1).border_color(t.border)
+      .text_size(11.8).text_color(t.muted)
+      .child(label(space?.machine ? "server" : "monitor", space?.machine ?? "This computer"))
+      .when(Boolean(space?.branch), (el) => el.child(label("branch", space.branch)))
+      .child(h_flex().gap(6).items_center()
+        .child(div().size(6).rounded(3).bg(t.dim))
+        .child(`${list.length} agents`)
+        .when(needs > 0, (el) => el.child(div().text_color(t.blocked).child(`· ${needs} needs you`))))
+      .child(div().flex_1())
+      .child(div().id("palette").text_color(t.dim)
+        .on_click(() => run("app.palette")).child(this.hint()))
+      .child(button);
   }
 }

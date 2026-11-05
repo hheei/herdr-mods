@@ -3,7 +3,13 @@ Copyright 2026 Herdr Mods contributors
 
 This project is independent of and not endorsed by the Herdr maintainers.
 
-layouts/herdr-mods.json and layouts/project-open.json are adapted from herdrdev/herdr-app/defaults/layouts/main.json under Apache License 2.0.
+layouts/herdr-mods.json and layouts/project-open.json are adapted from
+herdrdev/herdr-app/defaults/layouts/main.json under Apache License 2.0.
 Source: https://github.com/herdrdev/herdr-app/blob/master/defaults/layouts/main.json
-License: https://github.com/herdrdev/herdr-app/blob/master/LICENSE
-Change: inserted the project-open sidebar block and normalized formatting.
+
+The Project Open mod includes an adapted version of the original
+workspace-status renderer (machine, branch, agent count, palette hint) with a
+project launcher icon added inside the same row.
+Source: https://github.com/herdrdev/herdr-app/blob/master/defaults/mods/workspace-status/main.js
+
+Upstream license: https://github.com/herdrdev/herdr-app/blob/master/LICENSE
