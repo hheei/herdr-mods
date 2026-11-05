@@ -17,12 +17,21 @@ done
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 repo_dir=$(dirname "$script_dir")
 esc=$(printf '\033')
+interactive=no
+if [ -t 1 ] && (: </dev/tty) 2>/dev/null; then interactive=yes; fi
 if [ -t 1 ]; then
   bold=$esc'[1m' dim=$esc'[2m' good=$esc'[32m' hot=$esc'[33m' bad=$esc'[31m' off=$esc'[0m'
 else
   bold= dim= good= hot= bad= off=
 fi
 step() { printf '  %s✓%s %s\n' "$good" "$off" "$*"; }
+confirm() {
+  [ "$interactive" = yes ] || return 0
+  printf '  %s?%s %s [Y/n] ' "$hot" "$off" "$1"
+  answer=''
+  read -r answer </dev/tty || return 0
+  case "$answer" in [Nn]*) return 1 ;; *) return 0 ;; esac
+}
 warn() { printf '  %s!%s %s\n' "$hot" "$off" "$*" >&2; }
 spin() {
   label=$1; shift
@@ -60,14 +69,17 @@ if [ "$no_layout" = no ]; then
   mkdir -p "$home_dir/layouts"
   # Never modify Herdr's shipped layout. First installation copies it to a
   # reusable personal layout; all subsequent mods patch the same copy.
+  created=no
   if [ ! -f "$layout_dst" ]; then
     base="$home_dir/layouts/main.json"
     [ -f "$base" ] || base="$repo_dir/layouts/herdr-mods.json"
     cp "$base" "$layout_dst"
+    created=yes
   fi
   tmp="$layout_dst.tmp.$$"
   trap 'rm -f "$tmp"' EXIT HUP INT TERM
   patched=no
+  layout_ready=no
   if [ "$mod" = project-open ]; then
     if awk -f "$script_dir/patch-status.awk" "$layout_dst" > "$tmp"; then patched=yes; fi
   elif ! grep -Eq "\"id\"[[:space:]]*:[[:space:]]*\"$mod\"" "$layout_dst"; then
@@ -86,11 +98,19 @@ if [ "$no_layout" = no ]; then
     ' "$layout_dst" > "$tmp"; then patched=yes; fi
   fi
   if [ "$patched" = yes ] && ! cmp -s "$layout_dst" "$tmp"; then
-    cp -f "$layout_dst" "$layout_dst.bak"
-    mv "$tmp" "$layout_dst"
-    step "layout $layout patched ${dim}(backup: $layout.json.bak)${off}"
+    if confirm "patch layout $layout"; then
+      cp -f "$layout_dst" "$layout_dst.bak"
+      mv "$tmp" "$layout_dst"
+      layout_ready=yes
+      step "layout $layout patched ${dim}(backup: $layout.json.bak)${off}"
+    else
+      if [ "$created" = yes ]; then rm -f "$layout_dst"; fi
+      warn "layout left unchanged; patch it by hand (mods/$mod/README.md)"
+    fi
   elif [ "$patched" = no ]; then
     warn "layout left unchanged; add \"$mod\" by hand (mods/$mod/README.md)"
+  else
+    layout_ready=yes
   fi
 fi
 if [ "$verb" = updated ]; then
@@ -101,7 +121,7 @@ cp -R "$src" "$dst"
 step "mod $verb ${dim}→ $dst${off}"
 if [ "$no_layout" = yes ]; then
   warn "layout untouched (--no-layout); add \"$mod\" by hand"
-else
+elif [ "$layout_ready" = yes ]; then
   printf '  %s→%s switch Herdr App to layout %s%s%s  %s·  herdr-app check "%s"%s\n\n' \
     "$dim" "$off" "$bold" "$layout" "$off" "$dim" "$dst" "$off"
 fi

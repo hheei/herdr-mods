@@ -12,6 +12,12 @@ function Step([string]$Message) {
   Write-Host '✓' -NoNewline -ForegroundColor Green
   Write-Host " $Message" -ForegroundColor DarkGray
 }
+function Confirm([string]$Message) {
+  # Only ask a human at a real console; CI and piped runs take the default.
+  if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) { return $true }
+  $answer = Read-Host "  ? $Message [Y/n]"
+  return !($answer -match '^[Nn]')
+}
 function Warn([string]$Message) {
   Write-Host '  ' -NoNewline
   Write-Host '!' -NoNewline -ForegroundColor Yellow
@@ -46,11 +52,13 @@ Write-Host ''
 New-Item -ItemType Directory -Force -Path (Join-Path $homeDir 'mods') | Out-Null
 if (!$NoLayout) {
   New-Item -ItemType Directory -Force -Path (Join-Path $homeDir 'layouts') | Out-Null
-  if (!(Test-Path -LiteralPath $layoutDst)) {
+  $created = !(Test-Path -LiteralPath $layoutDst)
+  if ($created) {
     $base = Join-Path (Join-Path $homeDir 'layouts') 'main.json'
     if (!(Test-Path -LiteralPath $base)) { $base = Join-Path (Join-Path $repo 'layouts') 'herdr-mods.json' }
     Copy-Item -LiteralPath $base -Destination $layoutDst
   }
+  $layoutReady = $false
   $before = Get-Content -LiteralPath $layoutDst -Raw
   $data = $before | ConvertFrom-Json
   $sidebar = @($data.children | Where-Object { $_.id -eq 'sidebar' })[0]
@@ -98,9 +106,17 @@ if (!$NoLayout) {
   } else {
     $rendered = $data | ConvertTo-Json -Depth 100
     if ($rendered.Trim() -ne $before.Trim()) {
-      Copy-Item -LiteralPath $layoutDst -Destination "$layoutDst.bak" -Force
-      [System.IO.File]::WriteAllText($layoutDst, $rendered + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
-      Step "layout $layoutName patched (backup: $layoutName.json.bak)"
+      if (Confirm "patch layout $layoutName") {
+        Copy-Item -LiteralPath $layoutDst -Destination "$layoutDst.bak" -Force
+        [System.IO.File]::WriteAllText($layoutDst, $rendered + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
+        $layoutReady = $true
+        Step "layout $layoutName patched (backup: $layoutName.json.bak)"
+      } else {
+        if ($created) { Remove-Item -LiteralPath $layoutDst -Force }
+        Warn 'layout left unchanged; patch it by hand'
+      }
+    } else {
+      $layoutReady = $true
     }
   }
 }
@@ -112,7 +128,7 @@ Copy-Item -LiteralPath $src -Destination $dst -Recurse
 Step "mod $verb → $dst"
 if ($NoLayout) {
   Warn 'layout untouched (-NoLayout); add the mod by hand'
-} else {
+} elseif ($layoutReady) {
   Write-Host "  → switch Herdr App to layout $layoutName  ·  herdr-app check `"$dst`"" -ForegroundColor DarkGray
   Write-Host ''
 }

@@ -28,7 +28,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
 
 This installs the Mod under **~/.config/herdr-app/mods/project-open/** and creates/patches the shared personal layout **~/.config/herdr-app/layouts/herdr-mods.json**. It backs up existing layouts before changes, does not duplicate the button, and never modifies the shipped main layout. Select **herdr-mods** in the layout picker once; future Mods are added to the same layout.
 
-The installer looks before it writes. An already-integrated status bar is left alone, and a status bar that has been customized (any `content.mod` other than the stock `workspace-status`) is left **byte-identical**: the Mod files are still installed and you are asked to wire it in by hand. Sidebar Mods are only appended when their id is absent, so existing entries and file formatting survive.
+The installer looks before it writes and, in a terminal, asks `? patch layout herdr-mods [Y/n]`; answering `n` leaves the layout untouched (a `--no-layout` install skips the question entirely). An already-integrated status bar is left alone, and a status bar that has been customized (any `content.mod` other than the stock `workspace-status`) is left **byte-identical**: the Mod files are still installed and you are asked to wire it in by hand. Sidebar Mods are only appended when their id is absent, so existing entries and file formatting survive.
 
 ### Install without touching any layout
 
