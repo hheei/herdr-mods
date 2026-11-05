@@ -3,14 +3,26 @@ set -eu
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
-export HERDR_APP_HOME="$tmp/herdr-home"
-sh "$repo/scripts/install.sh"
-test -f "$HERDR_APP_HOME/mods/project-open/main.js"
-test -f "$HERDR_APP_HOME/layouts/project-open.json"
-if sh "$repo/scripts/install.sh" >"$tmp/out" 2>&1; then echo "FAIL: overwrote existing mod" >&2; exit 1; fi
-printf '%s\n' 'customized-layout-marker' >> "$HERDR_APP_HOME/layouts/project-open.json"
-sh "$repo/scripts/install.sh" --update
-grep -q 'customized-layout-marker' "$HERDR_APP_HOME/layouts/project-open.json"
-backup_count=$(find "$HERDR_APP_HOME/mods" -maxdepth 1 -name 'project-open.bak-*' | wc -l | tr -d ' ')
-test "$backup_count" -ge 1
-echo "PASS: shell installer, overwrite protection, backup and layout preservation"
+export HERDR_APP_HOME="$tmp/home"
+mkdir -p "$tmp/repo/mods/another-mod" "$tmp/repo/layouts" "$tmp/repo/scripts"
+cp "$repo/scripts/install.sh" "$tmp/repo/scripts/install.sh"
+cp "$repo/layouts/herdr-mods.json" "$tmp/repo/layouts/herdr-mods.json"
+cp -R "$repo/mods/project-open" "$tmp/repo/mods/"
+printf '%s\n' 'export default class Another {}' > "$tmp/repo/mods/another-mod/main.js"
+printf '%s\n' '{"place":"none"}' > "$tmp/repo/mods/another-mod/mod.json"
+sh "$tmp/repo/scripts/install.sh"
+if sh "$tmp/repo/scripts/install.sh" >"$tmp/duplicate.log" 2>&1; then echo 'FAIL overwrite'; exit 1; fi
+sh "$tmp/repo/scripts/install.sh" another-mod
+[ "$(grep -c '"id":"project-open"' "$HERDR_APP_HOME/layouts/herdr-mods.json")" -eq 1 ]
+[ "$(grep -c '"id":"another-mod"' "$HERDR_APP_HOME/layouts/herdr-mods.json")" -eq 1 ]
+sh "$tmp/repo/scripts/install.sh" project-open --update
+[ "$(grep -c '"id":"project-open"' "$HERDR_APP_HOME/layouts/herdr-mods.json")" -eq 1 ]
+[ "$(grep -c '"id":"another-mod"' "$HERDR_APP_HOME/layouts/herdr-mods.json")" -eq 1 ]
+[ "$(find "$HERDR_APP_HOME/layouts" -maxdepth 1 -name 'herdr-mods.json.bak-*' | wc -l | tr -d ' ')" -ge 2 ]
+[ "$(find "$HERDR_APP_HOME/mods" -maxdepth 1 -name 'project-open.bak-*' | wc -l | tr -d ' ')" -ge 1 ]
+if command -v jq >/dev/null 2>&1; then jq empty "$HERDR_APP_HOME/layouts/herdr-mods.json"; fi
+unset HERDR_APP_HOME XDG_CONFIG_HOME
+mkdir -p "$tmp/newhome"
+HOME="$tmp/newhome" sh "$tmp/repo/scripts/install.sh" >/dev/null
+[ -f "$tmp/newhome/.config/herdr-app/layouts/herdr-mods.json" ]
+echo 'PASS: unset env, two mods in shared layout, idempotence and backups'

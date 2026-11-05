@@ -28,12 +28,12 @@ These commands download a temporary source archive, install the files, and delet
 
 **If you already downloaded the repository**, run `sh scripts/install.sh` on macOS/Linux or `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1` on Windows.
 
-No Python, Node, jq, sudo, or additional dependency required for installation. Both scripts install the Mod and a ready-made **personal layout**, leaving all existing Herdr layouts untouched.
+No Python, Node, jq, sudo, or additional dependency required for installation. Both scripts install the Mod and **patch a shared personal layout** named `herdr-mods`. On first install, the installer copies the official `main` layout (or the bundled template) to a personal copy; each subsequent Mod is added to the **same layout**, with an automatic timestamped backup before every change. Shipped layouts are never modified.
 
-**Next:** in Herdr App switch to layout **project-open** (from the layout picker or command palette); alternatively:
+**Next:** in Herdr App switch to layout **herdr-mods** (from the layout picker or command palette); alternatively:
 
 ~~~sh
-herdr-app do layout.switch --name project-open
+herdr-app do layout.switch --name herdr-mods
 ~~~
 
 The source is available at **https://github.com/hheei/herdr-mods**. Direct-install commands always use the repository's `main` branch; inspect the script first or use a pinned release archive when you need a reproducible build.
@@ -48,7 +48,7 @@ sh scripts/install.sh project-open --update
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -Mod project-open -Update
 ~~~
 
-Updates back up existing mod files and preserve any customized personal layout.
+Updates back up existing mod files. Layout patching is idempotent: existing buttons and customizations are preserved, and an unchanged layout is not rewritten.
 
 The official Herdr App home is **~/.config/herdr-app**, even on Windows. XDG_CONFIG_HOME changes its config root; HERDR_APP_HOME overrides directly.
 
@@ -56,14 +56,14 @@ The official Herdr App home is **~/.config/herdr-app**, even on Windows. XDG_CON
 
 ~~~text
 mods/<name>/        each mod is self-contained (main.js, mod.json, assets, README)
-layouts/<name>.json optional ready-made personal layouts
+layouts/herdr-mods.json fallback base for the shared personal layout
 scripts/            portable sh and PowerShell installers
 examples/           manual integration snippets
 tests/              developer checks
 .github/workflows/  CI
 ~~~
 
-Future mods follow the same structure and can be installed by name. Installers do not change shipped Herdr App layouts or herdr-core.
+Future mods follow the same structure and can be installed by name. Every install patches the same `herdr-mods` layout with backup, so no manual JSON merging is needed. Installers do not change shipped Herdr App layouts or herdr-core. To patch an existing **personal** layout instead, use `--layout=my-layout` on shell or `-Layout my-layout` on PowerShell. Refuses to patch shipped `main`, `terminals` or `win98`.
 
 ## Development checks
 

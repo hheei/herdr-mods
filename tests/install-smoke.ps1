@@ -1,23 +1,36 @@
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
-$tempHome = Join-Path ([System.IO.Path]::GetTempPath()) ("herdr-mod-test-" + [guid]::NewGuid().ToString("N"))
-$previous = $env:HERDR_APP_HOME
+$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ('herdr-test-' + [guid]::NewGuid().ToString('N'))
+$oldHome = $env:HERDR_APP_HOME
 try {
-  $env:HERDR_APP_HOME = $tempHome
-  & (Join-Path $repo 'scripts/install.ps1')
-  if (!(Test-Path -LiteralPath (Join-Path $tempHome 'mods/project-open/main.js'))) { throw "Missing mod" }
-  $layout = Join-Path $tempHome 'layouts/project-open.json'
-  if (!(Test-Path -LiteralPath $layout)) { throw "Missing layout" }
+  $env:HERDR_APP_HOME = Join-Path $tmp 'home'
+  $testRepo = Join-Path $tmp 'repo'
+  foreach ($sub in @('scripts','mods','layouts')) { New-Item -ItemType Directory -Force -Path (Join-Path $testRepo $sub) | Out-Null }
+  Copy-Item (Join-Path $repo 'scripts/install.ps1') (Join-Path $testRepo 'scripts/install.ps1')
+  Copy-Item (Join-Path $repo 'layouts/herdr-mods.json') (Join-Path $testRepo 'layouts/herdr-mods.json')
+  Copy-Item -Recurse (Join-Path $repo 'mods/project-open') (Join-Path $testRepo 'mods/project-open')
+  $second = Join-Path $testRepo 'mods/another-mod'
+  New-Item -ItemType Directory $second | Out-Null
+  'export default class Another {}' | Set-Content -LiteralPath (Join-Path $second 'main.js')
+  '{"place":"none"}' | Set-Content -LiteralPath (Join-Path $second 'mod.json')
+  $installer = Join-Path $testRepo 'scripts/install.ps1'
+  & $installer
   $rejected = $false
-  try { & (Join-Path $repo 'scripts/install.ps1') } catch { $rejected = $true }
-  if (!$rejected) { throw "Expected overwrite protection" }
-  Add-Content -LiteralPath $layout -Value 'customized-layout-marker'
-  & (Join-Path $repo 'scripts/install.ps1') -Update
-  if (!(Select-String -LiteralPath $layout -Pattern 'customized-layout-marker' -Quiet)) { throw "Layout overwritten" }
-  $backups = @(Get-ChildItem -LiteralPath (Join-Path $tempHome 'mods') -Directory -Filter 'project-open.bak-*')
-  if ($backups.Count -lt 1) { throw "No backup" }
-  Write-Host 'PASS: PowerShell install, protection, backup and layout preservation'
+  try { & $installer } catch { $rejected = $true }
+  if (!$rejected) { throw 'Expected overwrite rejection' }
+  & $installer -Mod another-mod
+  $layout = Join-Path $env:HERDR_APP_HOME 'layouts/herdr-mods.json'
+  $json = Get-Content -LiteralPath $layout -Raw | ConvertFrom-Json
+  $ids = @($json.children | Where-Object id -eq 'sidebar' | ForEach-Object { $_.children.id })
+  if (@($ids | Where-Object { $_ -eq 'project-open' }).Count -ne 1) { throw 'project-open duplicate/missing' }
+  if (@($ids | Where-Object { $_ -eq 'another-mod' }).Count -ne 1) { throw 'another-mod duplicate/missing' }
+  & $installer -Update
+  $json = Get-Content -LiteralPath $layout -Raw | ConvertFrom-Json
+  $ids = @($json.children | Where-Object id -eq 'sidebar' | ForEach-Object { $_.children.id })
+  if (@($ids | Where-Object { $_ -eq 'project-open' }).Count -ne 1) { throw 'duplicated on update' }
+  if (@(Get-ChildItem (Join-Path $env:HERDR_APP_HOME 'layouts') -Filter 'herdr-mods.json.bak-*').Count -lt 2) { throw 'missing backups' }
+  Write-Host 'PASS: PowerShell multi-mod layout and backups'
 } finally {
-  $env:HERDR_APP_HOME = $previous
-  if (Test-Path -LiteralPath $tempHome) { Remove-Item -LiteralPath $tempHome -Recurse -Force }
+  $env:HERDR_APP_HOME = $oldHome
+  if (Test-Path $tmp) { Remove-Item $tmp -Force -Recurse }
 }

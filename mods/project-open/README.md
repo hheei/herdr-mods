@@ -26,9 +26,9 @@ sh scripts/install.sh
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
 ~~~
 
-This installs the Mod under **~/.config/herdr-app/mods/project-open/** and a ready-to-use layout under **~/.config/herdr-app/layouts/project-open.json**. Then select **project-open** in Herdr App's layout picker. The shipped main layout is never modified.
+This installs the Mod under **~/.config/herdr-app/mods/project-open/** and creates/patches the shared personal layout **~/.config/herdr-app/layouts/herdr-mods.json**. It backs up existing layouts before changes, does not duplicate the button, and never modifies the shipped main layout. Select **herdr-mods** in the layout picker once; future Mods are added to the same layout.
 
-To use an existing custom sidebar layout instead, insert the block from [examples/sidebar-project-open.json](../../examples/sidebar-project-open.json) into your own sidebar column. Clone a default layout via the official command before editing:
+To patch an existing custom sidebar layout instead, run `sh scripts/install.sh --layout=my-layout` or PowerShell `-Layout my-layout`; the installer will back it up and insert the button. You can still manually use [the example block](../../examples/sidebar-project-open.json). Clone a shipped layout first if needed:
 
 ~~~sh
 herdr-app do layout.clone '{"name":"main","as":"my-project-layout"}'
@@ -71,7 +71,7 @@ The test suite checks simulated behavior, but actual Herdr App GUI rendering and
 
 ## Update/uninstall
 
-Update via **sh scripts/install.sh project-open --update** or PowerShell install.ps1 -Update. Existing Mod is backed up and custom layout is kept. To remove, switch to a different layout then remove mods/project-open and, optionally, layouts/project-open.json from Herdr App Home. This does not affect running herdr-core sessions.
+Update via **sh scripts/install.sh project-open --update** or PowerShell install.ps1 -Update. Existing Mod is backed up, and the shared layout is patched only if the button is missing. To remove, switch to a different layout then remove mods/project-open and, optionally, layouts/project-open.json from Herdr App Home. This does not affect running herdr-core sessions.
 
 ## Upstream documentation
 

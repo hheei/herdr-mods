@@ -1,6 +1,6 @@
 # Contributing
 
-Add independent mods under mods/<name>/, each with main.js, mod.json, assets and README.md. Optional ready-made layouts go under layouts/<name>.json. Do not edit shipped Herdr App layouts.
+Add independent mods under mods/<name>/, each with main.js, mod.json, assets and README.md. All standard sidebar mods patch the shared personal layout `herdr-mods`, derived from `layouts/herdr-mods.json`. Do not edit shipped Herdr App layouts.
 
 Use the official Herdr App mod API and validate with:
 
