@@ -52,7 +52,7 @@ if (@($children | Where-Object { $_.id -eq $Mod }).Count -eq 0) {
   # Validate serialized JSON before mutating the original.
   $null = $rendered | ConvertFrom-Json
   $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-  $backup = "$layoutDst.bak-$stamp-$PID"
+  $backup = "$layoutDst.bak-$stamp-$([guid]::NewGuid().ToString('N'))"
   Copy-Item -LiteralPath $layoutDst -Destination $backup
   $temp = "$layoutDst.tmp-$PID"
   try {
@@ -67,7 +67,7 @@ if (@($children | Where-Object { $_.id -eq $Mod }).Count -eq 0) {
   Write-Host "Layout already contains $Mod (no duplicate added)."
 }
 if ($Update -and (Test-Path -LiteralPath $dst)) {
-  $backup = "$dst.bak-$(Get-Date -Format 'yyyyMMdd-HHmmss')-$PID"
+  $backup = "$dst.bak-$(Get-Date -Format 'yyyyMMdd-HHmmss')-$([guid]::NewGuid().ToString('N'))"
   Move-Item -LiteralPath $dst -Destination $backup
   Write-Host "Backed up mod: $backup"
 }
