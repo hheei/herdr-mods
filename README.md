@@ -42,15 +42,7 @@ The source is available at **https://github.com/hheei/herdr-mods**. Direct-insta
 
 ### Update
 
-~~~sh
-sh scripts/install.sh project-open --update
-~~~
-
-~~~powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -Mod project-open -Update
-~~~
-
-Without a clone, pipe the script again and pass `--update`:
+Pipe the installer again and pass `--update`:
 
 ~~~sh
 curl -fsSL https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/install.sh | sh -s -- --update

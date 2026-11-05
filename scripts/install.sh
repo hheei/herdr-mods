@@ -91,7 +91,7 @@ if [ "$no_layout" = no ]; then
   if [ "$patched" = yes ] && ! cmp -s "$layout_dst" "$tmp"; then
     cp -f "$layout_dst" "$layout_dst.bak"
     mv "$tmp" "$layout_dst"
-    step "layout $layout patched $dim(backup: $layout.json.bak)$off"
+    step "layout $layout patched ${dim}(backup: $layout.json.bak)${off}"
   elif [ "$patched" = no ]; then
     warn "layout left unchanged; add \"$mod\" by hand (mods/$mod/README.md)"
   fi
@@ -101,7 +101,7 @@ if [ "$update" = yes ] && [ -e "$dst" ]; then
   mv "$dst" "$dst.bak"
 fi
 cp -R "$src" "$dst"
-step "mod installed $dim→ $dst$off"
+step "mod installed ${dim}→ $dst${off}"
 if [ "$no_layout" = yes ]; then
   warn "layout untouched (--no-layout); add \"$mod\" by hand"
 else
