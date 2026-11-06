@@ -54,15 +54,15 @@ sh scripts/install.sh agent-ui project-open
 
 ### Message Rail
 
-- 七輪各一個**小圓點**，預設直徑 4px；**所有與視野相交的輪次同時放大成 8px 圓點**。中心線固定在相同 23px hit target，避免放大造成排列偏移；只用 Theme 的 `dim`／`muted` 中性色，已移除額外垂直高亮條。
-- `.on_hover` 只顯示**一行截短 user prompt**。只有 `requiresUserAction === true` 這種明確的使用者介入事件才加第二行 `需要處理`；**工具 failed／pending 不等於使用者需要介入**，也**不影響 Pin 顏色**。
+- **Message Rail 本身就是 Scrollbar**：唯一的 18px 寬操作區**只繪製訊息圓點**；沒有 1px Track、4px Thumb，也沒有獨立的視野高亮條。七輪各一個小圓點，非可視輪次 4px、與 viewport 相交的所有輪次同時放大為 8px。可視圓點集合就是閱讀位置指示，顏色只用 Theme 中性的 `dim`／`muted`。
+- 合併軌使用 `.on_mouse_move` 依位置找最近的圓點，Hover 只顯示**一行截短 user prompt**，離開控制軌即關閉。只有 `requiresUserAction === true` 的明確介入事件才加第二行 `需要處理`；**工具 failed／pending 不等於使用者需要介入**，也**不影響 Pin 顏色**。
 - 點擊固定 turn ID 時，在**同一份完整對話**內更新 `scrollY` 到該輪的**實際量測高度位置**；**不再將 earlier turns 切掉／換一份 window**。目前使用 Herdr 已有的 `on_scroll_wheel`、`on_size_change`、`overflow_hidden` 和絕對位置來建立手動可捲動 viewport；不是宣稱 Herdr 已有 public `scroll-to-id`。
 - `turnGeometry` 由每輪 `.on_size_change` 實測高度構成；群組展開導致高度變化時保留原閱讀錨點，滑鼠滾動更新 `scrollY`，所有與 viewport 區間相交的 turn 同時高亮。Hover 預覽及 rail pin 的 top 都以 viewport 高度 clamp，容器本身裁切。
-- 寬度低於約 520 logical px 時隱藏 Rail。**這是既有 Chrome Layout Stack 的 UI child，不是獨立 model Pane**。此 child 使用 `rounded(10)`、1px `theme.border` 和 `overflow_hidden()` 輕量模擬 Herdr Main Layout 框架，Topbar 高 38px、底部有淡色分隔線。真正 Terminal Pane Frame 由宿主負責；若將來宿主替 UI 也繪製 Frame，就應移除本地邊框避免雙重輪廓。
+- **操作**：點擊圓點並放開＝跳至該輪；從圓點拖曳超過 5px＝改成按 Rail 垂直位置捲動對話，放開不再觸發跳轉；點擊或拖曳圓點間的空白區也可按比例捲動。所有操作只更新唯一的 `scrollY`，不是另一個 Scrollbar 控件。窄 Pane 仍保留圓點；只有極短 viewport 才隱藏整條 Rail 防止溢出。此視圖仍是原本 Chrome Layout Stack 的子 View，不是獨立 model Pane；外框維持 `rounded(10)`、1px Theme border、38px Topbar。
 
-**已完成：連續 transcript 的量測式 Jump 和「可視範圍涵蓋多輪就全部放大圓點」。** 尚未完成／實機未驗證：長歷史 cluster、原生 Scrollbar thumb、鍵盤 Focus／Screen Reader 和 GPUI 真實文字幾何。這些不是已完成產品功能。
+**已完成：連續 transcript 的量測式 Jump 和「可視範圍涵蓋多輪就全部放大圓點」。** 尚未完成／實機未驗證：長歷史 cluster、跨視窗 pointer capture、鍵盤 Focus／Screen Reader 和 GPUI 真實文字幾何。這些不是已完成產品功能。
 
-**Scrollbar 現已實作（headless 測試通過，待實機 GUI 驗證）**：在對話最右緣建立 **12px 命中區、1px 低對比 Track、4px 圓角 Thumb**；內容不需滾動時不渲染線條。Thumb 高度與位置從同一份 `turnGeometry`／`scrollY`／`viewportHeight` 計算。滑鼠點擊 Track 按比例定位；拖曳 Thumb 使用相同 `scrollY`，可拉到頂／底，mouse-up／離開視野時終止；Wheel、Rail 點擊、resize 和工具展開均共用這份位置。因此沒有第二套獨立捲動狀態。這是**按照 Herdr Terminal 風格自行畫出的 GPUI Scrollbar**，而非直接掛上 `gpui-base.Scrollbar.vertical`（後者需原生 scroll container，與當前手動 transcript owner 不同）。原生 App 的 pointer capture／觸控／鍵盤與最終實際渲染仍須實測。
+**Dots-only Rail 已實作（headless 測試通過，實機待驗證）**：唯一 18px 操作區只由圓點組成，沒有畫出 Scroll Track／Thumb。圓點的位置由每輪實測 `turnGeometry` 映射；當前 viewport 內的圓點放大，就代表可見區間。Wheel、圓點跳轉和 Drag-to-scrub 都使用相同 `scrollY`。圓點短按與拖曳透過 5px 門檻區分；空白處可以直接捲動，不用先點任何 Thumb。Resize、工具展開仍沿用相同幾何。原生 App 的指標事件、Hover 與視覺需要實機驗證。
 
 ## 安裝與不干擾要求
 
@@ -79,6 +79,6 @@ node tests/project-open.test.cjs
 sh tests/agent-ui-demo-install.test.sh
 ```
 
-已覆蓋的行為：七輪 fixtures、group 和 tool detail 的折疊、失敗摘要（**右側不顯示狀態**）、工具失敗不觸發 `requiresUserAction`、Markdown 的原生 API 參數、**所有可見輪次的 Rail multi-highlight**、按 ID 捲動完整 transcript、Hover／Pin 可視範圍 clamp、**Scrollbar：依比例的 Thumb、Track 點擊、拖曳、放開、上下邊界、Wheel／Rail／Resize 同步**、圓角 root、本地 Composer、窄畫面、單 SVG status control、獨立 derive layout、不覆蓋一般個人 Layout／main、備份。
+已覆蓋的行為：七輪 fixtures、group 和 tool detail 的折疊、失敗摘要（**右側不顯示狀態**）、工具失敗不觸發 `requiresUserAction`、Markdown 的原生 API 參數、**所有可見輪次的 Rail multi-highlight**、按 ID 捲動完整 transcript、Hover／Pin 可視範圍 clamp、**Dots-only Rail：圓點點擊、空白處點擊／拖曳、5px Gesture 門檻、上下邊界、Wheel／Resize 同步，且不渲染 Track／Thumb**、圓角 root、本地 Composer、窄畫面、單 SVG status control、獨立 derive layout、不覆蓋一般個人 Layout／main、備份。
 
 實機進行以下 QA 才算完成下一個 Gate：`herdr-app check`、真實視窗截圖、Markdown code blocks、Hover 是否裁切、click 過程是否跳動、窄 Pane／IME／鍵盤 focus、當實際 UI 初始化失敗時是否仍能從 Status Bar 回 Terminal。**這台 Linux 執行環境沒有 `herdr-app` desktop binary，故無法代替目標 Mac 上的實機結果。**

@@ -5,7 +5,7 @@ import { theme } from "herdr";
 import { DEMO_TURNS } from "./fixtures.js";
 import {
   summarizeActivity, toRailNodes, shortPrompt, turnGeometry, clampScroll,
-  visibleTurnIds, railMarkers, previewTop, scrollbarGeometry, scrollbarOffsetAt,
+  visibleTurnIds, railMarkers, railHit, railScrubOffset, previewTop,
 } from "./model.js";
 
 const STATUSES = {
@@ -43,7 +43,7 @@ export default class AgentUi extends View {
     this.turnHeights = new Map();
     this.viewportHeight = 460;
     this.scrollY = 0;
-    this.scrollbarDrag = null;
+    this.railGesture = null;
     this.pendingJump = null;
     this.width = 800;
     this.localCount = 0;
@@ -60,7 +60,7 @@ export default class AgentUi extends View {
     const width = Math.round(size?.width ?? 800);
     if (Math.abs(width - this.width) >= 16) {
       this.width = width;
-      if (width < 520) this.hoveredTurn = null;
+      if (width < 240) this.hoveredTurn = null;
       cx.notify();
     }
   }
@@ -69,7 +69,8 @@ export default class AgentUi extends View {
     const height = Math.max(1, Math.round(size?.height ?? this.viewportHeight));
     if (Math.abs(height - this.viewportHeight) < 1) return;
     this.viewportHeight = height;
-    this.scrollbarDrag = null;
+    this.railGesture = null;
+    if (height < 80) this.hoveredTurn = null;
     const geometry = turnGeometry(this.turns, this.turnHeights);
     this.scrollY = clampScroll(this.scrollY, geometry.total, height);
     cx.notify();
@@ -111,10 +112,8 @@ export default class AgentUi extends View {
     cx.notify();
   }
 
-  // One measured scroll offset powers the transcript, rail, wheel and bar.
-  // The native Scrollbar.vertical targets a native scrolling element instead;
-  // overlaying it on this manually positioned transcript would desynchronize.
-  setScrollbarScroll(value, cx) {
+  // The dots ARE the scrollbar: one shared scrollY and no second control.
+  setRailScroll(value, cx) {
     const geometry = turnGeometry(this.turns, this.turnHeights);
     const next = clampScroll(value, geometry.total, this.viewportHeight);
     this.pendingJump = null;
@@ -123,42 +122,74 @@ export default class AgentUi extends View {
     cx.notify();
   }
 
-  scrollbarPress(event, cx) {
-    const geometry = turnGeometry(this.turns, this.turnHeights);
-    const bar = scrollbarGeometry(geometry.total, this.viewportHeight, this.scrollY);
+  railDragMove(event, cx) {
+    const gesture = this.railGesture;
+    if (!gesture) return;
     const screenY = Number(event?.position?.y);
-    const localY = Number.isFinite(Number(event?.local_position?.y))
-      ? Number(event.local_position.y) : screenY - Number(event?.bounds?.y);
-    if (!bar.scrollable || !Number.isFinite(screenY) || !Number.isFinite(localY)) return;
-    const onThumb = localY >= bar.thumbTop && localY <= bar.thumbTop + bar.thumbHeight;
-    const grab = onThumb ? localY - bar.thumbTop : bar.thumbHeight / 2;
-    this.setScrollbarScroll(scrollbarOffsetAt(localY, bar, grab), cx);
-    this.scrollbarDrag = { screenY, startScrollY: this.scrollY };
+    if (!Number.isFinite(screenY)) return;
+    if (gesture.mode === "pin") {
+      if (Math.abs(screenY - gesture.screenY) < 5) return;
+      gesture.mode = "scrub";
+      this.hoveredTurn = null;
+    }
+    const localY = screenY - gesture.originScreenY;
+    const geometry = turnGeometry(this.turns, this.turnHeights);
+    this.setRailScroll(railScrubOffset(localY, geometry.total, this.viewportHeight), cx);
     cx.stop_propagation();
+  }
+
+  cancelRailGesture(cx) {
+    if (!this.railGesture) return;
+    this.railGesture = null;
     cx.notify();
   }
 
-  scrollbarMove(event, cx) {
-    if (!this.scrollbarDrag) return;
-    const y = Number(event?.position?.y);
-    if (!Number.isFinite(y)) return;
-    const content = turnGeometry(this.turns, this.turnHeights).total;
-    const bar = scrollbarGeometry(content, this.viewportHeight, this.scrollY);
-    if (!bar.scrollable) {
-      this.scrollbarDrag = null;
-      cx.notify();
-      return;
+  railPointer(event) {
+    const y = Number.isFinite(Number(event?.local_position?.y))
+      ? Number(event.local_position.y) : Number(event?.position?.y) - Number(event?.bounds?.y);
+    const x = Number.isFinite(Number(event?.local_position?.x))
+      ? Number(event.local_position.x) : Number(event?.position?.x) - Number(event?.bounds?.x);
+    return { x, y };
+  }
+
+  railPress(event, cx) {
+    const { x, y } = this.railPointer(event);
+    const screenY = Number(event?.position?.y);
+    if (!Number.isFinite(screenY) || !Number.isFinite(y)) return;
+    const geometry = turnGeometry(this.turns, this.turnHeights);
+    const markers = railMarkers(geometry.ranges, geometry.total, this.viewportHeight);
+    const id = this.viewportHeight >= 80 ? railHit(markers, x, y) : null;
+    this.railGesture = {
+      mode: id ? "pin" : "scrub", id, screenY, originScreenY: screenY - y,
+    };
+    this.hoveredTurn = null;
+    if (!id) {
+      // Empty space between dots also scrolls: no track/thumb is drawn.
+      this.setRailScroll(railScrubOffset(y, geometry.total, this.viewportHeight), cx);
     }
-    const next = bar.travel > 0
-      ? this.scrollbarDrag.startScrollY
-        + (y - this.scrollbarDrag.screenY) * bar.maxScroll / bar.travel : 0;
-    this.setScrollbarScroll(next, cx);
     cx.stop_propagation();
   }
 
-  scrollbarRelease(cx) {
-    if (!this.scrollbarDrag) return;
-    this.scrollbarDrag = null;
+  railMove(event, cx) {
+    if (this.railGesture) {
+      this.railDragMove(event, cx);
+      return;
+    }
+    if (this.viewportHeight < 80) return;
+    const { x, y } = this.railPointer(event);
+    const geometry = turnGeometry(this.turns, this.turnHeights);
+    const id = railHit(railMarkers(geometry.ranges, geometry.total, this.viewportHeight), x, y);
+    if (id !== this.hoveredTurn) {
+      this.hoveredTurn = id;
+      cx.notify();
+    }
+  }
+
+  railRelease(cx) {
+    const pressed = this.railGesture;
+    if (!pressed) return;
+    this.railGesture = null;
+    if (pressed.mode === "pin") this.selectTurn(pressed.id, cx);
     cx.stop_propagation();
     cx.notify();
   }
@@ -173,15 +204,6 @@ export default class AgentUi extends View {
     this.pendingJump = geometry.complete ? null : id;
     this.hoveredTurn = null;
     cx.notify();
-  }
-
-  showHover(id, hovered, cx) {
-    if (this.width < 520) return;
-    const next = hovered ? id : (this.hoveredTurn === id ? null : this.hoveredTurn);
-    if (next !== this.hoveredTurn) {
-      this.hoveredTurn = next;
-      cx.notify();
-    }
   }
 
   toggleGroup(id, cx) {
@@ -312,54 +334,44 @@ export default class AgentUi extends View {
       .child(div().w_full().h(1).bg(t.border));
   }
 
-  rail(t, geometry, visible) {
+  navigationStrip(t, geometry, visible, showPins) {
     const nodes = toRailNodes(this.turns);
     const marks = railMarkers(geometry.ranges, geometry.total, this.viewportHeight);
     const byId = new Map(marks.map((mark) => [mark.id, mark]));
-    return div().id("agent-ui-rail").w(29).flex_none().h_full()
-      .relative().overflow_hidden()
-      .children(nodes.map((node) =>
-        h_flex().id(`agent-ui-rail-marker-${node.id}`).w(23).h(16).absolute()
-          .left(4).top(byId.get(node.id)?.top ?? 7)
+    return div().id("agent-ui-rail").w(18).flex_none().h_full()
+      .relative().overflow_hidden().cursor_pointer()
+      .on_mouse_down("left", (event, cx) => this.railPress(event, cx))
+      .on_mouse_move((event, cx) => this.railMove(event, cx))
+      .on_mouse_up("left", (_event, cx) => this.railRelease(cx))
+      .on_hover((hovered, cx) => {
+        if (!hovered && this.hoveredTurn !== null) {
+          this.hoveredTurn = null;
+          cx.notify();
+        }
+      })
+      .when(showPins, (el) => el.children(nodes.map((node) =>
+        h_flex().id(`agent-ui-rail-marker-${node.id}`).w(18).h(16).absolute()
+          .left(0).top(byId.get(node.id)?.top ?? 7)
           .items_center().justify_center().rounded(6)
-          .cursor_pointer()
-          .on_hover((on, cx) => this.showHover(node.id, on, cx))
-          .on_click((_event, cx) => this.selectTurn(node.id, cx))
-          // Every turn intersecting the viewport gets a larger CIRCLE,
-          // aligned on the same centerline. Tool state never changes pins.
+          // The dots alone indicate the visible scroll region: no track/thumb.
           .child(div().size(visible.has(node.id) ? 8 : 4).rounded(999)
-            .bg(visible.has(node.id) ? t.muted : t.dim))));
-  }
-
-  scrollbar(t, geometry) {
-    const bar = scrollbarGeometry(geometry.total, this.viewportHeight, this.scrollY);
-    return div().id("agent-ui-scrollbar").w(12).flex_none().h_full()
-      .relative().overflow_hidden()
-      .when(bar.scrollable, (el) => el
-        .cursor_pointer()
-        .on_mouse_down("left", (event, cx) => this.scrollbarPress(event, cx))
-        .child(div().id("agent-ui-scrollbar-track").absolute()
-          .left(6).top(bar.trackTop).w(1).h(bar.trackHeight)
-          .bg(t.dim).opacity(0.35))
-        .child(div().id("agent-ui-scrollbar-thumb").absolute()
-          .left(4).top(bar.thumbTop).w(4).h(bar.thumbHeight)
-          .rounded(2).bg(t.muted)));
+            .bg(visible.has(node.id) ? t.muted : t.dim)))));
   }
 
   hoverPreview(t, geometry) {
     if (!this.hoveredTurn) return null;
     const nodes = toRailNodes(this.turns);
     const node = nodes.find((item) => item.id === this.hoveredTurn);
-    if (!node) return null;
+    if (!node || this.width < 240) return null;
     if (this.viewportHeight < (node.actionable ? 60 : 44)) return null;
     const mark = railMarkers(geometry.ranges, geometry.total, this.viewportHeight)
       .find((item) => item.id === this.hoveredTurn);
     if (!mark) return null;
-    return v_flex().id("agent-ui-rail-preview").absolute().right(48)
+    return v_flex().id("agent-ui-rail-preview").absolute().right(22)
       // Keep preview wholly inside the conversation viewport, even for the
       // first/last marker. The containing main area clips excess pixels.
       .top(previewTop(mark.top, this.viewportHeight, node.actionable))
-      .w(207).px(11).py(9).gap(5)
+      .w(Math.min(207, this.width - 30)).px(11).py(9).gap(5)
       .rounded(7).bg(t.popover).border_1().border_color(t.border)
       .child(div().text_size(11.5).text_color(t.foreground)
         .truncate().child(shortPrompt(node.preview, 39)))
@@ -370,7 +382,7 @@ export default class AgentUi extends View {
   render(cx) {
     const t = theme();
     const compact = this.width < 520;
-    const railEnabled = !compact && this.viewportHeight >= 80;
+    const railEnabled = this.viewportHeight >= 80;
     const draft = String(this.composer.value() ?? "").trim();
     const geometry = turnGeometry(this.turns, this.turnHeights);
     this.scrollY = clampScroll(this.scrollY, geometry.total, this.viewportHeight);
@@ -389,10 +401,10 @@ export default class AgentUi extends View {
       .child(h_flex().id("agent-ui-main").flex_1().min_h(0)
         .relative().overflow_hidden()
         .on_scroll_wheel((event, context) => this.scrollWheel(event, context))
-        .on_mouse_move((event, context) => this.scrollbarMove(event, context))
-        .on_mouse_up("left", (_event, context) => this.scrollbarRelease(context))
+        .on_mouse_move((event, context) => this.railDragMove(event, context))
+        .on_mouse_up("left", (_event, context) => this.railRelease(context))
         .on_hover((hovered, context) => {
-          if (!hovered && this.scrollbarDrag) this.scrollbarRelease(context);
+          if (!hovered && this.railGesture) this.cancelRailGesture(context);
         })
         .child(div().id("agent-ui-viewport").flex_1().min_w(0).h_full()
           .relative().overflow_hidden()
@@ -401,8 +413,8 @@ export default class AgentUi extends View {
             .left(0).right(0).top(-this.scrollY)
             .px(compact ? 13 : 23).py(18).gap(19)
             .children(this.turns.map((turn) => this.turn(t, turn)))))
-        .when(railEnabled, (el) => el.child(this.rail(t, geometry, visible)))
-        .child(this.scrollbar(t, geometry))
+        .when(railEnabled, (el) =>
+          el.child(this.navigationStrip(t, geometry, visible, true)))
         .when(railEnabled && Boolean(this.hoveredTurn),
           (el) => el.child(this.hoverPreview(t, geometry))))
       .child(v_flex().id("agent-ui-composer").flex_none().px(compact ? 13 : 21)

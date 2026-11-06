@@ -82,30 +82,30 @@ export function railMarkers(ranges, contentHeight, viewportHeight) {
   });
 }
 
+// A dot click selects the nearest turn. Space between dots is the scrub area;
+// there is no independent scrollbar track or thumb.
+export function railHit(markers, x, y, centerX = 9, radius = 7) {
+  if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x - centerX) > radius) return null;
+  let winner = null, distance = radius + 1;
+  for (const marker of markers) {
+    const d = Math.abs(y - (marker.top + 8));
+    if (d <= radius && d < distance) {
+      winner = marker.id;
+      distance = d;
+    }
+  }
+  return winner;
+}
+
 export function previewTop(pinTop, viewportHeight, actionablePreview = false) {
   const height = actionablePreview ? 52 : 36;
   return Math.max(4, Math.min(pinTop - 5, viewportHeight - height - 4));
 }
 
-// Single scroll owner: the transcript, rail, wheel and scrollbar all consume
-// this geometry. The scrollbar never has an independent scroll offset.
-export function scrollbarGeometry(contentHeight, viewportHeight, scrollY, inset = 8, minThumb = 24) {
-  const trackHeight = Math.max(0, viewportHeight - 2 * inset);
-  const maxScroll = Math.max(0, contentHeight - viewportHeight);
-  const scrollable = maxScroll > 0 && trackHeight > 0;
-  if (!scrollable) return {
-    scrollable: false, trackTop: inset, trackHeight, thumbTop: inset,
-    thumbHeight: trackHeight, travel: 0, maxScroll: 0,
-  };
-  const thumbHeight = Math.min(trackHeight, Math.max(minThumb,
-    trackHeight * Math.min(1, viewportHeight / contentHeight)));
-  const travel = Math.max(0, trackHeight - thumbHeight);
-  const thumbTop = inset + travel * clampScroll(scrollY, contentHeight, viewportHeight) / maxScroll;
-  return { scrollable, trackTop: inset, trackHeight, thumbTop, thumbHeight, travel, maxScroll };
-}
-
-export function scrollbarOffsetAt(pointerY, geometry, grab = geometry.thumbHeight / 2) {
-  if (!geometry.scrollable || geometry.travel <= 0) return 0;
-  return Math.max(0, Math.min(geometry.maxScroll,
-    (pointerY - geometry.trackTop - grab) / geometry.travel * geometry.maxScroll));
+// The rail IS the scrollbar: dragging vertically scrubs the sole transcript
+// scrollY across its full range. The visible-turn dots are the position indicator.
+export function railScrubOffset(pointerY, contentHeight, viewportHeight, inset = 8) {
+  const travel = Math.max(1, viewportHeight - 2 * inset);
+  const fraction = Math.max(0, Math.min(1, (pointerY - inset) / travel));
+  return fraction * Math.max(0, contentHeight - viewportHeight);
 }

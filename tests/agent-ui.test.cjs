@@ -70,7 +70,7 @@ const modelSrc = fs.readFileSync(path.join(root, "mods/agent-ui/model.js"), "utf
 const fixtureSrc = fs.readFileSync(path.join(root, "mods/agent-ui/fixtures.js"), "utf8")
   .replace("export const DEMO_TURNS", "const DEMO_TURNS");
 vm.runInNewContext(modelSrc + "\n" + fixtureSrc
-  + "\nthis.summarizeActivity=summarizeActivity;this.toRailNodes=toRailNodes;this.shortPrompt=shortPrompt;this.turnGeometry=turnGeometry;this.clampScroll=clampScroll;this.visibleTurnIds=visibleTurnIds;this.railMarkers=railMarkers;this.previewTop=previewTop;this.scrollbarGeometry=scrollbarGeometry;this.scrollbarOffsetAt=scrollbarOffsetAt;this.DEMO_TURNS=DEMO_TURNS;", box);
+  + "\nthis.summarizeActivity=summarizeActivity;this.toRailNodes=toRailNodes;this.shortPrompt=shortPrompt;this.turnGeometry=turnGeometry;this.clampScroll=clampScroll;this.visibleTurnIds=visibleTurnIds;this.railMarkers=railMarkers;this.railHit=railHit;this.previewTop=previewTop;this.railScrubOffset=railScrubOffset;this.DEMO_TURNS=DEMO_TURNS;", box);
 
 assert.equal(box.DEMO_TURNS.length, 7);
 assert.equal(box.summarizeActivity([]).total, 0);
@@ -96,25 +96,21 @@ assert.deepEqual(Array.from(box.visibleTurnIds(positions.ranges, 430, 480)),
   "every turn overlapping the viewport is highlighted, not just one active turn");
 const marks = box.railMarkers(positions.ranges, positions.total, 340);
 assert.equal(marks.length, 15);
+assert.equal(box.railHit(marks, 9, marks[4].top + 8), "n-4");
+assert.equal(box.railHit(marks, 0, marks[4].top + 8), null,
+  "the rail margin is not a dot target");
 assert.ok(marks.every(m => m.top >= 7 && m.top <= 340 - 30),
   "all pins remain within the visible rail height");
 assert.ok(box.previewTop(marks[14].top, 340, true) + 52 <= 340 - 4,
   "last marker hover preview stays inside viewport");
 assert.ok(box.previewTop(marks[0].top, 340, false) >= 4);
 assert.equal(box.clampScroll(100000, 1650, 480), 1170);
-const scrollBar = box.scrollbarGeometry(1650, 480, 585);
-assert.equal(scrollBar.scrollable, true);
-assert.equal(scrollBar.maxScroll, 1170);
-assert.equal(scrollBar.thumbTop, 8 + scrollBar.travel / 2);
-assert.ok(scrollBar.thumbHeight >= 24 && scrollBar.thumbHeight < scrollBar.trackHeight);
-assert.equal(box.scrollbarOffsetAt(scrollBar.thumbTop + scrollBar.thumbHeight / 2,
-  scrollBar), 585);
-assert.equal(box.scrollbarOffsetAt(-500, scrollBar), 0);
-assert.equal(box.scrollbarOffsetAt(5000, scrollBar), scrollBar.maxScroll);
-assert.equal(box.scrollbarGeometry(100, 480, 0).scrollable, false,
-  "the scrollbar is hidden when content fits");
-assert.ok(box.scrollbarGeometry(10000, 120, 0).thumbHeight >= 24,
-  "long history keeps a grabbable minimum thumb");
+assert.equal(box.railScrubOffset(8, 1650, 480), 0);
+assert.equal(box.railScrubOffset(240, 1650, 480), 585);
+assert.equal(box.railScrubOffset(480, 1650, 480), 1170);
+assert.equal(box.railScrubOffset(-100, 1650, 480), 0);
+assert.equal(box.railScrubOffset(200, 100, 480), 0,
+  "the dot rail does not scroll content shorter than its viewport");
 
 const src = fs.readFileSync(path.join(root, "mods/agent-ui/main.js"), "utf8");
 vm.runInNewContext(src.replace(/^import\s+\{[\s\S]*?\}\s+from\s+"[^"]+";\s*/gm, "")
@@ -128,13 +124,14 @@ assert.ok(find(tree, "agent-ui-root"));
 assert.ok(find(tree, "agent-ui-composer"));
 assert.ok(find(tree, "agent-ui-rail"));
 assert.ok(find(tree, "agent-ui-rail-marker-t-inspect"));
-assert.ok(find(tree, "agent-ui-scrollbar"));
-assert.ok(find(tree, "agent-ui-scrollbar-track"));
-assert.ok(find(tree, "agent-ui-scrollbar-thumb"));
-assert.equal(find(tree, "agent-ui-scrollbar-track").style.w[0], 1);
-assert.equal(find(tree, "agent-ui-scrollbar-thumb").style.w[0], 4);
-assert.equal(find(tree, "agent-ui-scrollbar-thumb").style.rounded[0], 2,
-  "native-style thin rounded scrollbar");
+assert.equal(find(tree, "agent-ui-rail").style.w[0], 18);
+assert.equal(find(tree, "agent-ui-scrollbar"), null);
+assert.equal(find(tree, "agent-ui-scrollbar-track"), null,
+  "dots replace the visual scrollbar track");
+assert.equal(find(tree, "agent-ui-scrollbar-thumb"), null,
+  "dots replace the visual scrollbar thumb");
+assert.equal(find(tree, "agent-ui-rail-marker-t-inspect").style.left[0], 0,
+  "all dots share the same 18px rail centerline");
 assert.equal(find(tree, "agent-ui-rail-window"), null,
   "rail is made of circles, not a separate vertical range bar");
 assert.equal(find(tree, "agent-ui-root").style.rounded[0], 10,
@@ -190,50 +187,57 @@ assert.ok(find(oldTree, "agent-ui-user-t-live"), "continuous transcript remains 
 const oldY = ui.scrollY;
 find(oldTree, "agent-ui-main").handlers.on_scroll_wheel({ delta: { y: -380 } }, context);
 assert.equal(ui.scrollY, oldY + 380);
-let barVisual = find(ui.render(context), "agent-ui-scrollbar-thumb");
-assert.equal(barVisual.style.top[0], box.scrollbarGeometry(
-  box.turnGeometry(ui.turns, ui.turnHeights).total, ui.viewportHeight, ui.scrollY).thumbTop,
-  "wheel scrolling moves the scrollbar thumb from the same state");
+assert.equal(find(ui.render(context), "agent-ui-scrollbar-track"), null);
+assert.equal(find(ui.render(context), "agent-ui-scrollbar-thumb"), null);
 
-// Clicking the scrollbar track jumps the actual transcript and rail.
-let currentBar = box.scrollbarGeometry(box.turnGeometry(ui.turns, ui.turnHeights).total,
-  ui.viewportHeight, ui.scrollY);
-const pressAt = currentBar.trackTop + currentBar.trackHeight * 0.8;
-find(ui.render(context), "agent-ui-scrollbar").handlers.on_mouse_down({
-  position: { y: 1000 + pressAt }, local_position: { y: pressAt }, bounds: { y: 1000 },
-}, context);
-assert.ok(ui.scrollY > 380, "track press jumps toward its target");
-assert.ok(ui.scrollbarDrag, "a track press begins thumb drag");
-currentBar = box.scrollbarGeometry(box.turnGeometry(ui.turns, ui.turnHeights).total,
-  ui.viewportHeight, ui.scrollY);
-const beforeDrag = ui.scrollY;
+// Blank rail area scrubs the entire transcript. No track or thumb exists.
+const g = box.turnGeometry(ui.turns, ui.turnHeights);
+const markerPositions = box.railMarkers(g.ranges, g.total, ui.viewportHeight);
+const blankY = Array.from({length: ui.viewportHeight - 30}, (_, i) => i + 15)
+  .find(y => box.railHit(markerPositions, 9, y) === null);
+assert.ok(Number.isFinite(blankY), "a blank rail position exists");
+const blankPress = {local_position: {x: 9, y: blankY},
+  position: {x: 209, y: 1000 + blankY}, bounds: {x: 200, y: 1000}};
+find(ui.render(context), "agent-ui-rail").handlers.on_mouse_down(blankPress, context);
+assert.equal(ui.railGesture?.mode, "scrub");
+assert.equal(ui.scrollY, box.railScrubOffset(blankY, g.total, ui.viewportHeight),
+  "pressing between dots scrolls to proportional position");
 find(ui.render(context), "agent-ui-main").handlers.on_mouse_move({
-  position: { y: 1000 + pressAt - 75 },
+  position: {y: 1000 + ui.viewportHeight + 300},
 }, context);
-assert.ok(ui.scrollY < beforeDrag, "drag up moves transcript upward");
-assert.equal(find(ui.render(context), "agent-ui-scrollbar-thumb").style.top[0],
-  box.scrollbarGeometry(box.turnGeometry(ui.turns, ui.turnHeights).total,
-    ui.viewportHeight, ui.scrollY).thumbTop, "drag moves the thumb and transcript together");
+assert.equal(ui.scrollY, g.total - ui.viewportHeight, "dragging down scrubs to the end");
+find(ui.render(context), "agent-ui-main").handlers.on_mouse_move({
+  position: {y: 800},
+}, context);
+assert.equal(ui.scrollY, 0, "dragging up scrubs to the beginning");
 find(ui.render(context), "agent-ui-main").handlers.on_mouse_up({}, context);
-assert.equal(ui.scrollbarDrag, null, "release stops dragging");
+assert.equal(ui.railGesture, null, "release ends the rail scrub");
+find(ui.render(context), "agent-ui-main").handlers.on_scroll_wheel({delta: {y: -380}}, context);
+assert.equal(ui.scrollY, 380, "wheel still updates the same transcript scrollY");
 
-// Pressing the thumb itself should not jump it before dragging.
-currentBar = box.scrollbarGeometry(box.turnGeometry(ui.turns, ui.turnHeights).total,
-  ui.viewportHeight, ui.scrollY);
-const thumbPress = currentBar.thumbTop + currentBar.thumbHeight / 3;
-const scrollBeforeThumbPress = ui.scrollY;
-find(ui.render(context), "agent-ui-scrollbar").handlers.on_mouse_down({
-  position: { y: 1000 + thumbPress }, bounds: { y: 1000 },
-}, context);
-assert.ok(Math.abs(ui.scrollY - scrollBeforeThumbPress) < 0.01);
+// Dot press is a jump on release; dragging a dot turns into rail scrubbing.
+const sharedPin = markerPositions.find(x => x.id === "t-rail");
+const sharedY = sharedPin.top + 8;
+const pinPress = {local_position: {x: 9, y: sharedY},
+  position: {x: 209, y: 1000 + sharedY}, bounds: {x: 200, y: 1000}};
+const initialPinScroll = ui.scrollY;
+find(ui.render(context), "agent-ui-rail").handlers.on_mouse_down(pinPress, context);
+assert.equal(ui.railGesture?.mode, "pin");
 find(ui.render(context), "agent-ui-main").handlers.on_mouse_move({
-  position: { y: 15000 },
+  position: {y: pinPress.position.y + 3},
 }, context);
-assert.equal(ui.scrollY, box.turnGeometry(ui.turns, ui.turnHeights).total - ui.viewportHeight,
-  "dragging far beyond the bottom clamps to the end");
-find(ui.render(context), "agent-ui-main").handlers.on_hover(false, context);
-assert.equal(ui.scrollbarDrag, null, "leaving viewport cancels capture");
-
+assert.equal(ui.scrollY, initialPinScroll,
+  "less than 5px is still a potential dot click");
+find(ui.render(context), "agent-ui-main").handlers.on_mouse_move({
+  position: {y: pinPress.position.y + 70},
+}, context);
+assert.equal(ui.railGesture?.mode, "scrub");
+assert.ok(Math.abs(ui.scrollY - box.railScrubOffset(sharedY + 70, g.total, ui.viewportHeight)) < 1e-8,
+  "dragging a dot scrubs by its pointer position");
+const afterDrag = ui.scrollY;
+find(ui.render(context), "agent-ui-rail").handlers.on_mouse_up(pinPress, context);
+assert.equal(ui.railGesture, null);
+assert.equal(ui.scrollY, afterDrag, "drag release does not also jump to the dot");
 const scrolled = ui.render(context);
 const visible = box.visibleTurnIds(
   box.turnGeometry(ui.turns, ui.turnHeights).ranges, ui.scrollY, ui.viewportHeight);
@@ -262,18 +266,38 @@ assert.ok(ui.scrollY > 0);
 assert.equal(find(tree, "agent-ui-group-list-t-failure"), null, "failed group remains collapsed");
 assert.match(textOf(find(tree, "agent-ui-group-trigger-t-failure")), /1 failed/, "error visible in collapsed summary");
 
-let marker = find(tree, "agent-ui-rail-marker-t-rail");
-assert.ok(marker);
-marker.handlers.on_hover(true, context);
+function mergedEventFor(id) {
+  const g = box.turnGeometry(ui.turns, ui.turnHeights);
+  const pin = box.railMarkers(g.ranges, g.total, ui.viewportHeight).find(x => x.id === id);
+  assert.ok(pin, "missing pin position for " + id);
+  const y = pin.top + 8;
+  return {
+    local_position: { x: 9, y },
+    position: { x: 209, y: 1000 + y },
+    bounds: { x: 200, y: 1000 },
+  };
+}
+function moveToPin(id) {
+  find(ui.render(context), "agent-ui-rail").handlers.on_mouse_move(mergedEventFor(id), context);
+}
+function tapPin(id) {
+  const event = mergedEventFor(id);
+  const rail = find(ui.render(context), "agent-ui-rail");
+  const before = ui.scrollY;
+  rail.handlers.on_mouse_down(event, context);
+  assert.equal(ui.scrollY, before, "a dot press does not jump until released");
+  find(ui.render(context), "agent-ui-rail").handlers.on_mouse_up(event, context);
+}
+assert.ok(find(tree, "agent-ui-rail-marker-t-rail"));
+moveToPin("t-rail");
 tree = ui.render(context);
 const preview = find(tree, "agent-ui-rail-preview");
 assert.ok(preview, "hover shows compact preview");
 assert.match(textOf(preview), /右側 Message Rail/);
 assert.doesNotMatch(textOf(preview), /Read \d|Run \d|Pi:|13:42|工具數量/, "no busy metadata in preview");
-marker = find(tree, "agent-ui-rail-marker-t-rail");
-marker.handlers.on_hover(false, context);
+find(tree, "agent-ui-rail").handlers.on_hover(false, context);
 assert.equal(find(ui.render(context), "agent-ui-rail-preview"), null, "hover exit removes preview");
-find(ui.render(context), "agent-ui-rail-marker-t-failure").handlers.on_hover(true, context);
+moveToPin("t-failure");
 const failurePreview = find(ui.render(context), "agent-ui-rail-preview");
 assert.doesNotMatch(textOf(failurePreview), /需要處理/,
   "a failed tool is NOT an actionable approval request");
@@ -287,34 +311,32 @@ assert.ok(actionPreview.style.top[0] >= 4 &&
   "hover preview is clamped even for a marker close to the bottom");
 assert.equal(find(ui.render(context), "agent-ui-rail-marker-t-failure").kids[0].style.bg[0],
   originalPinColor, "user-action/tool state must not recolor rail pins");
-ui.showHover("t-live", true, context);
+moveToPin("t-live");
 assert.ok(find(ui.render(context), "agent-ui-rail-preview").style.top[0] + 36
   <= ui.viewportHeight - 4, "last pin hover stays within bounds");
-click(ui.render(context), "agent-ui-rail-marker-t-rail");
+tapPin("t-rail");
 assert.equal(ui.scrollY, box.clampScroll(
   box.turnGeometry(ui.turns, ui.turnHeights).ranges.find(x => x.id === "t-rail").start,
   box.turnGeometry(ui.turns, ui.turnHeights).total, ui.viewportHeight),
   "click scrolls to measured turn location in the same transcript");
 assert.equal(ui.hoveredTurn, null);
-assert.equal(find(ui.render(context), "agent-ui-scrollbar-thumb").style.top[0],
-  box.scrollbarGeometry(box.turnGeometry(ui.turns, ui.turnHeights).total,
-    ui.viewportHeight, ui.scrollY).thumbTop, "rail click moves the same scrollbar");
+assert.equal(find(ui.render(context), "agent-ui-scrollbar-thumb"), null,
+  "dot click changes scrollY without drawing any thumb");
 const anchorBefore = ui.scrollY;
 ui.measureTurn("t-intro", { height: measured[0] + 55 }, context);
 assert.equal(ui.scrollY, anchorBefore + 55,
   "expanding a prior turn preserves the user's current reading anchor");
 ui.measureViewport({ height: 48 }, context);
 assert.equal(find(ui.render(context), "agent-ui-rail"), null,
-  "when the viewport is too short even for markers, hide rather than overflow");
+  "very short view hides dots instead of exposing an invisible scrollbar");
 ui.measureViewport({ height: 360 }, context);
-assert.equal(find(ui.render(context), "agent-ui-scrollbar-thumb").style.top[0],
-  box.scrollbarGeometry(box.turnGeometry(ui.turns, ui.turnHeights).total,
-    ui.viewportHeight, ui.scrollY).thumbTop, "viewport resize updates scrollbar geometry");
+assert.ok(find(ui.render(context), "agent-ui-rail-marker-t-intro"),
+  "dots return after resizing");
 ui.measureViewport({ height: 10000 }, context);
-assert.equal(find(ui.render(context), "agent-ui-scrollbar-thumb"), null,
-  "hide the thumb when all transcript content fits");
-assert.equal(find(ui.render(context), "agent-ui-scrollbar-track"), null,
-  "hide the track when all transcript content fits");
+assert.ok(find(ui.render(context), "agent-ui-rail-marker-t-intro"),
+  "dots remain visible even when there is no content to scroll");
+assert.equal(find(ui.render(context), "agent-ui-scrollbar-thumb"), null);
+assert.equal(find(ui.render(context), "agent-ui-scrollbar-track"), null);
 ui.measureViewport({ height: 360 }, context);
 
 ui.composer.set_value("本地測試訊息");
@@ -325,30 +347,12 @@ assert.ok(find(ui.render(context), "agent-ui-user-t-local-1"));
 assert.match(find(ui.render(context), "agent-ui-message-a-local-1-md").markdown, /Local preview only/);
 
 ui.changeSize({ width: 420 }, context);
-assert.equal(find(ui.render(context), "agent-ui-rail"), null, "narrow mode hides the rail");
+assert.ok(find(ui.render(context), "agent-ui-rail"),
+  "narrow mode uses the same dots-only scrollbar");
+assert.ok(find(ui.render(context), "agent-ui-rail-marker-t-intro"),
+  "dots are still usable in a narrow pane");
+ui.changeSize({ width: 210 }, context);
+assert.equal(find(ui.render(context), "agent-ui-rail-preview"), null,
+  "extremely narrow panes do not overflow with a hover preview");
 
-// Layout is derived from the existing personal layout by an isolated mod declaration.
-const layout = spawnSync("awk", [
-  "-v", "prefix=agent-ui-demo", "-v", "mod=agent-ui",
-  "-f", path.join(root, "scripts/demo-layout.awk"),
-  path.join(root, "layouts/herdr-mods.json"),
-], { encoding: "utf8" });
-assert.equal(layout.status, 0, layout.stderr);
-const json = JSON.parse(layout.stdout);
-const work = json.children.find((x) => x.id === "work");
-const stack = work.children.find((x) => x.id === "work-body").children[0];
-assert.equal(stack.id, "agent-ui-demo-surface");
-assert.equal(stack.type, "stack", "the UI stays in the existing chrome Layout Stack");
-assert.equal(stack.active, "agent-ui-demo-terminal");
-assert.equal(stack.children[0].content.mod, "agent-ui");
-assert.equal(stack.children[1].content.tab, "active");
-assert.ok(stack.children.every(child => child.type === "block"),
-  "no extra model Pane is added by the preview layout");
-assert.equal(work.children.find((x) => x.id === "status").content.mod, "workspace-status",
-  "status is patched only when project-open is installed");
-const manifest = JSON.parse(fs.readFileSync(path.join(root, "mods/agent-ui/mod.json"), "utf8"));
-assert.equal(manifest.install, "derive:agent-ui-demo");
-for (const blocked of ["terminal.kill", "pane.close", "exec(", "fetch(", "Session JSONL"]) {
-  assert.ok(!src.includes(blocked), "agent-ui must not invoke live agent behavior: " + blocked);
-}
-console.log("PASS: Agent UI viewport multi-pin highlights, bounded hover, pixel jump, tool groups, Markdown, rounded frame and mock composer.");
+console.log("PASS: dots-only scroll rail, scrubbing, dot jump, multi-highlight, bounded hover, tools, Markdown and Stack view.");
