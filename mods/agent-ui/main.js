@@ -5,7 +5,7 @@ import { theme } from "herdr";
 import { DEMO_TURNS } from "./fixtures.js";
 import {
   summarizeActivity, toRailNodes, shortPrompt, turnGeometry, clampScroll,
-  visibleTurnIds, railMarkers, railHit, railScrubOffset, previewTop,
+  visibleTurnIds, railLayout, railHit, railScrubOffset, previewTop,
 } from "./model.js";
 
 const STATUSES = {
@@ -157,8 +157,9 @@ export default class AgentUi extends View {
     const screenY = Number(event?.position?.y);
     if (!Number.isFinite(screenY) || !Number.isFinite(y)) return;
     const geometry = turnGeometry(this.turns, this.turnHeights);
-    const markers = railMarkers(geometry.ranges, geometry.total, this.viewportHeight);
-    const id = this.viewportHeight >= 80 ? railHit(markers, x, y) : null;
+    const layout = railLayout(geometry.ranges, this.viewportHeight,
+      visibleTurnIds(geometry.ranges, this.scrollY, this.viewportHeight));
+    const id = this.viewportHeight >= 80 ? railHit(layout.dots, x, y) : null;
     this.railGesture = {
       mode: id ? "pin" : "scrub", id, screenY, originScreenY: screenY - y,
     };
@@ -178,7 +179,9 @@ export default class AgentUi extends View {
     if (this.viewportHeight < 80) return;
     const { x, y } = this.railPointer(event);
     const geometry = turnGeometry(this.turns, this.turnHeights);
-    const id = railHit(railMarkers(geometry.ranges, geometry.total, this.viewportHeight), x, y);
+    const layout = railLayout(geometry.ranges, this.viewportHeight,
+      visibleTurnIds(geometry.ranges, this.scrollY, this.viewportHeight));
+    const id = railHit(layout.dots, x, y);
     if (id !== this.hoveredTurn) {
       this.hoveredTurn = id;
       cx.notify();
@@ -335,9 +338,7 @@ export default class AgentUi extends View {
   }
 
   navigationStrip(t, geometry, visible, showPins) {
-    const nodes = toRailNodes(this.turns);
-    const marks = railMarkers(geometry.ranges, geometry.total, this.viewportHeight);
-    const byId = new Map(marks.map((mark) => [mark.id, mark]));
+    const layout = railLayout(geometry.ranges, this.viewportHeight, [...visible]);
     return div().id("agent-ui-rail").w(18).flex_none().h_full()
       .relative().overflow_hidden().cursor_pointer()
       .on_mouse_down("left", (event, cx) => this.railPress(event, cx))
@@ -349,13 +350,14 @@ export default class AgentUi extends View {
           cx.notify();
         }
       })
-      .when(showPins, (el) => el.children(nodes.map((node) =>
-        h_flex().id(`agent-ui-rail-marker-${node.id}`).w(18).h(16).absolute()
-          .left(0).top(byId.get(node.id)?.top ?? 7)
+      // One fixed centred column: 3px apart, never taller than 40% of the view.
+      .when(showPins, (el) => el.children(layout.dots.map((dot) =>
+        h_flex().id(`agent-ui-rail-marker-${dot.id}`).w(18).h(layout.pitch).absolute()
+          .left(0).top(dot.center - layout.pitch / 2)
           .items_center().justify_center().rounded(6)
-          // The dots alone indicate the visible scroll region: no track/thumb.
-          .child(div().size(visible.has(node.id) ? 8 : 4).rounded(999)
-            .bg(visible.has(node.id) ? t.muted : t.dim)))));
+          // Size is the Gaussian focus packet; the fill only says "on screen".
+          .child(div().size(dot.size).rounded(999)
+            .bg(dot.visible ? t.muted : t.dim)))));
   }
 
   hoverPreview(t, geometry) {
@@ -364,17 +366,19 @@ export default class AgentUi extends View {
     const node = nodes.find((item) => item.id === this.hoveredTurn);
     if (!node || this.width < 240) return null;
     if (this.viewportHeight < (node.actionable ? 60 : 44)) return null;
-    const mark = railMarkers(geometry.ranges, geometry.total, this.viewportHeight)
-      .find((item) => item.id === this.hoveredTurn);
-    if (!mark) return null;
+    const layout = railLayout(geometry.ranges, this.viewportHeight,
+      visibleTurnIds(geometry.ranges, this.scrollY, this.viewportHeight));
+    const dot = layout.dots.find((item) => item.turnIds.includes(this.hoveredTurn));
+    if (!dot) return null;
+    const grouped = dot.turnIds.length > 1 ? ` +${dot.turnIds.length - 1}` : "";
     return v_flex().id("agent-ui-rail-preview").absolute().right(22)
       // Keep preview wholly inside the conversation viewport, even for the
       // first/last marker. The containing main area clips excess pixels.
-      .top(previewTop(mark.top, this.viewportHeight, node.actionable))
+      .top(previewTop(dot.center - layout.pitch / 2, this.viewportHeight, node.actionable))
       .w(Math.min(207, this.width - 30)).px(11).py(9).gap(5)
       .rounded(7).bg(t.popover).border_1().border_color(t.border)
       .child(div().text_size(11.5).text_color(t.foreground)
-        .truncate().child(shortPrompt(node.preview, 39)))
+        .truncate().child(shortPrompt(node.preview, 39) + grouped))
       .when(node.actionable, (el) => el.child(
         div().text_size(10.5).text_color(t.blocked).child("! 需要處理")));
   }

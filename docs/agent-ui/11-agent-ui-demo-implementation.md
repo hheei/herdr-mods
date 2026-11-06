@@ -54,13 +54,14 @@ sh scripts/install.sh agent-ui project-open
 
 ### Message Rail
 
-- **Message Rail 本身就是 Scrollbar**：唯一的 18px 寬操作區**只繪製訊息圓點**；沒有 1px Track、4px Thumb，也沒有獨立的視野高亮條。七輪各一個小圓點，非可視輪次 4px、與 viewport 相交的所有輪次同時放大為 8px。可視圓點集合就是閱讀位置指示，顏色只用 Theme 中性的 `dim`／`muted`。
+- **Message Rail 本身就是 Scrollbar**：唯一的 18px 寬操作區**只繪製訊息圓點**；沒有 1px Track、4px Thumb，也沒有獨立的視野高亮條。圓點固定在右側垂直中線、**間距 3px（pitch 14px）**，整列不高於 viewport 的 **40%**。大小是**以閱讀位置為中心的高斯波包**：焦點 11px，往兩側遞減至 **6px 下限**；焦點取「與 viewport 相交、且最靠列中央」的圓點，因此可見輪次不必然全部同尺寸，視覺上只有一個焦點。顏色只用 Theme 中性的 `dim`／`muted`，可視僅提高亮度。
+- 高密度歷史**按桶合併**：`maxDots = floor(viewportHeight × 0.4 / 14)`、`perDot = ceil(turns / maxDots)`，一個圓點代表連續 `perDot` 輪，跳轉到該桶第一輪，Hover 追問 `+N`。**不抽樣丟棄任何輪次**，也不把每點縮成 1–2px 細線；這與編輯器 scrollbar decoration 的處理方式一致（比例定位＋密集處合併），而不是 minimap 的全量縮小。
 - 合併軌使用 `.on_mouse_move` 依位置找最近的圓點，Hover 只顯示**一行截短 user prompt**，離開控制軌即關閉。只有 `requiresUserAction === true` 的明確介入事件才加第二行 `需要處理`；**工具 failed／pending 不等於使用者需要介入**，也**不影響 Pin 顏色**。
 - 點擊固定 turn ID 時，在**同一份完整對話**內更新 `scrollY` 到該輪的**實際量測高度位置**；**不再將 earlier turns 切掉／換一份 window**。目前使用 Herdr 已有的 `on_scroll_wheel`、`on_size_change`、`overflow_hidden` 和絕對位置來建立手動可捲動 viewport；不是宣稱 Herdr 已有 public `scroll-to-id`。
 - `turnGeometry` 由每輪 `.on_size_change` 實測高度構成；群組展開導致高度變化時保留原閱讀錨點，滑鼠滾動更新 `scrollY`，所有與 viewport 區間相交的 turn 同時高亮。Hover 預覽及 rail pin 的 top 都以 viewport 高度 clamp，容器本身裁切。
 - **操作**：點擊圓點並放開＝跳至該輪；從圓點拖曳超過 5px＝改成按 Rail 垂直位置捲動對話，放開不再觸發跳轉；點擊或拖曳圓點間的空白區也可按比例捲動。所有操作只更新唯一的 `scrollY`，不是另一個 Scrollbar 控件。窄 Pane 仍保留圓點；只有極短 viewport 才隱藏整條 Rail 防止溢出。此視圖仍是原本 Chrome Layout Stack 的子 View，不是獨立 model Pane；外框維持 `rounded(10)`、1px Theme border、38px Topbar。
 
-**已完成：連續 transcript 的量測式 Jump 和「可視範圍涵蓋多輪就全部放大圓點」。** 尚未完成／實機未驗證：長歷史 cluster、跨視窗 pointer capture、鍵盤 Focus／Screen Reader 和 GPUI 真實文字幾何。這些不是已完成產品功能。
+**已完成：連續 transcript 的量測式 Jump、固定中線 3px 間距的圓點列、40% 高度上限、以及高斯波包焦點。** 尚未完成／實機未驗證：桶合併的 Hover 文字長度、跨視窗 pointer capture、鍵盤 Focus／Screen Reader 和 GPUI 真實文字幾何。這些不是已完成產品功能。
 
 **Dots-only Rail 已實作（headless 測試通過，實機待驗證）**：唯一 18px 操作區只由圓點組成，沒有畫出 Scroll Track／Thumb。圓點的位置由每輪實測 `turnGeometry` 映射；當前 viewport 內的圓點放大，就代表可見區間。Wheel、圓點跳轉和 Drag-to-scrub 都使用相同 `scrollY`。圓點短按與拖曳透過 5px 門檻區分；空白處可以直接捲動，不用先點任何 Thumb。Resize、工具展開仍沿用相同幾何。原生 App 的指標事件、Hover 與視覺需要實機驗證。
 

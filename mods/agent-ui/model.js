@@ -64,34 +64,63 @@ export function visibleTurnIds(ranges, scrollY, viewportHeight) {
   return ranges.filter((r) => r.end > scrollY && r.start < end).map((r) => r.id);
 }
 
-export function railMarkers(ranges, contentHeight, viewportHeight) {
-  const margin = 7, pinHeight = 16;
-  const available = Math.max(0, viewportHeight - pinHeight - 2 * margin);
-  const length = Math.max(1, contentHeight);
-  // Keep normal-length histories clickable, while never letting a marker
-  // spill outside the rail. Very dense histories need a future cluster view.
-  const gap = Math.min(16, available / Math.max(1, ranges.length - 1));
-  let previous = -Infinity;
-  return ranges.map((r, i) => {
-    const raw = margin + available * (r.start / length);
-    const maxTop = margin + available - gap * (ranges.length - 1 - i);
-    const top = Math.max(margin + i * gap,
-      Math.min(maxTop, Math.max(raw, previous + gap)));
-    previous = top;
-    return { id: r.id, top };
+// Rail dots live in one fixed column at the vertical centre, 3px apart, and the
+// whole column never exceeds 40% of the viewport. Longer histories are grouped
+// into one dot per bucket, the way editor scrollbar markers collapse dense runs
+// instead of shrinking to meaningless hairlines.
+export function railLayout(ranges, viewportHeight, visibleIds = []) {
+  const gap = 3, minDot = 6, peakDot = 11, cap = 0.4;
+  const pitch = peakDot + gap;
+  const maxDots = Math.max(1, Math.floor((viewportHeight * cap) / pitch));
+  const perDot = Math.max(1, Math.ceil(ranges.length / maxDots));
+  const groups = [];
+  for (let i = 0; i < ranges.length; i += perDot) {
+    const turnIds = ranges.slice(i, i + perDot).map((range) => range.id);
+    groups.push({ id: turnIds[0], turnIds });
+  }
+  const visible = new Set(visibleIds);
+  const mid = (groups.length - 1) / 2;
+  let focus = Math.floor(mid), best = Infinity;
+  groups.forEach((group, index) => {
+    if (!group.turnIds.some((id) => visible.has(id))) return;
+    const distance = Math.abs(index - mid);
+    if (distance < best) {
+      best = distance;
+      focus = index;
+    }
   });
+  const span = groups.length * pitch;
+  const first = Math.max(pitch / 2, (viewportHeight - span) / 2 + pitch / 2);
+  return {
+    pitch,
+    perDot,
+    focus,
+    dots: groups.map((group, index) => ({
+      ...group,
+      center: first + index * pitch,
+      size: dotSize(index, focus, minDot, peakDot),
+      visible: group.turnIds.some((id) => visible.has(id)),
+    })),
+  };
 }
 
-// A dot click selects the nearest turn. Space between dots is the scrub area;
+// A Gaussian wave packet: the dot at the reading position is widest and its
+// neighbours fall away to the 6px floor, so the column reads as one focus.
+export function dotSize(index, focus, min = 6, peak = 11, sigma = 1.5) {
+  const z = (index - focus) / sigma;
+  return Math.max(min, Math.round(min + (peak - min) * Math.exp(-z * z)));
+}
+
+// A dot click selects that dot's first turn. Space outside the dots scrubs;
 // there is no independent scrollbar track or thumb.
-export function railHit(markers, x, y, centerX = 9, radius = 7) {
+export function railHit(dots, x, y, centerX = 9, radius = 7) {
   if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x - centerX) > radius) return null;
   let winner = null, distance = radius + 1;
-  for (const marker of markers) {
-    const d = Math.abs(y - (marker.top + 8));
-    if (d <= radius && d < distance) {
-      winner = marker.id;
-      distance = d;
+  for (const dot of dots) {
+    const dy = Math.abs(y - dot.center);
+    if (dy <= radius && dy < distance) {
+      winner = dot.id;
+      distance = dy;
     }
   }
   return winner;

@@ -70,7 +70,7 @@ const modelSrc = fs.readFileSync(path.join(root, "mods/agent-ui/model.js"), "utf
 const fixtureSrc = fs.readFileSync(path.join(root, "mods/agent-ui/fixtures.js"), "utf8")
   .replace("export const DEMO_TURNS", "const DEMO_TURNS");
 vm.runInNewContext(modelSrc + "\n" + fixtureSrc
-  + "\nthis.summarizeActivity=summarizeActivity;this.toRailNodes=toRailNodes;this.shortPrompt=shortPrompt;this.turnGeometry=turnGeometry;this.clampScroll=clampScroll;this.visibleTurnIds=visibleTurnIds;this.railMarkers=railMarkers;this.railHit=railHit;this.previewTop=previewTop;this.railScrubOffset=railScrubOffset;this.DEMO_TURNS=DEMO_TURNS;", box);
+  + "\nthis.summarizeActivity=summarizeActivity;this.toRailNodes=toRailNodes;this.shortPrompt=shortPrompt;this.turnGeometry=turnGeometry;this.clampScroll=clampScroll;this.visibleTurnIds=visibleTurnIds;this.railLayout=railLayout;this.dotSize=dotSize;this.railHit=railHit;this.previewTop=previewTop;this.railScrubOffset=railScrubOffset;this.DEMO_TURNS=DEMO_TURNS;", box);
 
 assert.equal(box.DEMO_TURNS.length, 7);
 assert.equal(box.summarizeActivity([]).total, 0);
@@ -94,16 +94,44 @@ assert.equal(positions.total, 1650);
 assert.deepEqual(Array.from(box.visibleTurnIds(positions.ranges, 430, 480)),
   ["n-3", "n-4", "n-5", "n-6", "n-7", "n-8"],
   "every turn overlapping the viewport is highlighted, not just one active turn");
-const marks = box.railMarkers(positions.ranges, positions.total, 340);
-assert.equal(marks.length, 15);
-assert.equal(box.railHit(marks, 9, marks[4].top + 8), "n-4");
-assert.equal(box.railHit(marks, 0, marks[4].top + 8), null,
+const rail = box.railLayout(positions.ranges, 340);
+assert.equal(rail.pitch, 14, "an 11px dot plus a 3px gap");
+assert.equal(rail.perDot, 2, "15 turns collapse into the 40% column, not 15 dots");
+assert.equal(rail.dots.length, 8);
+const centers = rail.dots.map((dot) => dot.center);
+centers.slice(1).forEach((center, i) =>
+  assert.equal(center - centers[i], 14, "dots are 3px apart"));
+assert.equal(box.railHit(rail.dots, 9, centers[4]), rail.dots[4].id);
+assert.equal(box.railHit(rail.dots, 0, centers[4]), null,
   "the rail margin is not a dot target");
-assert.ok(marks.every(m => m.top >= 7 && m.top <= 340 - 30),
-  "all pins remain within the visible rail height");
-assert.ok(box.previewTop(marks[14].top, 340, true) + 52 <= 340 - 4,
+const columnTop = centers[0] - rail.pitch / 2;
+const columnBottom = centers.at(-1) + rail.pitch / 2;
+assert.ok(columnTop >= 340 * 0.3 && columnBottom <= 340 * 0.7,
+  "the column is vertically centred inside 40% of the view");
+assert.ok(box.previewTop(columnBottom - rail.pitch, 340, true) + 52 <= 340 - 4,
   "last marker hover preview stays inside viewport");
-assert.ok(box.previewTop(marks[0].top, 340, false) >= 4);
+assert.ok(box.previewTop(columnTop, 340, false) >= 4);
+
+// The focused dot is the widest and neighbours fall away to the 6px floor.
+const sizes = rail.dots.map((dot) => dot.size);
+assert.equal(sizes[rail.focus], 11, "peak at the reading position");
+assert.equal(sizes[0], 6, "the far end of the packet is a 6px floor dot");
+assert.equal(sizes.at(-1), 6);
+sizes.slice(rail.focus).slice(1).forEach((size, i) =>
+  assert.ok(size <= sizes[rail.focus + i], "the packet decays away from focus"));
+assert.equal(box.dotSize(3, 3, 6, 11), 11);
+assert.equal(box.dotSize(9, 3, 6, 11), 6);
+assert.equal(box.dotSize(4, 3, 6, 11), 9);
+
+// A long history buckets several turns per dot instead of overflowing.
+const many = Array.from({ length: 400 }, (_, i) =>
+  ({ id: `m-${i}`, start: i * 100, end: i * 100 + 90 }));
+const dense = box.railLayout(many, 340);
+assert.equal(dense.dots.length, 9, "a 400-turn history still fits the column");
+assert.equal(dense.perDot, 45);
+assert.equal(dense.dots[0].turnIds.length, 45);
+assert.equal(dense.dots.at(-1).id, "m-360");
+assert.ok(dense.dots.at(-1).center + dense.pitch / 2 <= 340 * 0.7);
 assert.equal(box.clampScroll(100000, 1650, 480), 1170);
 assert.equal(box.railScrubOffset(8, 1650, 480), 0);
 assert.equal(box.railScrubOffset(240, 1650, 480), 585);
@@ -145,7 +173,7 @@ assert.ok(find(tree, "agent-ui-root").style.overflow_hidden,
 assert.equal(find(tree, "agent-ui-header").style.h[0], 38,
   "header is aligned with Herdr's 38px Terminal-style chrome");
 const inactiveDot = find(tree, "agent-ui-rail-marker-t-live").kids[0];
-assert.equal(inactiveDot.style.size[0], 4, "offscreen pin is a small circle");
+assert.equal(inactiveDot.style.size[0], 6, "a dot away from the focus sits at the 6px floor");
 assert.equal(inactiveDot.style.rounded[0], 999, "pin is circular, not a line");
 assert.equal(find(tree, "agent-ui-rail-preview"), null);
 assert.equal(find(tree, "agent-ui-scenes"), null);
@@ -192,10 +220,11 @@ assert.equal(find(ui.render(context), "agent-ui-scrollbar-thumb"), null);
 
 // Blank rail area scrubs the entire transcript. No track or thumb exists.
 const g = box.turnGeometry(ui.turns, ui.turnHeights);
-const markerPositions = box.railMarkers(g.ranges, g.total, ui.viewportHeight);
+const railDots = box.railLayout(g.ranges, ui.viewportHeight,
+  box.visibleTurnIds(g.ranges, ui.scrollY, ui.viewportHeight)).dots;
 const blankY = Array.from({length: ui.viewportHeight - 30}, (_, i) => i + 15)
-  .find(y => box.railHit(markerPositions, 9, y) === null);
-assert.ok(Number.isFinite(blankY), "a blank rail position exists");
+  .find(y => box.railHit(railDots, 9, y) === null);
+assert.ok(Number.isFinite(blankY), "the rail above and below the column scrubs");
 const blankPress = {local_position: {x: 9, y: blankY},
   position: {x: 209, y: 1000 + blankY}, bounds: {x: 200, y: 1000}};
 find(ui.render(context), "agent-ui-rail").handlers.on_mouse_down(blankPress, context);
@@ -216,8 +245,8 @@ find(ui.render(context), "agent-ui-main").handlers.on_scroll_wheel({delta: {y: -
 assert.equal(ui.scrollY, 380, "wheel still updates the same transcript scrollY");
 
 // Dot press is a jump on release; dragging a dot turns into rail scrubbing.
-const sharedPin = markerPositions.find(x => x.id === "t-rail");
-const sharedY = sharedPin.top + 8;
+const sharedPin = railDots.find((dot) => dot.turnIds.includes("t-rail"));
+const sharedY = sharedPin.center;
 const pinPress = {local_position: {x: 9, y: sharedY},
   position: {x: 209, y: 1000 + sharedY}, bounds: {x: 200, y: 1000}};
 const initialPinScroll = ui.scrollY;
@@ -242,16 +271,22 @@ const scrolled = ui.render(context);
 const visible = box.visibleTurnIds(
   box.turnGeometry(ui.turns, ui.turnHeights).ranges, ui.scrollY, ui.viewportHeight);
 assert.ok(visible.length >= 2, "viewport contains multiple visible turns");
-for (const turnId of visible) {
-  const pin = find(scrolled, `agent-ui-rail-marker-${turnId}`).kids[0];
-  assert.equal(pin.style.size[0], 8,
-    "every visible turn pin enlarges as a circle");
+const layoutNow = box.railLayout(
+  box.turnGeometry(ui.turns, ui.turnHeights).ranges, ui.viewportHeight, visible);
+layoutNow.dots.forEach((dot) => {
+  const pin = find(scrolled, `agent-ui-rail-marker-${dot.id}`).kids[0];
+  assert.equal(pin.style.size[0], dot.size, "dot width comes from the focus packet");
   assert.equal(pin.style.rounded[0], 999);
-}
+});
+assert.equal(Math.max(...layoutNow.dots.map((dot) => dot.size)),
+  layoutNow.dots[layoutNow.focus].size, "one dot owns the peak");
+assert.ok(layoutNow.dots.filter((dot) => dot.visible).length >= 2,
+  "every visible turn is part of the packet");
 const outside = ui.turns.find(turn => !visible.includes(turn.id));
 assert.ok(outside, "fixture contains turns outside viewport");
-const outsidePin = find(scrolled, `agent-ui-rail-marker-${outside.id}`).kids[0];
-assert.equal(outsidePin.style.size[0], 4, "outside turns stay smaller");
+const outsideDot = layoutNow.dots.find((dot) => dot.turnIds.includes(outside.id));
+const outsidePin = find(scrolled, `agent-ui-rail-marker-${outsideDot.id}`).kids[0];
+assert.equal(outsidePin.style.size[0], outsideDot.size);
 assert.equal(outsidePin.style.bg[0], "#777",
   "outside turns use neutral theme dim, never tool status");
 assert.ok(ui.scrollY > 0);
@@ -268,9 +303,11 @@ assert.match(textOf(find(tree, "agent-ui-group-trigger-t-failure")), /1 failed/,
 
 function mergedEventFor(id) {
   const g = box.turnGeometry(ui.turns, ui.turnHeights);
-  const pin = box.railMarkers(g.ranges, g.total, ui.viewportHeight).find(x => x.id === id);
-  assert.ok(pin, "missing pin position for " + id);
-  const y = pin.top + 8;
+  const dot = box.railLayout(g.ranges, ui.viewportHeight,
+    box.visibleTurnIds(g.ranges, ui.scrollY, ui.viewportHeight))
+    .dots.find((x) => x.turnIds.includes(id));
+  assert.ok(dot, "missing dot position for " + id);
+  const y = dot.center;
   return {
     local_position: { x: 9, y },
     position: { x: 209, y: 1000 + y },
