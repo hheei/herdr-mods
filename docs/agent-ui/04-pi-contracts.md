@@ -164,6 +164,8 @@ Herdr Mod 端的 `exec` **不能被假設**可帶任意私有 stdin stream。需
 
 第一版寫過「一事件一檔＋序號＋剪枝」，但那是在硬碟上追加一串 delta：每次 token 都寫檔，還要維護序號、缺號偵測與剪枝。**改成狀態而不是事件**之後那些全部消失：
 
+寫者與讀者都在 `mods/agent-ui/`：`bridge/herdr-agent-ui.js` 是**一個** Pi extension 檔（Pi 的發現規則本來就吃 `extensions/*.js` 單檔，jiti 直接載入，多檔只有多檔才需要），`bridge-source.js` 是 Mod 端的讀者。
+
 ```
 <HERDR_APP_HOME>/agent-ui/bridge/<pid>/
   meta.json   {version, epoch, revision, pid, sessionId, cwd, updatedAt, closed?}

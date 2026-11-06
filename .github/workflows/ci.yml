@@ -18,8 +18,7 @@ jobs:
           node --check mods/agent-ui/fixtures.js
           node --check mods/agent-ui/model.js
           node --check mods/agent-ui/state.js
-          node --check mods/agent-ui/bridge/mailbox.js
-          node --check mods/agent-ui/bridge/project.js
+          node --check mods/agent-ui/bridge/herdr-agent-ui.js
           node --check mods/agent-ui/bridge-source.js
           node --check tests/project-open.test.cjs
           node --check tests/agent-ui.test.cjs

@@ -16,8 +16,9 @@ function messageEntry(id, message) {
 }
 
 (async () => {
-  const project = await load("mods/agent-ui/bridge/project.js");
-  const mailbox = await load("mods/agent-ui/bridge/mailbox.js");
+  const bridge = await load("mods/agent-ui/bridge/herdr-agent-ui.js");
+  const project = bridge;
+  const mailbox = bridge;
 
   assert.equal(project.kindOf("bash"), "exec");
   assert.equal(project.kindOf("grep"), "search");
@@ -27,7 +28,7 @@ function messageEntry(id, message) {
   assert.equal(project.targetOf({ path: "a/b.ts" }), "a/b.ts");
   assert.equal(project.targetOf({ command: "x".repeat(200) }).length, 80);
   assert.equal(project.textOf({ content: [{ type: "text", text: "a" }, { type: "image" }] }), "a");
-  assert.equal(project.textOf("plain"), "plain");
+  assert.equal(project.textOf({ content: "plain" }), "plain");
 
   const entries = [
     messageEntry("u1", { role: "user", content: "why is retry slow?", timestamp: 0 }),
@@ -69,7 +70,7 @@ function messageEntry(id, message) {
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-ui-bridge-"));
   const read = (name) => JSON.parse(fs.readFileSync(path.join(dir, name), "utf8"));
-  const box = mailbox.createWriter(dir, { sessionId: "s-1", cwd: "/tmp/project" });
+  const box = bridge.createWriter(dir, { sessionId: "s-1", cwd: "/tmp/project" });
   assert.equal(read("meta.json").sessionId, "s-1");
   assert.equal(read("meta.json").cwd, "/tmp/project");
   assert.equal(read("meta.json").version, 2);
@@ -104,7 +105,11 @@ function messageEntry(id, message) {
     ["done.json", "live.json", "meta.json"], "the whole bridge is three small files");
 
   fs.rmSync(dir, { recursive: true, force: true });
-  console.log("PASS: bridge writer — entries projected, three state files, throttled live flush, close.");
+  assert.equal(typeof (await import("data:text/javascript;base64," + Buffer
+    .from(fs.readFileSync(path.join(root, "mods/agent-ui/bridge/herdr-agent-ui.js"))).toString("base64"))).default,
+  "function", "the file is one extension: a default export takes pi");
+
+  console.log("PASS: bridge — one extension file, entries projected, three state files, throttled live flush, close.");
 })().catch((error) => {
   console.error(error);
   process.exit(1);
