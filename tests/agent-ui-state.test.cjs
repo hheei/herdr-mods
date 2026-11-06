@@ -88,4 +88,19 @@ assert.equal(fresh.turns.length, 1);
 assert.equal(fresh.turns[0].id, "n1");
 assert.notEqual(fresh.turns, state.turns, "the snapshot array is ours, not the caller's");
 
-console.log("PASS: reducer — open/stream/close, tools, action, dedupe, dropped turns, immutability, snapshot.");
+// The transcript is bounded, so the view never has to lay out an unbounded list.
+const many = Array.from({ length: 5 }, (_, i) => ({ id: `b-${i}`, prompt: `${i}` }));
+let capped = box.createTranscript(many, 3);
+assert.deepEqual(Array.from(capped.turns, (turn) => turn.id), ["b-2", "b-3", "b-4"]);
+assert.equal(capped.limit, 3);
+result = box.applyEvent(capped, { type: "turn.start", turn: { id: "b-5" } });
+capped = result.state;
+assert.deepEqual(Array.from(capped.turns, (turn) => turn.id), ["b-3", "b-4", "b-5"]);
+assert.deepEqual(Array.from(result.dropped), ["b-2"], "the view is told what fell off");
+result = box.applyEvent(capped, { type: "snapshot", turns: many });
+assert.equal(result.state.turns.length, 3, "a reconnect snapshot is bounded too");
+assert.deepEqual(Array.from(result.dropped), ["b-0", "b-1"]);
+assert.equal(box.applyEvent(result.state, { type: "turn.start", turn: { id: "x" } }).state.turns.at(-1).id,
+  "x", "the newest turn always survives its own trim");
+
+console.log("PASS: reducer — open/stream/close, tools, action, dedupe, dropped turns, immutability, snapshot, bounded transcript.");

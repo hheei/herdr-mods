@@ -87,6 +87,17 @@ export default class AgentUi extends View {
     this.transcript.turns = next;
   }
 
+  // Dropping the oldest turns must not move what is being read, so the turn that
+  // was on top is put back on top. If that turn itself went, the offset stays put
+  // and the view lands a little further down.
+  restoreTop(top) {
+    if (!top) return;
+    const range = turnGeometry(this.turns, this.turnHeights).ranges
+      .find((item) => item.id === top);
+    if (range) this.scrollY = range.start;
+    this.viewportTop = null;
+  }
+
   anchor(kind) {
     if (this.stick) {
       const geometry = turnGeometry(this.turns, this.turnHeights);
@@ -99,10 +110,22 @@ export default class AgentUi extends View {
     else this.live += 1;
   }
 
+  // Only a new turn can push the oldest ones out, and only at the limit.
+  atLimit(event) {
+    return event.type === "turn.start" && this.turns.length >= this.transcript.limit;
+  }
+
   apply(event) {
+    const top = this.atLimit(event)
+      ? visibleTurnIds(turnGeometry(this.turns, this.turnHeights).ranges,
+        this.scrollY, this.viewportHeight)[0]
+      : null;
     const result = applyEvent(this.transcript, event);
     if (!result.changed) return false;
     this.transcript = result.state;
+    const dropped = result.dropped ?? [];
+    for (const id of dropped) this.turnHeights.delete(id);
+    if (dropped.length > 0 && !this.stick) this.restoreTop(top);
     // A new turn is counted once; only deltas inside it count as live content.
     const kind = event.type === "turn.start" || event.type === "snapshot" ? "turn"
       : event.type === "message.delta" ? "content" : null;

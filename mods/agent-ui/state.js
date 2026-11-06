@@ -2,6 +2,10 @@
 // A bridge event and a fixture event take exactly this path.
 
 const SEEN_LIMIT = 512;
+// Rendering, not the geometry math, is what grows with history: 200 turns build
+// in ~2ms a frame, 2000 in ~27ms. Past the limit the oldest turns are dropped,
+// the way a terminal bounds its scrollback.
+const TURN_LIMIT = 200;
 
 function cloneTurn(turn) {
   return {
@@ -11,8 +15,15 @@ function cloneTurn(turn) {
   };
 }
 
-export function createTranscript(turns = []) {
-  return { turns: turns.map(cloneTurn), seen: [] };
+function keep(turns, limit) {
+  if (turns.length <= limit) return { turns, dropped: [] };
+  const cut = turns.slice(0, turns.length - limit);
+  return { turns: turns.slice(cut.length), dropped: cut.map((turn) => turn.id) };
+}
+
+export function createTranscript(turns = [], limit = TURN_LIMIT) {
+  const kept = keep(turns.map(cloneTurn), limit);
+  return { turns: kept.turns, seen: [], limit };
 }
 
 export function deriveStatus(turn) {
@@ -27,7 +38,7 @@ function findTurn(state, id) {
 }
 
 function unchanged(state) {
-  return { state, changed: false, grew: false };
+  return { state, changed: false, grew: false, dropped: [] };
 }
 
 export function applyEvent(state, event) {
@@ -35,15 +46,13 @@ export function applyEvent(state, event) {
   // A bridge may deliver the same event twice after a reconnect.
   if (event.id && state.seen.includes(event.id)) return unchanged(state);
   const seen = event.id ? [...state.seen, event.id].slice(-SEEN_LIMIT) : state.seen;
-  const withSeen = (turns) => ({ turns, seen });
+  const withSeen = (turns) => ({ turns, seen, limit: state.limit });
 
   switch (event.type) {
-    case "snapshot":
-      return {
-        state: { turns: (event.turns ?? []).map(cloneTurn), seen },
-        changed: true,
-        grew: true,
-      };
+    case "snapshot": {
+      const kept = keep((event.turns ?? []).map(cloneTurn), state.limit);
+      return { state: { ...kept, seen, limit: state.limit }, changed: true, grew: true, dropped: kept.dropped };
+    }
     case "turn.start": {
       const turn = event.turn ?? {};
       if (!turn.id || findTurn(state, turn.id)) return unchanged(state);
@@ -51,7 +60,9 @@ export function applyEvent(state, event) {
         id: turn.id, prompt: turn.prompt ?? "", status: "working",
         messages: turn.messages ?? [], tools: turn.tools ?? [],
       });
-      return { state: withSeen([...state.turns, next]), changed: true, grew: true };
+      const kept = keep([...state.turns, next], state.limit);
+      return { state: { ...withSeen(kept.turns), limit: state.limit },
+        changed: true, grew: true, dropped: kept.dropped };
     }
     default:
       break;

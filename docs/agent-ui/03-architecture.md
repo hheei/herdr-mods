@@ -214,10 +214,24 @@ source.step()       // 「時間前進」；fixture 用它放行一段 chunk，b
 
 事件：`snapshot`、`turn.start`、`message.start|delta|end`、`tool.start|update`、`turn.action`、`turn.end`。帶 `id` 的事件在同一 transcript 內只套用一次（去重上限 512）；指向已不存在 turn／message 的事件**丟棄**，不猜測。
 
-**兩個已知限制**（不在 P2 偷偷解掉）：
+**歷史有上限，rail 不吃高度**（量完才決定，不靠感覺）：
 
-1. **O(n) 佈局**：rail 依賴每一輪的實測高度，因此無法只渲染可見輪（未渲染 = 高度未知）。真會話需要歷史上限或早期輪折疊，數字要先量，不能憑感覺。
-2. **`step()` 是 fixture 的時間**：bridge 不需要它，但也因此 fixture 的節奏不代表真實到達速率。
+真正的成本是**渲染**，不是幾何。量測（Node 20、假 builder，取最差樣本）：
+
+| 輪數 | 一幀 render | `turnGeometry` | `railLayout` |
+| --- | --- | --- | --- |
+| 60 | 0.94ms | 0.09ms | 0.34ms |
+| 200 | 1.79ms | 0.20ms | 0.34ms |
+| 1000 | 11.4ms | 0.55ms | 0.08ms |
+| 2000 | 27.3ms | 0.55ms | 0.08ms |
+
+所以：
+
+- **不虛擬化**。host 沒有 scroll-anchor 原語（`herdr.d.ts` 只有 `terminal.scroll`，mod 自己 `overflow_y_scroll` ＋ 自己的 `scrollY`），估計高度會讓「貼底」與點 dot 跳轉都要先猜再修正——那是更大的語義損失，還多一套量測快取。
+- **改成上限 200 輪**：reducer 超出即丟最舊（`result.dropped` 告知 view），view 忘掉那些輪的高度，並用「viewport 最上面那一輪的 id」把閱讀位置放回去。**語義損失**：超過 200 輪的歷史看不到；若被讀的那一輪正好被丟，位置就落在原 offset（往下一點）。這和終端 scrollback 上限是同一種取捨。
+- **rail 只吃輪序**：`railLayout` 接受 id 或帶 `.id` 的東西，只用「順序＋數量」，高度純粹是 scroll 的事。所以「某輪還沒被量過」永遠不會讓 rail 出錯，只影響那一段的捲動精度。
+
+剩下的限制：`step()` 是 fixture 的時間，bridge 不需要它，fixture 的節奏也不代表真實到達速率。
 
 ## 8. 安裝／相容與不干擾現有 mods
 

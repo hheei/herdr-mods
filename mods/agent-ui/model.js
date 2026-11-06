@@ -68,14 +68,18 @@ export function visibleTurnIds(ranges, scrollY, viewportHeight) {
 // whole column never exceeds 40% of the viewport. Longer histories are grouped
 // into one dot per bucket, the way editor scrollbar markers collapse dense runs
 // instead of shrinking to meaningless hairlines.
+// The rail only ever needs the turn order and count: heights are a scroll concern,
+// so ids (or anything carrying .id) are enough and the rail never depends on
+// having measured an off-screen turn.
 export function railLayout(ranges, viewportHeight, visibleIds = []) {
+  const ids = ranges.map((range) => (typeof range === "string" ? range : range.id));
   const gap = 3, minDot = 4, peakDot = 9, cap = 0.4;
   const pitch = peakDot + gap;
   const maxDots = Math.max(1, Math.floor((viewportHeight * cap) / pitch));
-  const perDot = Math.max(1, Math.ceil(ranges.length / maxDots));
+  const perDot = Math.max(1, Math.ceil(ids.length / maxDots));
   const groups = [];
-  for (let i = 0; i < ranges.length; i += perDot) {
-    const turnIds = ranges.slice(i, i + perDot).map((range) => range.id);
+  for (let i = 0; i < ids.length; i += perDot) {
+    const turnIds = ids.slice(i, i + perDot);
     groups.push({ id: turnIds[0], turnIds });
   }
   const visible = new Set(visibleIds);

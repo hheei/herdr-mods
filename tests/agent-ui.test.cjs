@@ -624,4 +624,30 @@ ui.pump(context);
 assert.equal(ui.source.streaming(), false);
 assert.equal(ui.turns.at(-1).status, "done");
 
-console.log("PASS: dots-only scroll rail, scrubbing, dot jump, keyboard focus, narrow turn list, empty and offline states, sticky bottom, streaming replay, bounded hover, tool detail edges, Markdown and Stack view.");
+// The rail needs the turn order only: no heights, no measurement.
+const idOnly = box.railLayout(["a", "b", "c"], 340);
+assert.deepEqual(Array.from(idOnly.dots, (dot) => dot.id), ["a", "b", "c"],
+  "the rail lays out ids without waiting for any measured height");
+
+// A bounded transcript keeps the reading position when the oldest turn falls off.
+const bounded = new box.AgentUi();
+bounded.init({}, context);
+bounded.transcript = box.createTranscript(Array.from({ length: 5 }, (_, i) =>
+  ({ id: `b-${i}`, prompt: `${i}`, status: "done",
+    messages: [{ id: `a-${i}`, role: "assistant", text: "x", open: false }], tools: [] })), 5);
+bounded.turnHeights = new Map(bounded.turns.map((turn) => [turn.id, 100]));
+bounded.measureViewport({ height: 200 }, context);
+bounded.scrollY = 120;
+bounded.stick = false;
+const topBefore = box.visibleTurnIds(
+  box.turnGeometry(bounded.turns, bounded.turnHeights).ranges, bounded.scrollY, bounded.viewportHeight)[0];
+assert.equal(topBefore, "b-1");
+bounded.apply({ type: "turn.start", turn: { id: "b-5", prompt: "new" } });
+assert.deepEqual(Array.from(bounded.turns, (turn) => turn.id), ["b-1", "b-2", "b-3", "b-4", "b-5"],
+  "the oldest turn fell off and the new one is in");
+assert.equal(bounded.turnHeights.has("b-0"), false, "heights of a dropped turn are forgotten");
+assert.equal(box.visibleTurnIds(
+  box.turnGeometry(bounded.turns, bounded.turnHeights).ranges, bounded.scrollY, bounded.viewportHeight)[0],
+  topBefore, "the turn that was on top stays on top after the trim");
+
+console.log("PASS: dots-only scroll rail, scrubbing, dot jump, keyboard focus, narrow turn list, empty and offline states, sticky bottom, streaming replay, bounded hover, tool detail edges, Markdown and Stack view, bounded history.");

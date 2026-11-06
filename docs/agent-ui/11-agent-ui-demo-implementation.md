@@ -67,6 +67,8 @@ sh scripts/install.sh agent-ui project-open
 
 **接縫已實作（P2 前置）**：`state.js`（`applyEvent` / `deriveStatus`，純函式、無 host）＋ `fixtures.js` 內的 fixture source（`snapshot/take/step/replay/finish/arrive`）＋ `main.js` 的 `pump()`。流式回放與 `+ turn` 都走同一條 reducer，不再有 `text += chunk` 這種寫在 view 裡的狀態變更。事件去重、未知 turn/message 丟棄、snapshot 重建都有獨立單元測試（`tests/agent-ui-state.test.cjs`）。
 
+**歷史上限**：reducer 保留最近 200 輪（`createTranscript(turns, limit)`），超出丟最舊並回報 `dropped`；view 清掉對應高度、用最上面的輪 id 還原閱讀位置。量測見 `03-architecture.md` §7.5——200 輪一幀約 1.8ms，2000 輪 27ms，所以先設上限而不是做虛擬化。rail 只依賴輪序，不依賴高度。
+
 **流式回放已實作**：`▶ stream` 用 `cx.timer.every(140, …)` 每 tick 追加一段（14 段 Markdown），走的是與未來 bridge 相同的 `appendTurn()` 路徑 —— 幾何、rail 桶、reading anchor 都沒有特例分支。讀者在上方時 `scrollY` 不動、`↓ live` 計數累加；在底部時跟隨成長；`⏭ finish` 一次補完並把 turn／tool 標成 done。tick 在沒有串流時立刻 return 且不 `notify`，這是對「動畫別用 timer」的讓步：串流本來就是外部事件，只是現在由時鐘代替。
 
 **狀態與貼底已實作**：標頭 chip 循環 **DEMO／OFFLINE／EMPTY**；offline 顯示 banner、既有輪次仍可讀、`send()` 直接拒絕並說明「沒有送出、沒有排隊」；empty 以「沒有東西可顯示」取代 transcript，而不是無盡 spinner。**Sticky bottom**：讀者在上方閱讀時新輪次不改 `scrollY`，只出現 `↓ N new`；按下去才到底並歸零；已在底部時內容成長自動跟隨。`+ turn`（寬 pane）模擬這種到達，也是後續 streaming 回放要用的同一條 `appendTurn()` 路徑。
