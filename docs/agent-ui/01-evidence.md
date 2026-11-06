@@ -54,6 +54,9 @@
 | `message_end` hook 時檔案已寫好嗎？ | E：AgentSession 先呼叫 extension handlers，再 append | bridge 不得在 hook 內假設 durable entry ID 已存在 |
 | 可以把既有 TUI 切成 RPC 嗎？ | E：文件中的 RPC 是長存 subprocess 介面；未提供把任意 TUI 原地變 RPC 的保證 | 禁止為 UI 另開 `pi --mode rpc --session ...` 造成雙 writer |
 | 現有工作中途裝 bridge？ | E：Pi 不可在 Agent running 時 reload | 安裝不自動 `/reload`；目前仍可使用 Terminal，待 idle 經確認啟用 GUI extension |
+| Mod 可否取得鍵盤？ | E：`init(props, cx)` 內 `cx.focus_handle()`，配合 `.track_focus(h)`、`.on_key_down((e, cx) => …)`、`h.focus()`；`mod.json` 的 `"focusable": true` 讓 `pane.go` 能把 focus 移進來（見 `defaults/AGENTS.md`、`defaults/herdr.d.ts`） | 圓點可用方向鍵／Home／End／Enter／Esc 操作，與滑鼠 hover 提供同樣資訊 |
+| 有無 accessibility／aria 介面？ | E：`defaults/herdr.d.ts` 與 `src/window.rs` 都沒有任何 accessibility tree、label 或 screen-reader 接口；只有 `KeyDownEvent.keystroke.key` | 只能宣稱「鍵盤可達」，**不得宣稱螢幕閱讀器支援**；RL-08 的 a11y 部分屬於宿主缺口 |
+| 可否在 Mod 內寫剪貼簿？ | E：只有 `terminal.copy`／`terminal.paste` 這類作用於終端選取與輸入的命令，Mod 沒有自己的 clipboard API | Tool 詳情不做「Copy 按鈕」；文字留在可選取的 Text 中，完整輸出仍在 Terminal |
 | Terminal identity 可由何而來？ | E：本機 `hc --skill` 文件定義 `$HC_TERMINAL_ID` | 需加 host/core/process incarnation 防地址重用；不能只用 cwd |
 
 ## 5. 尚未驗證，禁止寫成保證

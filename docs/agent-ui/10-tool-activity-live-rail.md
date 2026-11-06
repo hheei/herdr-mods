@@ -299,7 +299,7 @@ interface RailViewState {
 | **RL-05** | Hover 第 A Pane marker，然後切換到 Pane B / Pi 重啟 | A 的 preview／定位結果立即失效，不在 B 顯示 A 的內容 |
 | **RL-06** | 長文展開、上方補內容、窄 360px、Reduced Motion | 不遮擋 Composer／Status Bar，不丟 viewport anchor；窄 pane 使用替代導航 |
 | **RL-07** | 16+ marker cluster／含 failed turn | Cluster 展開能精確選中被合併的輪；可視輪次不被採樣吞掉，工具失敗不影響 Pin 色 |
-| **RL-08** | 無滑鼠、鍵盤導航、螢幕閱讀器 | preview 可經 focus 取得，同樣內容有 accessible name；不是 hover-only 功能 |
+| **RL-08** | 無滑鼠、鍵盤導航、螢幕閱讀器 | **鍵盤部分已實作**：↑／↓ 移動圓點、Home／End 首末、Enter 跳轉、Esc 清除，focus 圓點實心並顯示同一份預覽；**螢幕閱讀器部分不可實作**——Herdr 無 accessibility tree（[01 §4](01-evidence.md)），只能宣稱鍵盤可達 |
 | **RL-09** | 一般輪次／未解決異常的 Hover 簡潔度 | **正常單行短 prompt**；異常最多加一行 `需要處理`；沒有回答摘要、tool badges、時間、模型、token、heading outline 或大卡片 |
 | **RL-10** | 視窗同時包含 3 個 user turns | **3 個 Pin 同時高亮**；滑鼠捲動即時更新，Click 保留連續 transcript 的 earlier turns |
 | **RL-11** | Hover 頂部／底部 Pin、折疊展開、Resize | Hover 與所有 Pin 不超出 viewport；量測高度更新後閱讀位置穩定，Stack 子視圖的外框對齊 Herdr Theme |

@@ -51,7 +51,7 @@ function stateObj(spec) {
     set_value(value) { this.text = value; },
   };
 }
-const context = { notify() {}, stop_propagation() {} };
+const context = { notify() {}, stop_propagation() {}, focus_handle: () => ({ focus() {} }) };
 const box = {
   View: class {}, div: node, h_flex: node, v_flex: node,
   theme: () => ({
@@ -151,7 +151,7 @@ vm.runInNewContext(src.replace(/^import\s+\{[\s\S]*?\}\s+from\s+"[^"]+";\s*/gm, 
   .replace("export default class AgentUi", "class AgentUi")
   + "\nthis.AgentUi=AgentUi;", box);
 const ui = new box.AgentUi();
-ui.init();
+ui.init({}, context);
 ui.turns = box.FIXTURE_TURNS.map((turn) => ({
   ...turn, messages: [...turn.messages], tools: [...turn.tools],
 }));
@@ -426,4 +426,99 @@ assert.ok(find(longRender, `agent-ui-rail-marker-${longRail.dots.at(-1).id}`),
   "the last bucket is reachable");
 assert.ok(find(longRender, "agent-ui-user-t-long-01"), "generated turns are mounted");
 
-console.log("PASS: dots-only scroll rail, scrubbing, dot jump, multi-highlight, bounded hover, tools, Markdown and Stack view.");
+// Keyboard reaches the rail without a pointer. Screen readers are NOT claimed:
+// Herdr exposes no accessibility API, so only focus + keys are testable here.
+ui.turns = box.FIXTURE_TURNS.map((turn) => ({
+  ...turn, messages: [...turn.messages], tools: [...turn.tools],
+}));
+ui.turnHeights = new Map();
+ui.changeSize({ width: 800 }, context);
+ui.measureViewport({ height: 460 }, context);
+ui.scrollY = 0;
+ui.keyTurn = null;
+const keyEvent = (key) => ({ keystroke: { key } });
+let rootNode = find(ui.render(context), "agent-ui-root");
+assert.ok(rootNode.handlers.on_key_down, "the Stack view handles keys while focused");
+assert.equal(rootNode.style.track_focus.length, 1,
+  "the root tracks the focus handle taken in init");
+assert.equal(typeof rootNode.style.track_focus[0].focus, "function");
+rootNode.handlers.on_key_down(keyEvent("down"), context);
+assert.ok(ui.keyTurn, "arrow down selects the first rail dot");
+rootNode = find(ui.render(context), "agent-ui-root");
+const keyedDot = find(ui.render(context),
+  `agent-ui-rail-marker-${ui.keyTurn}`).kids[0];
+assert.equal(keyedDot.style.opacity[0], 1, "keyboard focus is drawn solid");
+assert.equal(keyedDot.style.bg[0], "#9AD", "keyboard focus uses the accent token");
+const keyPreview = find(ui.render(context), "agent-ui-rail-preview");
+assert.ok(keyPreview, "focused dots show the same preview as hover");
+const kbGeometry = () => box.turnGeometry(ui.turns, ui.turnHeights);
+rootNode.handlers.on_key_down(keyEvent("home"), context);
+assert.equal(ui.scrollY, kbGeometry().ranges[0].start, "Home jumps to the first turn");
+rootNode.handlers.on_key_down(keyEvent("down"), context);
+const focusedId = ui.keyTurn;
+const focusedStart = kbGeometry().ranges.find((range) => range.id === focusedId).start;
+rootNode.handlers.on_key_down(keyEvent("enter"), context);
+assert.equal(ui.scrollY, focusedStart, "Enter jumps to the focused turn");
+rootNode.handlers.on_key_down(keyEvent("end"), context);
+const endTurn = ui.keyTurn;
+assert.equal(endTurn, kbGeometry().ranges.at(-1).id, "End reaches the last bucket");
+rootNode.handlers.on_key_down(keyEvent("up"), context);
+assert.notEqual(ui.keyTurn, endTurn, "arrow up moves back");
+rootNode.handlers.on_key_down(keyEvent("down"), context);
+assert.equal(ui.keyTurn, endTurn, "arrow down returns");
+rootNode.handlers.on_key_down(keyEvent("escape"), context);
+assert.equal(ui.keyTurn, null, "Escape clears the keyboard focus");
+assert.equal(find(ui.render(context), "agent-ui-rail-preview"), null);
+
+// A narrow pane swaps the strip for the same buckets as a short list.
+ui.changeSize({ width: 210 }, context);
+let narrow = ui.render(context);
+assert.equal(find(narrow, "agent-ui-rail"), null, "no strip in a narrow pane");
+assert.ok(find(narrow, "agent-ui-turn-list-toggle"), "a Turns control takes over");
+find(narrow, "agent-ui-turn-list-toggle").handlers.on_click({}, context);
+narrow = ui.render(context);
+assert.ok(find(narrow, "agent-ui-turn-list"), "the list opens in place");
+const listGeometry = box.turnGeometry(ui.turns, ui.turnHeights);
+const listLayout = box.railLayout(listGeometry.ranges, ui.viewportHeight,
+  box.visibleTurnIds(listGeometry.ranges, ui.scrollY, ui.viewportHeight));
+const listRowId = listLayout.dots[0].id;
+assert.ok(find(narrow, `agent-ui-turn-list-${listRowId}`), "every bucket has a row");
+const listScroll = ui.scrollY;
+find(narrow, `agent-ui-turn-list-${listRowId}`).handlers.on_click({}, context);
+assert.equal(ui.turnList, false, "picking a row closes the list");
+assert.notEqual(ui.scrollY, listScroll, "picking a row jumps");
+ui.changeSize({ width: 800 }, context);
+
+// Tool details: an unknown kind is shown as itself, truncated output says how
+// much it dropped, and a partial patch is not passed off as a full one.
+ui.turns.push({
+  id: "t-detail-edge", prompt: "edge cases", status: "done",
+  messages: [{ id: "a-detail-edge", role: "assistant", text: "edge" }],
+  tools: [
+    { id: "x-output", kind: "exec", title: "Run", status: "done", target: "cmd",
+      detail: Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n") },
+    { id: "x-unknown", kind: "weird-kind", title: "Mystery", status: "done", target: "?",
+      detail: "raw payload" },
+    { id: "x-partial", kind: "edit", title: "Edit", status: "done", target: "f.js",
+      detail: "- only a removal" },
+  ],
+});
+ui.turnHeights = new Map();
+ui.groupOpen.add("t-detail-edge");
+ui.toolOpen.add("x-output");
+ui.toolOpen.add("x-unknown");
+ui.toolOpen.add("x-partial");
+const edge = ui.render(context);
+assert.equal(find(edge, "agent-ui-detail-more-x-output").kids[0].text ?? "",
+  "", "truncation notice node exists");
+const moreText = textOf(find(edge, "agent-ui-detail-more-x-output"));
+assert.match(moreText, /18 of 40 lines/);
+assert.match(moreText, /full output stays in the Terminal/);
+assert.match(textOf(find(edge, "agent-ui-tool-x-unknown")), /WEIRD-KIND/,
+  "an unknown tool kind is not relabelled as a known one");
+assert.ok(find(edge, "agent-ui-detail-partial-x-partial"),
+  "a patch without a hunk header is marked partial");
+assert.equal(find(edge, "agent-ui-detail-partial-x-unknown"), null,
+  "only edit details carry the partial-patch notice");
+
+console.log("PASS: dots-only scroll rail, scrubbing, dot jump, keyboard focus, narrow turn list, bounded hover, tool detail edges, Markdown and Stack view.");

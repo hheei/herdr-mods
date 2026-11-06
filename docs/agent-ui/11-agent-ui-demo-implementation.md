@@ -61,7 +61,13 @@ sh scripts/install.sh agent-ui project-open
 - `turnGeometry` 由每輪 `.on_size_change` 實測高度構成；群組展開導致高度變化時保留原閱讀錨點，滑鼠滾動更新 `scrollY`，所有與 viewport 區間相交的 turn 同時高亮。Hover 預覽及 rail pin 的 top 都以 viewport 高度 clamp，容器本身裁切。
 - **操作**：點擊圓點並放開＝跳至該輪；從圓點拖曳超過 5px＝改成按 Rail 垂直位置捲動對話，放開不再觸發跳轉；點擊或拖曳圓點間的空白區也可按比例捲動。所有操作只更新唯一的 `scrollY`，不是另一個 Scrollbar 控件。窄 Pane 仍保留圓點；只有極短 viewport 才隱藏整條 Rail 防止溢出。此視圖仍是原本 Chrome Layout Stack 的子 View，不是獨立 model Pane；外框維持 `rounded(10)`、1px Theme border、38px Topbar。
 
-**已完成：連續 transcript 的量測式 Jump、固定中線 3px 間距的圓點列、40% 高度上限、以及高斯波包焦點。** 尚未完成／實機未驗證：桶合併的 Hover 文字長度、跨視窗 pointer capture、鍵盤 Focus／Screen Reader 和 GPUI 真實文字幾何。這些不是已完成產品功能。
+**已完成（headless）：連續 transcript 的量測式 Jump、固定中線 3px 間距的圓點列、40% 高度上限、高斯波包焦點、鍵盤導航與窄 pane 輪次清單。** 鍵盤：`init(props, cx)` 取 `cx.focus_handle()`，root `.track_focus(h)` ＋ `.on_key_down`；↑／↓ 移動選取圓點、Home／End 到首末桶、Enter 跳轉、Esc 清除，focus 中的圓點以實心 accent 畫出並顯示與 hover 相同的預覽。
+
+**明確不做（宿主缺口，見 [01 §4](01-evidence.md)）：** 螢幕閱讀器／accessibility tree —— Herdr 沒有相關接口，因此只能宣稱「鍵盤可達」。**未實作／實機未驗證：** 跨視窗 pointer capture、桶合併的 Hover 文字長度、GPUI 真實文字幾何、全域快捷鍵（本 Mod 不附 `keys.json`）。
+
+**窄 pane／矮 pane fallback 已實作**：視窗寬度 < 240px 或高度 < 80px 時不畫圓點列，標題列出現 **Turns** 控制，展開後列出同一批桶（`短問題 +N`），點一列即跳轉；列數依可用高度截斷並顯示剩餘數量。
+
+**Tool 細節邊界已實作**：詳情最多顯示 18 行／4000 字元，超出時說明「顯示 N / M 行，完整輸出仍在 Terminal」；`edit` 詳情沒有 hunk header 時標示 **partial**，不假裝是完整 patch；未知 `kind` 直接印出原字串，不冒認 Read／Run／Edit。Mod 沒有 clipboard API，因此不做 Copy 按鈕。
 
 **Dots-only Rail 已實作（headless 測試通過，實機待驗證）**：唯一 18px 操作區只由圓點組成，沒有畫出 Scroll Track／Thumb。圓點的位置由每輪實測 `turnGeometry` 映射；當前 viewport 內的圓點放大，就代表可見區間。Wheel、圓點跳轉和 Drag-to-scrub 都使用相同 `scrollY`。圓點短按與拖曳透過 5px 門檻區分；空白處可以直接捲動，不用先點任何 Thumb。Resize、工具展開仍沿用相同幾何。原生 App 的指標事件、Hover 與視覺需要實機驗證。
 
@@ -80,6 +86,6 @@ node tests/project-open.test.cjs
 sh tests/agent-ui-demo-install.test.sh
 ```
 
-已覆蓋的行為：七輪腳本 fixtures（Demo 另載入 60 輪，並斷言 460px 下收斂為 15 個圓點）、group 和 tool detail 的折疊、失敗摘要（**右側不顯示狀態**）、工具失敗不觸發 `requiresUserAction`、Markdown 的原生 API 參數、**所有可見輪次的 Rail multi-highlight**、按 ID 捲動完整 transcript、Hover／Pin 可視範圍 clamp、**Dots-only Rail：圓點點擊、空白處點擊／拖曳、5px Gesture 門檻、上下邊界、Wheel／Resize 同步，且不渲染 Track／Thumb**、圓角 root、本地 Composer、窄畫面、單 SVG status control、獨立 derive layout、不覆蓋一般個人 Layout／main、備份。
+已覆蓋的行為：七輪腳本 fixtures（Demo 另載入 60 輪，並斷言 460px 下收斂為 15 個圓點）、group 和 tool detail 的折疊、失敗摘要（**右側不顯示狀態**）、工具失敗不觸發 `requiresUserAction`、Markdown 的原生 API 參數、**所有可見輪次的 Rail multi-highlight**、按 ID 捲動完整 transcript、Hover／Pin 可視範圍 clamp、**Dots-only Rail：圓點點擊、空白處點擊／拖曳、5px Gesture 門檻、上下邊界、Wheel／Resize 同步，且不渲染 Track／Thumb**、**鍵盤 ↑↓/Home/End/Enter/Esc 與 focus 圓點實心**、**窄 pane Turns 清單**、**tool 詳情 18 行截斷／partial patch／未知 kind 標籤**、圓角 root、本地 Composer、窄畫面、單 SVG status control、獨立 derive layout、不覆蓋一般個人 Layout／main、備份。
 
 實機進行以下 QA 才算完成下一個 Gate：`herdr-app check`、真實視窗截圖、Markdown code blocks、Hover 是否裁切、click 過程是否跳動、窄 Pane／IME／鍵盤 focus、當實際 UI 初始化失敗時是否仍能從 Status Bar 回 Terminal。**這台 Linux 執行環境沒有 `herdr-app` desktop binary，故無法代替目標 Mac 上的實機結果。**

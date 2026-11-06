@@ -31,13 +31,22 @@ function markdown(t, id, source) {
 
 function toolLabel(tool) {
   const names = { read: "Read", search: "Search", exec: "Run", edit: "Edit", custom: "Tool" };
-  return names[tool.kind] ?? "Tool";
+  const kind = String(tool?.kind ?? "");
+  // An unknown kind is shown as it is; never silently relabel it as a known tool.
+  return names[kind] ?? (kind ? kind.toUpperCase() : "Tool");
 }
 
+const DETAIL_LINES = 18;
+const DETAIL_CHARS = 4000;
+
 export default class AgentUi extends View {
-  init() {
+  init(_props, cx) {
     this.turns = DEMO_TURNS.map((turn) => ({ ...turn, messages: [...turn.messages], tools: [...turn.tools] }));
+    // Herdr Mod guide: cx.focus_handle() in init, .track_focus(h), h.focus().
+    this.h = cx.focus_handle();
     this.hoveredTurn = null;
+    this.keyTurn = null;
+    this.turnList = false;
     this.groupOpen = new Set();
     this.toolOpen = new Set();
     this.turnHeights = new Map();
@@ -197,6 +206,70 @@ export default class AgentUi extends View {
     cx.notify();
   }
 
+  // Keyboard reaches the same information as hover: arrows move a rail dot, and
+  // its preview is shown while that dot is the keyboard focus.
+  keyDown(event, cx) {
+    const key = String(event?.keystroke?.key ?? "").toLowerCase();
+    if (!key) return;
+    const geometry = turnGeometry(this.turns, this.turnHeights);
+    const layout = railLayout(geometry.ranges, this.viewportHeight,
+      visibleTurnIds(geometry.ranges, this.scrollY, this.viewportHeight));
+    if (key === "escape") {
+      if (this.keyTurn === null && this.hoveredTurn === null && !this.turnList) return;
+      this.keyTurn = null;
+      this.hoveredTurn = null;
+      this.turnList = false;
+      cx.notify();
+      return;
+    }
+    if (!layout.dots.length) return;
+    const current = layout.dots.findIndex((dot) => dot.turnIds.includes(this.keyTurn));
+    let next = current;
+    if (key === "up") next = current < 0 ? layout.dots.length - 1 : Math.max(0, current - 1);
+    else if (key === "down") next = current < 0 ? 0 : Math.min(layout.dots.length - 1, current + 1);
+    else if (key === "home") next = 0;
+    else if (key === "end") next = layout.dots.length - 1;
+    else if (key === "enter" || key === "return") {
+      if (!this.keyTurn) return;
+      this.selectTurn(this.keyTurn, cx);
+      return;
+    } else return;
+    this.keyTurn = layout.dots[next].id;
+    // Moving the keyboard focus moves the reading position, so the packet and
+    // the transcript stay together.
+    const target = geometry.ranges.find((range) => range.id === this.keyTurn);
+    if (target) this.scrollY = clampScroll(target.start, geometry.total, this.viewportHeight);
+    this.hoveredTurn = null;
+    cx.stop_propagation();
+    cx.notify();
+  }
+
+  // Narrow or very short panes have no room for the strip; the same buckets are
+  // offered as a short list instead of dropping navigation entirely.
+  turnListPanel(t, layout) {
+    const rows = Math.max(3, Math.floor((this.viewportHeight - 120) / 26));
+    const nodes = toRailNodes(this.turns);
+    return v_flex().id("agent-ui-turn-list").absolute().left(8).right(8).top(8)
+      .px(8).py(6).gap(1).rounded(8)
+      .bg(t.popover).border_1().border_color(t.border)
+      .children(layout.dots.slice(0, rows).map((dot) => {
+        const node = nodes.find((item) => item.id === dot.id);
+        const grouped = dot.turnIds.length > 1 ? ` +${dot.turnIds.length - 1}` : "";
+        return h_flex().id(`agent-ui-turn-list-${dot.id}`).h(24).w_full().gap(7)
+          .items_center().cursor_pointer().rounded(5).px(5)
+          .when(dot.visible, (el) => el.bg(t.raised))
+          .on_click((_event, cx) => {
+            this.turnList = false;
+            this.selectTurn(dot.id, cx);
+          })
+          .child(div().flex_1().min_w(0).truncate().text_size(11.5)
+            .text_color(t.foreground).child(shortPrompt(node?.preview ?? "", 32) + grouped));
+      }))
+      .when(layout.dots.length > rows, (el) => el.child(
+        div().text_size(10.5).text_color(t.dim)
+          .child(`+${layout.dots.length - rows} more turns · open a wider pane`)));
+  }
+
   selectTurn(id, cx) {
     if (!this.turns.some((turn) => turn.id === id)) return;
     const geometry = turnGeometry(this.turns, this.turnHeights);
@@ -247,7 +320,12 @@ export default class AgentUi extends View {
   }
 
   toolDetail(t, tool) {
-    const detail = String(tool.detail ?? "No details available.").slice(0, 8192);
+    const raw = String(tool.detail ?? "No details available.");
+    const detail = raw.slice(0, DETAIL_CHARS);
+    const lines = raw.split("\n");
+    const shown = detail.split("\n").slice(0, DETAIL_LINES);
+    const truncated = lines.length > shown.length || raw.length > detail.length;
+    const partial = String(tool.kind ?? "") === "edit" && !detail.includes("@@");
     const headings = {
       read: "File excerpt",
       search: "Matches and source",
@@ -255,7 +333,7 @@ export default class AgentUi extends View {
       edit: "Patch preview",
       custom: "Integration information",
     };
-    const title = headings[tool.kind] ?? "Tool result";
+    const title = headings[tool.kind] ?? `Tool result · ${String(tool.kind ?? "unknown")}`;
     const warn = tool.status === "failed" || tool.status === "pending";
     return v_flex().id(`agent-ui-detail-${tool.id}`).pl(22).pr(8).py(7).gap(4)
       .border_l(1).border_color(t.border)
@@ -266,13 +344,18 @@ export default class AgentUi extends View {
           .child(tool.status === "failed" ? "Failed" : "Needs input"))))
       .child(div().text_size(10.5).text_color(t.dim)
         .child(tool.target || "Unknown target"))
-      .children(detail.split("\n").slice(0, 32).map((line, i) =>
+      .children(shown.map((line, i) =>
         div().id(`agent-ui-detail-line-${tool.id}-${i}`).text_size(11.5)
           .text_color(tool.kind === "edit" && line.startsWith("+") ? (t.done || t.accent)
             : tool.kind === "edit" && line.startsWith("-") ? t.blocked : t.muted)
           .child(line || " ")))
-      .when(detail.split("\n").length > 32, (el) => el.child(
-        div().text_size(11).text_color(t.dim).child("Preview truncated · synthetic fixture")));
+      // A partial patch and a truncated log are different problems; say which.
+      .when(partial, (el) => el.child(div().id(`agent-ui-detail-partial-${tool.id}`)
+        .text_size(10.5).text_color(t.working)
+        .child("Patch preview is partial · no hunk header in this fixture")))
+      .when(truncated, (el) => el.child(div().id(`agent-ui-detail-more-${tool.id}`)
+        .text_size(10.5).text_color(t.dim)
+        .child(`Preview shows ${shown.length} of ${lines.length} lines · full output stays in the Terminal`)));
   }
 
   toolRow(t, tool) {
@@ -356,20 +439,25 @@ export default class AgentUi extends View {
         h_flex().id(`agent-ui-rail-marker-${dot.id}`).w(18).h(layout.pitch).absolute()
           .left(0).top(dot.center - layout.pitch / 2)
           .items_center().justify_end().pr(3).rounded(6)
-          // Size is the Gaussian focus packet; the fill only says "on screen".
-          .child(div().size(dot.size).rounded(999).opacity(0.7)
-            .bg(dot.visible ? t.muted : t.dim)))));
+          // Size is the Gaussian focus packet; the fill only says "on screen",
+          // and the keyboard-focused dot is drawn solid so focus is visible.
+          .child(div().size(dot.size).rounded(999)
+            .when(this.keyTurn && dot.turnIds.includes(this.keyTurn),
+              (el) => el.opacity(1).bg(t.accent))
+            .when(!(this.keyTurn && dot.turnIds.includes(this.keyTurn)),
+              (el) => el.opacity(0.7).bg(dot.visible ? t.muted : t.dim))))));
   }
 
   hoverPreview(t, geometry) {
-    if (!this.hoveredTurn) return null;
+    const target = this.hoveredTurn ?? this.keyTurn;
+    if (!target) return null;
     const nodes = toRailNodes(this.turns);
-    const node = nodes.find((item) => item.id === this.hoveredTurn);
+    const node = nodes.find((item) => item.id === target);
     if (!node || this.width < 240) return null;
     if (this.viewportHeight < (node.actionable ? 60 : 44)) return null;
     const layout = railLayout(geometry.ranges, this.viewportHeight,
       visibleTurnIds(geometry.ranges, this.scrollY, this.viewportHeight));
-    const dot = layout.dots.find((item) => item.turnIds.includes(this.hoveredTurn));
+    const dot = layout.dots.find((item) => item.turnIds.includes(target));
     if (!dot) return null;
     const grouped = dot.turnIds.length > 1 ? ` +${dot.turnIds.length - 1}` : "";
     return v_flex().id("agent-ui-rail-preview").absolute().right(22)
@@ -387,7 +475,9 @@ export default class AgentUi extends View {
   render(cx) {
     const t = theme();
     const compact = this.width < 520;
-    const railEnabled = this.viewportHeight >= 80;
+    // The strip needs both room and height; without them the list takes over.
+    const railEnabled = this.viewportHeight >= 80 && this.width >= 240;
+    const listEnabled = !railEnabled && this.viewportHeight >= 60;
     const draft = String(this.composer.value() ?? "").trim();
     const geometry = turnGeometry(this.turns, this.turnHeights);
     this.scrollY = clampScroll(this.scrollY, geometry.total, this.viewportHeight);
@@ -397,10 +487,17 @@ export default class AgentUi extends View {
       // card frame here, without introducing a second host Pane Frame.
       .rounded(10).overflow_hidden().border_1().border_color(t.border).bg(t.background)
       .text_color(t.foreground)
+      .track_focus(this.h)
+      .on_key_down((event, context) => this.keyDown(event, context))
       .on_size_change((size, context) => this.changeSize(size, context))
       .child(h_flex().id("agent-ui-header").h(38).flex_none().px(12).gap(9)
         .items_center().border_b(1).border_color(t.border)
         .child(div().flex_1().text_size(12.5).font_semibold().child("Pi · Conversation"))
+        .when(listEnabled, (el) => el.child(control(t, "agent-ui-turn-list-toggle",
+          this.turnList ? "Close" : "Turns", (context) => {
+            this.turnList = !this.turnList;
+            context.notify();
+          }, this.turns.length > 0)))
         .child(this.statusLine(t, this.turns.at(-1).status))
         .child(div().text_color(t.dim).text_size(10).child("DEMO")))
       .child(h_flex().id("agent-ui-main").flex_1().min_h(0)
@@ -420,8 +517,10 @@ export default class AgentUi extends View {
             .children(this.turns.map((turn) => this.turn(t, turn)))))
         .when(railEnabled, (el) =>
           el.child(this.navigationStrip(t, geometry, visible, true)))
-        .when(railEnabled && Boolean(this.hoveredTurn),
-          (el) => el.child(this.hoverPreview(t, geometry))))
+        .when(railEnabled && Boolean(this.hoveredTurn ?? this.keyTurn),
+          (el) => el.child(this.hoverPreview(t, geometry)))
+        .when(listEnabled && this.turnList, (el) => el.child(this.turnListPanel(t,
+          railLayout(geometry.ranges, this.viewportHeight, [...visible])))))
       .child(v_flex().id("agent-ui-composer").flex_none().px(compact ? 13 : 21)
         .pt(10).pb(12).gap(8).border_t(1).border_color(t.border).bg(t.chrome)
         .child(Textarea.new(this.composer).id("agent-ui-textarea").w_full()
