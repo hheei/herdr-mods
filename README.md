@@ -6,20 +6,20 @@ Small independent mods for [Herdr App](https://github.com/herdrdev/herdr-app). C
 
 | Mod | Function |
 | --- | --- |
-| [Project Open](mods/project-open/README.md) | One icon in the status bar, left of the Commands hint; left-click opens with the last chosen app; right-click changes the default without opening. Remote SSH supported for VS Code. |
-| [Pi Agent UI (P0 preview)](mods/agent-ui/README.md) | Native GPUI fixture conversation, tool disclosure, search and mock Composer. Derived `agent-ui-demo` layout with a Status Bar preview switch; **not** production per-Pane switching or a live Pi client. |
+| [Project Open](mods/project-open/README.md) | Single status icon, left click opens the selected tool, right click changes preference. |
+| [Agent UI](mods/agent-ui/README.md) | Native GPUI fixture conversation with **Markdown, collapsed tool activity, minimal Message Rail and one SVG mode switch**. Not yet connected to live Pi or a single split Pane. |
 
-### Experimental Pi Agent UI preview
+### Agent UI demo (local checkout)
 
-Install Herdr App first, then run this **on the computer hosting the GUI**, from a checkout:
+Run on the computer hosting the Herdr App GUI:
 
 ```sh
 sh scripts/install.sh agent-ui project-open
 ```
 
-It copies both Mod folders into Herdr App Home (one `.bak` per replaced folder) and **generates** `layouts/agent-ui-demo.json` from your own `herdr-mods` layout — only the tab renderer is wrapped in the demo stack, so every existing layout stays byte-identical.
+Select **`agent-ui-demo`** in the Layout picker. The **single SVG icon** in the existing Status Bar switches between your Terminal Tab display and the synthetic Agent UI. The conversation includes seven test turns, grouped tool details, native Markdown and a lightweight navigation rail. Hover only shows a short question; click changes the transcript window to begin at that turn (not yet precise pixel scrolling).
 
-Then select **agent-ui-demo** in the Layout picker (or `herdr-app do layout.switch --name agent-ui-demo`) and use **Terminal | UI · demo** in its Status Bar. The switch swaps the active **Tab display**, not a single split Pane; strict per-Pane switching needs a separate Herdr host presenter API. It never edits `herdr-mods.json`, sends anything to Pi or restarts terminals. Re-running the command refreshes the demo. [Full steps](mods/agent-ui/README.md#install-the-demo) · [prototype scope and test status](docs/agent-ui/08-prototype-implementation.md).
+This is an **opt-in Tab-display chrome-stack preview**, not a live Pi client or per-model split-Pane switch. It does not start, stop or send commands to Pi. [Installation and limitations](mods/agent-ui/README.md) · [implementation status](docs/agent-ui/11-agent-ui-demo-implementation.md).
 
 ## Quick install
 
@@ -81,6 +81,7 @@ node tests/layout-status.test.cjs
 node tests/agent-ui.test.cjs
 node --check mods/project-open/main.js
 node --check mods/agent-ui/main.js
+node --check mods/agent-ui/model.js
 sh -n scripts/install.sh
 sh tests/install-smoke.sh
 sh tests/agent-ui-demo-install.test.sh

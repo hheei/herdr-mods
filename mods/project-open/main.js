@@ -14,7 +14,7 @@ const ICON = {
   finder: "mods/project-open/finder.svg",
 };
 
-// P0 only: the opt-in agent-ui-demo layout has a *chrome stack*, not a
+// Demo only: the opt-in agent-ui-demo layout has a *chrome stack*, not a
 // model-pane replacement API. Never modify the current pane or running PTY.
 const DEMO_STACK = "agent-ui-demo-surface";
 function findNode(tree, id) {
@@ -128,18 +128,22 @@ export default class ProjectOpen extends View {
     }
 
     const mode = demoMode();
-    const toggle = (id, label, child) =>
-      div().id(id).h(22).px(8).flex_none().rounded(5)
-        .flex().items_center().justify_center().text_size(11.2)
-        .text_color(mode === child ? t.foreground : t.muted)
-        .when(mode === child, (el) => el.bg(t.selected))
-        .cursor_pointer()
-        .on_click((_e, cx) => {
-          cx.stop_propagation();
-          if (shared("layout") !== "agent-ui-demo" || demoMode() === null) return;
-          run("layout.select", { stack: DEMO_STACK, child: child === "ui" ? "agent-ui-demo-ui" : "agent-ui-demo-terminal" });
+    const modeToggle = mode === null ? null :
+      div().id("agent-ui-mode").size(22).flex_none()
+        .flex().items_center().justify_center()
+        .cursor_pointer().text_color(t.muted)
+        // One icon like project-open, no hover tooltip or extra Status Bar slot.
+        .on_click((_e, context) => {
+          context.stop_propagation();
+          const fresh = demoMode();
+          if (!fresh) return;
+          run("layout.select", {
+            stack: DEMO_STACK,
+            child: fresh === "terminal" ? "agent-ui-demo-ui" : "agent-ui-demo-terminal",
+          });
         })
-        .child(label);
+        .child(svg(mode === "terminal"
+          ? "mods/project-open/agent-ui.svg" : "mods/project-open/agent-terminal.svg").size(15));
     const action = lastAction();
     const button = div().id("project-open-button").size(22).flex_none()
       .flex().items_center().justify_center()
@@ -171,11 +175,7 @@ export default class ProjectOpen extends View {
         // a new far-right slot after the Commands hint.
         .child(button))
       .child(div().flex_1())
-      .when(mode !== null, (el) => el.child(h_flex().id("agent-ui-demo-toggle")
-        .h(24).items_center().gap(2).px(3).rounded(7)
-        .border_1().border_color(t.border)
-        .child(toggle("demo-terminal", "Terminal", "terminal"))
-        .child(toggle("demo-ui", "UI · demo", "ui"))))
+      .when(mode !== null, (el) => el.child(modeToggle))
       .child(div().id("palette").text_color(t.dim)
         .on_click(() => run("app.palette")).child(this.hint()));
   }

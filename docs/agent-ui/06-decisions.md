@@ -16,7 +16,7 @@
 
 ## ADR-003 · UI 元件與互動先用合成 fixtures 做到成熟
 
-**採納，但明確分兩個階段。** P0 用 synthetic fixtures 建**可操作的最小原型**（既有 Status Bar 切換、對話、最少工具卡、mock Composer、返回 Terminal），先確認同 Pane 技術 Gate。**P1 在觀察原型的使用摩擦後才打磨** native GPUI message timeline、工具卡、diff、thinking、搜尋、Composer、scroll/focus/a11y；不要求第一版就做完像素級 polish。詳見 [07](07-post-prototype-polish.md)。Pane Header 只有資訊，不放切換鈕。用 mock event feeder 模擬 streaming／故障，不等待 host observer 完成才開始做 UI。
+**採納，但明確分兩個階段。** P0 用 synthetic fixtures 建**可操作的最小原型**（既有 Status Bar 切換、對話、最少工具、mock Composer、返回 Terminal），先確認同 Pane 技術 Gate。**P1 在觀察原型的使用摩擦後才打磨** native GPUI message timeline、工具群組、真正 Markdown、diff、thinking、Composer、scroll/focus/a11y；**移除常駐搜尋和 fixture 情境按鈕**，不要求第一版就做完像素級 polish。詳見 [07](07-post-prototype-polish.md) 和 [09](09-p0-feedback-round1.md)。Pane Header 只有資訊，不放切換鈕。
 
 **拒絕**：先造一整個 gateway/index platform，最後才開始畫介面。這與本產品目標不符。
 
@@ -30,7 +30,7 @@
 
 **採納，與原有 `project-open` 相容。** Terminal／UI 切換鈕固定在**視窗底部 Status Bar**，而非 Pane Header。狀態列可以是視窗級，但切換命令只對**當前聚焦的 Pane** 生效；點擊時捕捉 PaneId／terminal incarnation／binding epoch，不能在 async 後把命令投送到新的 focused Pane。焦點變更只更新按鈕顯示；Shell／不支援 Agent／無焦點時停用。
 
-**原位整合要求**：共用已有 Status Bar 背景、頂邊框、高度與 renderer，保留 Machine、Agents、Commands、Project Open；不增加另一個底部 Layout Block／挖空 32px 欄位。控制由可靠的宿主或 status compositor 擁有，即使 Agent UI Mod render 失敗也可回 Terminal。如果 Herdr 沒有 Status Bar 組合 API，先做能力驗證或最小宿主擴充，而不直接覆蓋現有 Mod。
+**原位整合要求**：**只有一個與 Project Open 同規格的 SVG 模式圖示**（22×22／15px），不再使用 `Terminal | UI` segmented control；共用已有 Status Bar 背景、頂邊框、高度與 renderer，保留 Machine、Agents、Commands、Project Open；不增加另一個底部 Layout Block／挖空 32px 欄位。控制由可靠的宿主或 status compositor 擁有，即使 Agent UI Mod render 失敗也可回 Terminal。如果 Herdr 沒有 Status Bar 組合 API，先做能力驗證或最小宿主擴充，而不直接覆蓋現有 Mod。簡潔 hover 不代表可刪掉鍵盤焦點與 accessible name。
 
 ## ADR-006 · 最小 Pi Extension，直接取 live session 資訊
 
@@ -40,7 +40,7 @@
 
 ## ADR-007 · 只用原生 GPUI 設計，不搬 Web 產品
 
-**採納。** 借鑑四倉與 Moshi 的行為、排版、狀態機，不拷貝其 React、CSS、私有 hook 或商業資產。Native Markdown／code／CJK／數學能力逐個驗證，缺失要有 source-preserving fallback。[R1–R2](01-evidence.md#r1)、[M2](01-evidence.md#m2)、[H1](01-evidence.md#h1)
+**採納。** 借鑑四倉與 Moshi 的行為、排版、狀態機，不拷貝其 React、CSS、私有 hook 或商業資產。P0 `para()` 沒有真正解析 Markdown；P1 優先驗證官方列出的 `TextView.markdown(id, text)`，Native Markdown／code／CJK／數學能力仍須逐個實機確認，缺失要有 source-preserving fallback。[R1–R2](01-evidence.md#r1)、[M2](01-evidence.md#m2)、[H1](01-evidence.md#h1)、[09](09-p0-feedback-round1.md)
 
 ## ADR-008 · Presentation、runtime state 與 UI view state 三層分離
 
@@ -65,6 +65,14 @@
 ## ADR-013 · 安裝與退出不影響工作，CI 不能代替 GUI 驗收
 
 **採納。** Mod、Pi extension、relay、可選 App presenter hook 分別安裝與回退；不改現有 `project-open`，不默默 patch binary 或重啟 Pi。通過 `herdr-app check` 不表示同 Pane、IME、scrollback、Kitty 圖像或 native focus 已通過，需目標機器實測。[H1](01-evidence.md#h1)
+
+## ADR-014 · Tool Activity 分層，保留專業細節
+
+**採納。** 工具不常駐一工具一張 box，改為**每 turn 一行預設折疊的群組摘要 → 展開後無卡片底色的緊湊列 → 點擊單項才掛載依工具類型的 Detail**。摘要必須保留 failed／needs-input／unknown 的可見訊號。細節採 PI-Desktop 的 typed slots、paseo 的 run grouping、ZCode 的 per-tool rendering 思路，但不搬 Web 元件／大卡外框；真實 Read/Search/Exec/Edit 資料不足時明示未知。[10](10-tool-activity-live-rail.md)
+
+## ADR-015 · 不加 Search；用原生 Conversation Rail 評估長會話定位
+
+**候選，先做 P1 spike／可用性驗證後再決定是否採納。** 參考 HW1 message rail 的「一個問題一節點、點擊跳轉」**功能**，及 pi-harness `docs/notes/minimap-simplification.md` **已接受但未實作完成**的精簡方向（單一 active turn、簡短 user/custom prompt、transcript owner 控制捲動），而非複製 Web 色彩或大幅 hover 列表。新設計在對話區右緣提供低干擾 rail：**hover/focus 正常只有一行截短提問；只有仍需處理的異常才加第二行；不顯示 assistant 回答、工具數字、時間戳或多層卡片**。Click 準確跳到同一 Pi Session 的指定 turn。小 Pane 隱藏或採緊湊輪次選單，不能遮擋 Scrollbar／Composer。未驗證 native GPUI overlay、定時／scroll-to-turn 前不得宣稱完成，也**不重建 JSONL Reader 或全文索引**。[10](10-tool-activity-live-rail.md)
 
 ## 決策修訂規則
 

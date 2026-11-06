@@ -1,43 +1,50 @@
 #!/bin/sh
-# Isolated demo-layout contract: derived from the personal layout, refreshed whole.
+# Canonical agent-ui demo installer contract (replaces older previews).
 set -eu
-repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 export HERDR_APP_HOME="$tmp/home"
 mkdir -p "$HERDR_APP_HOME/layouts" "$HERDR_APP_HOME/mods/agent-ui"
-cp "$repo/layouts/herdr-mods.json" "$HERDR_APP_HOME/layouts/herdr-mods.json"
-printf 'Original custom agent-ui marker\n' > "$HERDR_APP_HOME/mods/agent-ui/CUSTOM"
-awk -f "$repo/scripts/patch-status.awk" "$repo/layouts/herdr-mods.json" \
-  | awk -f "$repo/scripts/demo-layout.awk" - > "$tmp/expected.json"
-
-sh "$repo/scripts/install.sh" agent-ui project-open >/dev/null
-[ -f "$HERDR_APP_HOME/layouts/agent-ui-demo.json" ]
+cp "$root/layouts/herdr-mods.json" "$HERDR_APP_HOME/layouts/herdr-mods.json"
+cp "$root/layouts/herdr-mods.json" "$HERDR_APP_HOME/layouts/main.json"
+printf '{"id":"untouched-personal-layout"}\n' > "$HERDR_APP_HOME/layouts/personal.json"
+printf 'old Agent UI version\n' > "$HERDR_APP_HOME/mods/agent-ui/OLD"
+sh "$root/scripts/install.sh" agent-ui project-open >/dev/null
 [ -f "$HERDR_APP_HOME/mods/agent-ui/main.js" ]
-[ -f "$HERDR_APP_HOME/mods/agent-ui.bak/CUSTOM" ]
-grep -q '"mod": "project-open"' "$HERDR_APP_HOME/layouts/herdr-mods.json"
-cmp "$HERDR_APP_HOME/layouts/agent-ui-demo.json" "$tmp/expected.json"
+[ -f "$HERDR_APP_HOME/mods/agent-ui/model.js" ]
+[ -f "$HERDR_APP_HOME/mods/agent-ui/fixtures.js" ]
+[ -f "$HERDR_APP_HOME/mods/agent-ui.bak/OLD" ]
+[ -f "$HERDR_APP_HOME/mods/project-open/agent-ui.svg" ]
+[ -f "$HERDR_APP_HOME/layouts/agent-ui-demo.json" ]
+[ ! -d "$HERDR_APP_HOME/mods/agent-ui-v2" ]
+[ ! -e "$HERDR_APP_HOME/layouts/agent-ui-v2-demo.json" ]
+grep -q untouched-personal-layout "$HERDR_APP_HOME/layouts/personal.json"
+cmp "$HERDR_APP_HOME/layouts/main.json" "$root/layouts/herdr-mods.json"
 
-# Re-running regenerates the demo layout and keeps exactly one backup each.
-printf '{"id":"custom-demo-layout"}\n' > "$HERDR_APP_HOME/layouts/agent-ui-demo.json"
-sh "$repo/scripts/install.sh" agent-ui project-open >/dev/null
-cmp "$HERDR_APP_HOME/layouts/agent-ui-demo.json" "$tmp/expected.json"
-grep -q custom-demo-layout "$HERDR_APP_HOME/layouts/agent-ui-demo.json.bak"
-[ "$(find "$HERDR_APP_HOME" -name 'agent-ui-demo.json.bak*' | wc -l | tr -d ' ')" -eq 1 ]
+node - "$HERDR_APP_HOME/layouts/agent-ui-demo.json" <<'NODE'
+const fs = require("fs"), assert = require("node:assert/strict");
+const layout = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const work = layout.children.find(x => x.id === "work");
+const stack = work.children.find(x => x.id === "work-body").children[0];
+assert.equal(stack.id, "agent-ui-demo-surface");
+assert.equal(stack.type, "stack");
+assert.equal(stack.active, "agent-ui-demo-terminal");
+assert.equal(stack.children.find(x => x.id === "agent-ui-demo-ui").content.mod, "agent-ui");
+assert.equal(stack.children.find(x => x.id === "agent-ui-demo-terminal").content.tab, "active");
+assert.equal(work.children.find(x => x.id === "status").content.mod, "project-open");
+NODE
+
+printf '{"id":"custom-demo"}\n' > "$HERDR_APP_HOME/layouts/agent-ui-demo.json"
+sh "$root/scripts/install.sh" agent-ui project-open >/dev/null
+grep -q custom-demo "$HERDR_APP_HOME/layouts/agent-ui-demo.json.bak"
+[ "$(find "$HERDR_APP_HOME/layouts" -name 'agent-ui-demo.json.bak*' | wc -l | tr -d ' ')" -eq 1 ]
 [ "$(find "$HERDR_APP_HOME/mods" -maxdepth 1 -name 'agent-ui.bak*' | wc -l | tr -d ' ')" -eq 1 ]
+grep -q untouched-personal-layout "$HERDR_APP_HOME/layouts/personal.json"
 
-# Alone, the demo mod derives from the personal layout but never leaves the
-# status bar unwired: only the status-kind mod patches it.
-mkdir -p "$tmp/alone/layouts"
-cp "$repo/layouts/herdr-mods.json" "$tmp/alone/layouts/herdr-mods.json"
-HERDR_APP_HOME="$tmp/alone" sh "$repo/scripts/install.sh" agent-ui >/dev/null
-[ -f "$tmp/alone/layouts/agent-ui-demo.json" ]
-cmp "$tmp/alone/layouts/herdr-mods.json" "$repo/layouts/herdr-mods.json"
-
-# A customized work-body is left alone instead of guessed at.
-mkdir -p "$tmp/custom/layouts"
-sed 's/"id": "main"/"id": "custom-tab"/' "$repo/layouts/herdr-mods.json" > "$tmp/custom/layouts/herdr-mods.json"
-HERDR_APP_HOME="$tmp/custom" sh "$repo/scripts/install.sh" agent-ui project-open >/dev/null 2>&1
-[ ! -e "$tmp/custom/layouts/agent-ui-demo.json" ]
-[ -f "$tmp/custom/mods/agent-ui/main.js" ]
-echo "PASS: demo layout derived from the personal layout, refreshed as a whole, one .bak each."
+# Customized work-body must not be guessed/replaced.
+mkdir -p "$tmp/unsupported/layouts"
+sed 's/"id": "main"/"id": "custom-tab"/' "$root/layouts/herdr-mods.json" > "$tmp/unsupported/layouts/herdr-mods.json"
+HERDR_APP_HOME="$tmp/unsupported" sh "$root/scripts/install.sh" agent-ui project-open >/dev/null 2>&1
+[ ! -e "$tmp/unsupported/layouts/agent-ui-demo.json" ]
+echo "PASS: canonical Agent UI installation, backup, isolated layout, no duplicate v2."

@@ -79,7 +79,7 @@ interface FocusedPaneForStatusBar { // proposed host-owned context
 
 **切換入口放在視窗底部的既有 Status Bar，不在 Pane Header。** Status Bar 是視窗級共享 UI，但操作對象是當前 focused Pane。狀態列應隨焦點更新顯示：Pi + Terminal → 可切 UI；Pi + UI → 可切 Terminal；Shell／未綁定／無 active Pane → disabled，不得推測或操作最後一個 Pi。UI 初始化失敗時，宿主仍需提供 Status Bar 回 Terminal。
 
-狀態列整合必須**共用原本 Status Bar renderer 的背景、頂部 border、高度與 spacing**，保留 Machine、Agents、Commands、現有 `project-open` 按鈕等；**不使用獨立 Layout Block 或 32px cut-out**。可能需要統一的 Status Bar 小型 compositing API／slot registry；這是新增的 host 能力提案，不能假設兩個 Mods 互相嵌套已被上游支援。
+狀態列整合必須**共用原本 Status Bar renderer 的背景、頂部 border、高度與 spacing**，保留 Machine、Agents、Commands、現有 `project-open` 按鈕等；**不使用獨立 Layout Block 或 32px cut-out**。**P1 最終切換器是一個與 Project Open 同規格的 22×22 按鈕／15px SVG**，不再使用 `Terminal | UI` 兩段式文字，無額外框／hover tooltip，保留 accessible label 與 focus。可能需要統一的 Status Bar 小型 compositing API／slot registry；這是新增的 host 能力提案，不能假設兩個 Mods 互相嵌套已被上游支援。詳見 [09 第一輪回饋](09-p0-feedback-round1.md)。
 
 實作應保留 PaneId、TerminalView 實體、原本的 pane tree／split／zoom／尺寸；只切換 body renderer。切回 Terminal 不是重新 `attach`。宿主擴充不得耦合 Pi API：它只認一個 Mod 呈現者，將來 Codex／Claude 也能使用。
 
@@ -99,10 +99,12 @@ mods/agent-ui/
     conversation.js       # visible turns and activity groups
     user-message.js
     assistant-message.js
-    tool-card.js          # registry + specialized presentations
+    tool-activity.js      # collapsed group summary -> compact list
+    tool-details.js       # typed presentation registry; lazy details
+    conversation-rail.js  # candidate: in-chat turn markers, jump, hover preview
     composer.js
     status.js
-    search.js
+    search.js             # deferred; NOT a default P1 UI feature
   state/
     view-state.js         # per Pane draft, disclosure, scroll anchor, mode
     projection.js         # event -> grouped UI rows
@@ -126,7 +128,9 @@ host/agent-ui-relay/       # only if needed for desktop/native/SSH transport
 - `StatusBarModeToggle` 由宿主／Status Bar compositor 掌握，與 Agent UI 的 rendering lifecycle 分離；讀 active Pane、mode、capability，原子捕捉 click target，再派發 switch。
 - `AgentUiView` 僅做 UI 與調度；不在 `render()` 中呼叫網路／subprocess。
 - `ProjectionStore` 使用 immutable event records，將同一使用者意圖整理成 turn；最新 live tail 與已完成 turns 分開更新，避免每 token 重建全部行。
-- `ToolRendererRegistry` 根據工具類型投影成 `summary/details`，未知工具用安全純文字 fallback。
+- `ToolActivityProjection` 在 turn 內先合成**單一預設折疊群組**；只有使用者展開才生成緊湊清單（不為每項畫獨立 box）。`ToolRendererRegistry` 只在單項被選取時投影 `details`，未知工具用安全純文字 fallback；群組摘要不得隱藏失敗／待處理的數量。
+- `ToolDetailRegistry` 把 Read／Search／Bash／Edit／Images／Unknown 的資料統一成可選擇的 presentation slots，再用對應的**輕量、無多層卡片**的 UI 呈現；長輸出只在開啟時分頁，不能靠現在的檔案內容偽造歷史 diff。
+- `RailIndex` 從同一 `ProjectionStore` 產生以 **TurnKey** 為基準的有界導航 markers（首尾／閱讀中／異常優先），**只有一個 activeTurnKey，由既有 Conversation viewport owner 提供**；`HoverPreviewModel` 預設只顯示**一行來源使用者提問**，未解決高優先異常才添第二行，不重複 assistant 回答或工具 metadata。已載入 turn 的位置使用已測量 geometry，未載入只有穩定身分，不捏造 pixel coordinates。`jumpToTurn` 只改本地 Conversation viewport scroll anchor；**不更動 Pi runtime／branch、也不建立全文索引**。此組件為 P1 原生 GPUI spike 候選，詳細行為見 [10](10-tool-activity-live-rail.md)。
 - `ViewState` 以 `ViewKey` 綁定草稿、disclosure、scroll anchor、搜尋、模式；不同 Pane 不共用焦點。
 - `ThemeTokens` 從 `theme()` 取得背景／文字／border，文字階層、間距、hover/focus/a11y 都一致。
 - `State` 是資料，不是動畫：更新 coalesce；原生動畫不用高頻 JS `notify()` 驅動。
@@ -182,12 +186,12 @@ Control: unavailable | validated | dispatching | uncertain
 
 具體畫面、尺寸、長內容、IME 與可訪問性規格集中在 [02](02-ux-spec.md)。首個 UI prototype 需要呈現：
 
-1. **底部 Status Bar**：明確 `Terminal | UI`，綁定目前 focused Pane、模式與可用能力；必須原位嵌入原有 status renderer，保持 Project Open／Commands 顯示。Pane Header 只顯示 Pi／host／工作狀態，不放模式切換。
+1. **底部 Status Bar**：**單一 SVG 模式切換按鈕**，綁定目前 focused Pane、模式與可用能力；必須原位嵌入原有 status renderer，保持 Project Open／Commands 顯示。Pane Header 只顯示 Pi／host／工作狀態，不放模式切換。
 2. Message timeline：使用者段落、助手答案、當前活動，按使用者 intent 分組。
-3. Tool summaries：類型與數量；失敗、未確定與等待輸入始終可辨認。
+3. Tool summaries：每組工具**預設只顯示一行**類型／數量摘要，點擊後是無 box 的緊湊工具列，再點開單項詳細；失敗、未確定與等待輸入始終可辨認。
 4. Composer：自動成長、草稿、Shift+Enter 與 IME；未連通時禁用 Send。
-5. 搜尋、回底、scroll anchor、Copy、鍵盤 focus、窄版。
-6. CJK／Markdown／code／diff／科學公式的來源保真與降級。
+5. 回底、scroll anchor、Copy、鍵盤 focus、窄版；**不常駐 preview search**。先試驗對話區右側的 Live Conversation Rail：turn markers、**單一 active turn**、hover/focus **一行短使用者問題**（未解決異常才兩行）、click 跳轉；完整契約見 [10](10-tool-activity-live-rail.md)，不宣稱上游已提供 scroll-to-key。
+6. 真正的原生 Markdown（官方文件所列 `TextView.markdown`）、CJK／code／diff／科學公式的來源保真與降級，具體支援要在目標版驗證。
 
 ## 8. 安裝／相容與不干擾現有 mods
 

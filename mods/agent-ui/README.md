@@ -1,62 +1,42 @@
-# Pi Agent UI — P0 Native GPUI Prototype
+# Agent UI — Native Herdr Demo
 
-A **functional, fixture-driven native Herdr App Mod**. It is a prototype of the conversation and tools interface, **not** a live Pi client.
+This is a **standalone, installable native-GPUI fixture demo**. It does not use WebView, does not read Pi's Session JSONL and does not send commands to Pi. There is **one canonical Agent UI Mod** at `mods/agent-ui/`, with the updated demo design.
 
-## What works
+## Try the demo
 
-- Native Herdr GPUI view with **Working / Completed / Needs attention** fixtures.
-- Interactive tool disclosure, per-fixture status labels and in-view search.
-- Multiline Composer: typing and **Try send (demo)** only add local mock bubbles.
-- A **Terminal | UI · demo** control embedded in the existing Status Bar renderer (alongside Project Open) in the opt-in demo layout.
-- Switching the preview does **not** start, stop, detach, kill, send keys to or restart any Core terminal or Pi program.
-
-**Important limitation:** The demo uses a **chrome Layout Stack around the entire active Tab body**, because the public Herdr API does not expose safe replacement of one arbitrary split model Pane. If a Tab has several Panes, **all of them are hidden together** while UI demo is shown; the processes continue running. This is **not yet** the final same-Pane switching promised in the design. That requires host work described in [P0 feasibility notes](../../docs/agent-ui/03-architecture.md#2-最難的缺口真正的同一原生-pane).
-
-## Install the demo
-
-Run on the computer hosting the **Herdr App GUI**, from a checkout of this repository:
+From this repository checkout, **on the machine where the Herdr App GUI is running**:
 
 ```sh
 sh scripts/install.sh agent-ui project-open
 ```
 
-What it does:
-
-1. Copies `mods/agent-ui` and `mods/project-open` into Herdr App Home, moving any existing copy to a single `.bak`.
-2. Applies each mod's declared wiring: Project Open (`mod.json` → `"install": "status"`) patches the status bar of `herdr-mods` once, asking first in a terminal; Agent UI (`"install": "derive:agent-ui-demo"`) generates `layouts/agent-ui-demo.json` **from your own layout**: it reuses `layouts/herdr-mods.json` if you have one, otherwise the repository template, and wraps only the tab renderer (`work-body` → `main`) in the demo stack. Your `herdr-mods`, `main` and every other layout stay byte-identical.
-3. Changes nothing else: no layout switch, no agent start, no Pi extension, no Session JSONL, no `herdr-mods` edit.
-
-Then pick **agent-ui-demo** in the Layout picker, or:
+Select the **`agent-ui-demo`** layout in Herdr's Layout picker, or, if the CLI is installed:
 
 ```sh
 herdr-app do layout.switch --name agent-ui-demo
 ```
 
-The Status Bar now shows **Terminal | UI · demo** next to Project Open. Click **UI · demo** for the fixture conversation, **Terminal** to return to the normal tab view.
+The usual Status Bar (rendered by `project-open`) shows **one small icon**. On the Terminal view, it is a conversation icon to switch to the Agent UI. In the Agent UI, it becomes a terminal icon to switch back. No tooltip, no extra status-bar slot, no two-part control. The old two-button segmented control has been removed.
 
-The **Terminal | UI · demo** control is drawn by the Project Open status renderer, so the generated layout also runs the usual status patch (a personal `herdr-mods.json` keeps its existing renderer; the bundled template is patched the same way as `install.sh`). If your status bar has been customized to another Mod, the demo layout still works but the toggle will not appear until you wire `content.mod: "project-open"` by hand.
+The installer derives `agent-ui-demo.json` from your own `herdr-mods.json` if available, otherwise the repo template. It does not replace `main` or the user's normal `herdr-mods` layout with the demo; it creates or refreshes `agent-ui-demo` with one `.bak` backup. However, installing `project-open` also patches the `herdr-mods` Status Bar if it is still the standard one (with its normal single `.bak`). Modified demo files and replaced Mods are backed up to one `.bak`. The installer may ask you to confirm a change in an interactive terminal.
 
-Re-running the same command refreshes the demo: each replaced Mod gets one `.bak` folder and a changed `agent-ui-demo.json` goes to `agent-ui-demo.json.bak`. If your personal layout no longer starts `work-body` with the tab renderer (for example after renaming that block by hand), the generated layout is skipped with `! layout left unchanged` and the Mods are installed anyway — wire the stack by hand in that case.
+## What you can interact with
 
-```
-$ sh scripts/install.sh agent-ui project-open
-  ✓ mods agent-ui + project-open → ~/.config/herdr-app/mods
-  ✓ layout agent-ui-demo → ~/.config/herdr-app/layouts/agent-ui-demo.json
+1. **Seven synthetic turns** are shown in the same conversation. There is no row of Working/Completed/Needs-attention fixture buttons and no search input.
+2. **Tool Activity** is a compact one-line summary, **collapsed by default**. Click it to reveal text-only tool rows; click an individual row to inspect its detail. Failed/pending states are visible in the collapsed summary.
+3. **Native Markdown** is passed to the official `TextView.markdown(id, text)` interface rather than `para()`. A test turn includes headings, bold, italics, inline and fenced code, and a quote.
+4. **Message Rail** on the right: one marker per user question; click a marker to display a transcript **window starting at that turn**. Hover a marker for **one short user question**, with a second warning line only for an unresolved actionable state. No model, tool counts, assistant answer or timestamp in the hover.
+5. **Composer (demo only)** echoes your input as a synthetic user turn with a local response. It never sends, queues or changes a real Pi prompt.
 
-  → switch Herdr App to layout agent-ui-demo  ·  preview only: hides the active tab view, never stops the process
-```
+### Scope limits
 
-## Try the interactions
+- **Same Tab display, not same model split Pane:** The optional layout wraps the whole active Tab block in a chrome stack. Existing PTYs/agents keep running but sibling split Panes are hidden together while the demo is shown. This is **not** final per-Pane switching.
+- **Rail jump is a demo-only transcript window jump:** Selecting an anchor changes the windowed list to start at the selected turn; it does *not* claim a pixel-accurate scroll-to-turn in a continuously mounted transcript. Earlier turns remain reachable from the rail or **Earlier turns** control. The host does not expose a verified scroll-to-key hook. Viewport-driven active-marker updates while free scrolling are not yet implemented.
+- **Markdown:** The tests verify that the original Markdown text is passed to `TextView.markdown`. Rendering fidelity, code blocks, links, selection, mathematics and import/export availability must be verified using your **actual Herdr App version**.
+- **Hover:** Uses native `.on_hover` and a lightweight in-view preview. Positioning, clipping, keyboard/screen-reader accessibility and focus restoration need target-App visual/interaction QA.
+- The fixture UI is not connected to live Pi events. No JSONL reader, historical index, shell process or agent lifecycle hook is used.
 
-1. In **UI · demo**, switch between **Working**, **Completed** and **Needs attention**.
-2. Click a tool row to expand/collapse details. Failures remain identifiable in the scenario.
-3. Use **Search this preview…** to filter the current mock conversation.
-4. Type Chinese or English in the multiline Composer and click **Try send (demo)**. A local mock response appears, but **nothing is sent**.
-5. Use the Status Bar **Terminal** button to return to the same Terminal/Tab view.
-
-This is a development prototype. Markdown rich text, perfect scroll anchoring, complete keyboard/IME handling, real runtime events and secure two-way control are **not** claimed as complete. The next milestone is [post-prototype UI/UX polish](../../docs/agent-ui/07-post-prototype-polish.md).
-
-## Test & scope
+## Tests
 
 ```sh
 node tests/agent-ui.test.cjs
@@ -64,16 +44,16 @@ node tests/project-open.test.cjs
 sh tests/agent-ui-demo-install.test.sh
 ```
 
-The environment used to build this prototype did not have the `herdr-app` desktop executable, so `herdr-app check`, a real window screenshot and direct GPUI rendering could **not** be performed here. Before treating it as visually validated, run:
+On a computer with Herdr App installed, additionally verify the actual runtime:
 
 ```sh
 herdr-app check "$HOME/.config/herdr-app/mods/agent-ui"
 herdr-app check "$HOME/.config/herdr-app/mods/project-open"
-herdr-app shot agent-ui-demo.png
+herdr-app shot agent-ui.png
 ```
 
-Expected behavior is backed by the official [Herdr App Mod documentation](https://github.com/herdrdev/herdr-app/blob/master/defaults/AGENTS.md) and [Pi UI design decisions](../../docs/agent-ui/06-decisions.md). It must be verified in a running App.
+This development environment could execute deterministic Node mocks and isolated installation tests but has not proven actual native App rendering. Keep `agent-ui-demo` opt-in until real screenshots confirm Markdown, rail hover location and status-bar blending.
 
-## Uninstall / return to normal
+Full design and acceptance constraints: [10 · Tool Activity + Live Rail](../../docs/agent-ui/10-tool-activity-live-rail.md). Implementation and remaining gaps: [11 · Agent UI Demo](../../docs/agent-ui/11-agent-ui-demo-implementation.md).
 
-Switch back to **herdr-mods** (or your previous Layout). Optionally delete the personal `layouts/agent-ui-demo.json` and `mods/agent-ui` under Herdr App Home. Do not delete `mods/project-open` if other layouts use it. Existing terminals keep running when the demo layout is no longer active.
+To return to your normal working environment, select your previous Layout in Herdr App. There is no need to stop Pi or delete any session.

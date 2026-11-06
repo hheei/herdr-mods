@@ -1,6 +1,6 @@
-# 08 · P0 prototype implementation status
+# 08 · 早期 P0 原型記錄（已退役）
 
-**2026-11-06 · Implemented in the local working tree, not released or GUI-certified.**
+**歷史文件。這一版的 P0 原型程式已由後續的 Agent UI 實作覆蓋，並沒有保留舊版程式。** 本文下方的場景按鈕、搜尋欄與逐工具卡片描述，僅記錄當時的設計問題，**不能當成目前 `mods/agent-ui` 的功能清單**。目前唯一的 Demo 及測試結果請看 [11 · Agent UI Demo](11-agent-ui-demo-implementation.md)。
 
 The goal of P0 is to obtain a **working native GPUI interaction prototype** while respecting the non-interruption rule. The project now contains a safe demo path, with a **known host API gap** that prevents claiming production-grade per-model-Pane switching.
 
@@ -19,13 +19,20 @@ The goal of P0 is to obtain a **working native GPUI interaction prototype** whil
 | Real Pi session events / secure commands | **Not started, explicitly outside P0** | P2/P3 in [05](05-delivery-and-tests.md) |
 | Real macOS GPUI rendering | **Not verified in this host environment** | `herdr-app` executable absent on development Linux host |
 
+**Original post-test findings (historical):** the three large Working／Completed／Needs attention buttons selected fixtures, not agent states; the Status Bar had a two-part text switch; the search field stayed visible; each tool was a bordered box; `para()` did not parse Markdown. These have been replaced in the **single current demo** by a single SVG, grouped tools and a native Markdown API call. See [09 · P0 feedback](09-p0-feedback-round1.md) and [11 · current implementation](11-agent-ui-demo-implementation.md). Actual GPUI rendering still needs verification.
+
+**Second-round design:** typed Tool Activity details and a minimal right-edge navigation rail inspired by HW1 and pi-harness. See [10](10-tool-activity-live-rail.md). The current demo provides an initial compact rail with a **windowed** jump, not a verified pixel-accurate scroll-to-turn.
+
+**Current structure:** only `mods/agent-ui/` and the derived `agent-ui-demo` layout are supported. The original version has been **replaced rather than retained**; see [11](11-agent-ui-demo-implementation.md).
+
 ### Structure
 
 ```text
 mods/
   agent-ui/
     main.js                   Native GPUI fixture view
-    fixtures.js               Three deterministic fake Pi conversations
+    fixtures.js               Seven deterministic synthetic Pi turns (current)
+    model.js                  Tool activity and rail projections (current)
     mod.json                  place:none; focusable:true
     README.md                 Install, use, safety, known limitations
     mod.json                  install: "derive:agent-ui-demo"
@@ -65,7 +72,7 @@ To return to your normal workflow, switch to your previous Layout. Full instruct
 1. **Strict per-Pane replacement:** A real Herdr model Pane must keep its PaneId/TerminalView/PTY, hold its own mode state, and change only its own body. `layout.select` is chrome scoped, not that API.
 2. **Rendering quality:** Static Node mocks and JSON validation do not prove GPUI's actual geometry, scroll interactions, IME behavior or layout of native `Textarea`; screenshots and `herdr-app check` are still required on a host with the App.
 3. **Live semantics:** Fixture event/status text is explicitly synthetic. Even if the UI looks like Pi, it never reads a Session JSONL or sends prompts to Pi.
-4. **Native Markdown completeness:** P0 uses simple paragraph and heading presentation; full formatting/diff/scientific text rendering is post-prototype work.
+4. **Native Markdown completeness:** The retired version's `para()` did not parse Markdown; the canonical Demo now calls `TextView.markdown(id, text)`. Rendering and target-version compatibility still need live validation; see [FB-05](09-p0-feedback-round1.md).
 5. **Production multi-Pane routing:** No Pi identification or runtime binding is used in the chrome demo. The final status toggle must target captured focused-Pane identity and epoch, not the active Tab or a guessed cwd.
 
 ## Host feasibility next step (blocking for the final product)

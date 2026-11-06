@@ -138,6 +138,25 @@ Herdr App guide，固定 commit `cfcf836404f932817f10f88455c33e33c94fd1df`：
 
 本機 `hc --version` → `hc 0.1.18`；`hc --skill` 定義 `$HC_TERMINAL_ID`；`hc --help` 描述 `send` 是 paste＋Enter、`keys` 是按鍵注入。此項是本次 read-only CLI 文件核查，不是對正在執行的 Agent 發命令。
 
+### UX-HW1（2026-11-06 新增）
+
+使用者提供的唯讀參考專案 `/home/chlo/Projects/aiphy2026/HW1/homework1/`：
+
+- `src/hw1_chat/static/app.js` 約 L175–254（SHA-256：`65b1c4cae891f1fb6bfa0ce96af5f584b0b04546da6119e9e21bf757c88daecb`）。
+- `src/hw1_chat/static/style.css` 約 L361–417（SHA-256：`2756b2befaa07eee6fb022211aa5c0d28e4fe79e5233612516ab00edb2937f2a`）；`templates/index.html` L102 的 `#msg-rail`。
+
+**功能核實**：以使用者提問建立輪次導航節點；多於 16 個節點時抽樣；scroll 標示可見輪次；click 捲至對應 row；聊天區 hover 時顯示狹窄右側 rail。**當前 HW1 沒有呈現提問／回答內容的 hover preview**，只有 `title`（跳到第 N 個問題）和節點視覺放大。新方案借用**節點、當前定位、跳轉的概念**，自行設計 Native GPUI 資訊預覽與安全 TurnKey；不抄綠色 CSS／波浪外觀，也不引用 HW1 的 DOM row index 當穩定鍵。詳細取捨與 [四倉 R2 修正](#r2) 對照見 [10](10-tool-activity-live-rail.md)。
+
+### UX-PIH（2026-11-06 新增）
+
+使用者提供的唯讀對照專案 `/home/chlo/Projects/pi-harness/`。檢視了：
+
+- `packages/ui/src/components/ChatMinimap.tsx`、`packages/ui/src/styles/ChatMinimap.module.css`：**目前實作**有右側 rail、約 320px 的詳細 preview 列表、Assistant answer／heading outline、tool-count badge、鍵盤 opener 和 click-to-jump。它比本專案想要的 Hover 重很多。
+- `packages/ui/src/lib/history-rail.ts`、`history-rail.test.ts`：以 **entryId** 結合 paged outline（身份、順序、短 preview）與 measured transcript（已掛載 turn 的幾何）；未掛載的 turn **沒有可信像素位置**，跳轉交由既有導航 owner 處理，而不是用 DOM index 猜測。
+- `docs/notes/minimap-simplification.md`：**已接受但仍標示尚未實作完成的設計方案**。要把 preview 簡化成**只有 user/custom prompt 的短摘要**、去掉 answer outline／heading jump／tool metadata、**只標記一個 active turn**，並讓 transcript viewport 成為唯一的幾何 owner。此文件目前是未追蹤工作樹檔案，不能當成已發布的功能。
+
+**Herdr 採用的設計決策**：沿用穩定 turn identity／委託 scroll owner／簡短 user prompt／單一 active turn。Hover 通常**只顯示一行提問**；僅真正未解決且可處理的異常才增加一行提示。**不再顯示 assistant 回答、工具計數、時間戳或大型預覽卡**；完整工具詳情留在對話中。詳見 [10](10-tool-activity-live-rail.md)。
+
 ### P1
 
 Pi 套件：`@earendil-works/pi-coding-agent` **1.5.0**。官方 tag `v1.5.0` 對應 commit `f9a26365568127461c47a07a37dcb42c140a3ac5`；本機 `docs/session-format.md` 與該 tag 內容 byte-identical。

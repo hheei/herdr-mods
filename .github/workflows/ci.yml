@@ -16,6 +16,7 @@ jobs:
           node --check mods/project-open/main.js
           node --check mods/agent-ui/main.js
           node --check mods/agent-ui/fixtures.js
+          node --check mods/agent-ui/model.js
           node --check tests/project-open.test.cjs
           node --check tests/agent-ui.test.cjs
           node -e "const f=require('fs'); for(const p of ['mods/project-open/mod.json','mods/agent-ui/mod.json','layouts/herdr-mods.json']) JSON.parse(f.readFileSync(p))"

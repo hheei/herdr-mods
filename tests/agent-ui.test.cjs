@@ -1,21 +1,11 @@
-// P0 native GPUI fixture prototype: headless interaction tests.
-// No live Pi/PTY/app GUI required; real Herdr App rendering still needs QA.
+// Headless contract tests for the independent native GPUI preview.
+// Herdr's actual visual, scroll and Markdown renderer require a running App.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
-
+const { spawnSync } = require("node:child_process");
 const root = path.resolve(__dirname, "..");
-const fixturesSource = fs.readFileSync(path.join(root, "mods/agent-ui/fixtures.js"), "utf8")
-  .replace("export const CASES", "const CASES");
-const fixtureBox = {};
-vm.runInNewContext(fixturesSource + "\nthis.CASES = CASES;", fixtureBox);
-const CASES = fixtureBox.CASES;
-
-const sourceFull = fs.readFileSync(path.join(root, "mods/agent-ui/main.js"), "utf8");
-const source = sourceFull.replace(/^import [^\n]+;\n/gm, "")
-  .replace("export default class AgentUi", "class AgentUi");
 
 function node() {
   const state = { nodeId: null, kids: [], handlers: {}, style: {} };
@@ -23,129 +13,167 @@ function node() {
   proxy = new Proxy(state, {
     get(target, prop) {
       if (prop in target) return target[prop];
-      if (prop === "id") return (value) => { target.nodeId = value; return proxy; };
-      if (prop === "when") return (flag, fn) => { if (flag) fn(proxy); return proxy; };
-      if (prop === "children") return (xs) => { target.kids.push(...xs); return proxy; };
-      if (prop === "child") return (x) => { target.kids.push(x); return proxy; };
-      if (String(prop).startsWith("on_")) return (handler) => {
-        target.handlers[prop] = handler;
-        return proxy;
-      };
+      if (prop === "id") return (id) => { target.nodeId = id; return proxy; };
+      if (prop === "when") return (condition, fn) => { if (condition) fn(proxy); return proxy; };
+      if (prop === "child") return (child) => { target.kids.push(child); return proxy; };
+      if (prop === "children") return (children) => { target.kids.push(...children); return proxy; };
+      if (String(prop).startsWith("on_")) return (fn) => { target.handlers[prop] = fn; return proxy; };
       return (...args) => { target.style[prop] = args; return proxy; };
     },
   });
   return proxy;
 }
-
-function stateObject(options) {
-  return {
-    text: options.value ?? "",
-    events: {},
-    on(name, fn) { this.events[name] = fn; },
-    value() { return this.text; },
-    set_value(v) { this.text = v; },
-    focus() {},
-  };
-}
-
-const runCalls = [];
-const context = { notify() {}, stop_propagation() {} };
-const box = {
-  View: class {},
-  CASES,
-  theme: () => ({
-    foreground: "#EEE", muted: "#B5B5B5", dim: "#999", accent: "#8BC",
-    raised: "#333", selected: "#3C4", border: "#555", background: "#222",
-    input: "#667", chrome: "#111", working: "#FFD", done: "#AFA", blocked: "#F88",
-  }),
-  props: () => ({}),
-  div: node, h_flex: node, v_flex: node,
-  InputState: { new: stateObject },
-  TextareaState: { new: stateObject },
-  Input: { new: (_state) => node() },
-  Textarea: { new: (_state) => node() },
-};
-vm.runInNewContext(source + "\nthis.AgentUi = AgentUi;", box);
-
-function find(node, id) {
-  if (!node || typeof node !== "object") return null;
-  if (node.nodeId === id) return node;
-  for (const c of node.kids || []) {
-    const match = find(c, id);
-    if (match) return match;
+function find(root, id) {
+  if (!root || typeof root !== "object") return null;
+  if (root.nodeId === id) return root;
+  for (const child of root.kids || []) {
+    const v = find(child, id);
+    if (v) return v;
   }
   return null;
 }
-function textOf(node) {
-  if (typeof node === "string") return node;
-  if (!node || typeof node !== "object") return "";
-  return (node.kids || []).map(textOf).join(" ");
+function textOf(n) {
+  if (typeof n === "string") return n;
+  if (!n || typeof n !== "object") return "";
+  return (n.kids || []).map(textOf).join(" ");
 }
-function click(root, id) {
-  const target = find(root, id);
-  assert.ok(target, "missing node " + id);
-  assert.equal(typeof target.handlers.on_click, "function", "missing handler for " + id);
-  target.handlers.on_click(null, context);
+function click(tree, id) {
+  const n = find(tree, id);
+  assert.ok(n, "missing control " + id);
+  assert.equal(typeof n.handlers.on_click, "function", "no click for " + id);
+  n.handlers.on_click(null, context);
 }
+function stateObj(spec) {
+  return {
+    text: spec.value ?? "", events: {},
+    on(name, fn) { this.events[name] = fn; },
+    value() { return this.text; },
+    set_value(value) { this.text = value; },
+  };
+}
+const context = { notify() {}, stop_propagation() {} };
+const box = {
+  View: class {}, div: node, h_flex: node, v_flex: node,
+  theme: () => ({
+    foreground: "#DDD", muted: "#AAA", dim: "#777", accent: "#9AD", blocked: "#E99",
+    working: "#EC9", chrome: "#222", background: "#181818", raised: "#292929",
+    border: "#444", popover: "#333", input: "#555",
+  }),
+  TextView: { markdown: (id, source) => {
+    const n = node(); n.nodeId = id; n.markdown = source;
+    return n;
+  } },
+  TextareaState: { new: stateObj },
+  Textarea: { new: () => node() },
+};
+const modelSrc = fs.readFileSync(path.join(root, "mods/agent-ui/model.js"), "utf8").replace(/^export /gm, "");
+const fixtureSrc = fs.readFileSync(path.join(root, "mods/agent-ui/fixtures.js"), "utf8")
+  .replace("export const DEMO_TURNS", "const DEMO_TURNS");
+vm.runInNewContext(modelSrc + "\n" + fixtureSrc
+  + "\nthis.summarizeActivity=summarizeActivity;this.toRailNodes=toRailNodes;this.shortPrompt=shortPrompt;this.windowFromTurn=windowFromTurn;this.DEMO_TURNS=DEMO_TURNS;", box);
 
-assert.equal(CASES.length, 3);
-const mod = new box.AgentUi();
-mod.init({}, context);
-let page = mod.render(context);
-assert.ok(find(page, "agent-ui-root"));
-assert.ok(find(page, "agent-ui-header"));
-assert.ok(find(page, "agent-ui-composer"));
-assert.ok(find(page, "agent-ui-textarea"));
-assert.ok(find(page, "scenario-working"));
-assert.ok(find(page, "tool-toggle-w-read"));
-assert.equal(find(page, "tool-detail-w-read"), null);
-click(page, "tool-toggle-w-read");
-page = mod.render(context);
-assert.ok(find(page, "tool-detail-w-read"), "expands tool details");
-click(page, "tool-toggle-w-read");
-assert.equal(find(mod.render(context), "tool-detail-w-read"), null, "folds tool details");
+assert.equal(box.DEMO_TURNS.length, 7);
+assert.equal(box.summarizeActivity([]).total, 0);
+assert.deepEqual(
+  [box.summarizeActivity(box.DEMO_TURNS[5].tools).failed, box.summarizeActivity(box.DEMO_TURNS[5].tools).pending],
+  [1, 1],
+);
+assert.equal(box.toRailNodes(box.DEMO_TURNS).length, 7);
+assert.ok(box.toRailNodes(box.DEMO_TURNS)[5].actionable);
+assert.equal(box.toRailNodes(box.DEMO_TURNS)[0].actionable, false);
+assert.equal(box.windowFromTurn(box.DEMO_TURNS, "t-failure")[0].id, "t-failure");
+assert.ok(box.shortPrompt("a".repeat(120)).length <= 39);
 
-click(page, "scenario-error");
-page = mod.render(context);
-assert.ok(find(page, "tool-toggle-e-fail"), "error scenario visible");
-assert.match(textOf(page), /Failed/, "failed tool visible");
-mod.filter.set_value("nothing-matches-preview");
-page = mod.render(context);
-assert.match(textOf(page), /No matching preview content/, "search provides empty result");
-mod.filter.set_value("");
-click(mod.render(context), "scenario-done");
-page = mod.render(context);
-assert.ok(find(page, "d-answer"), "completed answer visible");
+const src = fs.readFileSync(path.join(root, "mods/agent-ui/main.js"), "utf8");
+vm.runInNewContext(src.replace(/^import [^\n]+;\n/gm, "")
+  .replace("export default class AgentUi", "class AgentUi")
+  + "\nthis.AgentUi=AgentUi;", box);
+const ui = new box.AgentUi();
+ui.init();
+let tree = ui.render(context);
+assert.ok(find(tree, "agent-ui-root"));
+assert.ok(find(tree, "agent-ui-composer"));
+assert.ok(find(tree, "agent-ui-rail"));
+assert.ok(find(tree, "agent-ui-rail-marker-t-inspect"));
+assert.equal(find(tree, "agent-ui-rail-preview"), null);
+assert.equal(find(tree, "agent-ui-scenes"), null);
+assert.equal(find(tree, "agent-ui-search"), null);
+assert.equal(find(tree, "agent-ui-group-list-t-inspect"), null, "groups default collapsed");
+assert.ok(find(tree, "agent-ui-group-trigger-t-inspect"));
+assert.equal(find(tree, "agent-ui-tool-i-read"), null, "no individual cards before group expansion");
 
-mod.composer.set_value("請保留我的草稿");
-page = mod.render(context);
-click(page, "agent-ui-send");
-page = mod.render(context);
-assert.equal(mod.composer.value(), "", "demo composer clears after local echo");
-assert.ok(find(page, "local-0"), "locally mocked user message appears");
-assert.match(textOf(page), /Mock only/, "no real send is implied");
+// Correctly feeds original Markdown to Herdr's documented native Markdown API.
+const markdown = find(tree, "agent-ui-message-a-intro-md");
+assert.ok(markdown, "native Markdown node exists");
+assert.match(markdown.markdown, /## 設計原則/);
+assert.match(markdown.markdown, /\*\*同一個 Pi runtime\*\*/);
 
-assert.ok(!sourceFull.includes('from "fs"'));
-assert.ok(!sourceFull.includes('exec('));
-assert.ok(!sourceFull.includes('hc('));
-assert.ok(!sourceFull.includes('terminal.kill'));
-assert.equal(runCalls.length, 0);
+click(tree, "agent-ui-group-trigger-t-inspect");
+tree = ui.render(context);
+assert.ok(find(tree, "agent-ui-group-list-t-inspect"));
+assert.ok(find(tree, "agent-ui-tool-i-read"));
+assert.equal(find(tree, "agent-ui-detail-i-read"), null, "detail stays closed");
+click(tree, "agent-ui-tool-trigger-i-read");
+assert.ok(find(ui.render(context), "agent-ui-detail-i-read"), "typed detail expands on demand");
+click(ui.render(context), "agent-ui-tool-trigger-i-read");
+assert.equal(find(ui.render(context), "agent-ui-detail-i-read"), null);
 
-const generated = execFileSync("sh", ["-c",
-  `awk -f "${path.join(root, "scripts/patch-status.awk")}" "${path.join(root, "layouts/herdr-mods.json")}" `
-  + `| awk -f "${path.join(root, "scripts/demo-layout.awk")}" -`], { encoding: "utf8" });
-const layout = JSON.parse(generated);
-const work = layout.children.find((child) => child.id === "work");
-const body = work.children.find((child) => child.id === "work-body");
-const stack = body.children[0];
+ui.selectTurn("t-failure", context);
+tree = ui.render(context);
+assert.ok(find(tree, "agent-ui-transcript-t-failure"), "selection creates target-centered demo window");
+assert.equal(find(tree, "agent-ui-user-t-inspect"), null, "earlier turns outside demo window");
+assert.ok(find(tree, "agent-ui-user-t-failure"));
+assert.ok(find(tree, "agent-ui-show-earlier"), "can recover earlier turns");
+assert.equal(find(tree, "agent-ui-group-list-t-failure"), null, "failed group remains collapsed");
+assert.match(textOf(find(tree, "agent-ui-group-trigger-t-failure")), /1 failed/, "error visible in collapsed summary");
+
+let marker = find(tree, "agent-ui-rail-marker-t-rail");
+assert.ok(marker);
+marker.handlers.on_hover(true, context);
+tree = ui.render(context);
+const preview = find(tree, "agent-ui-rail-preview");
+assert.ok(preview, "hover shows compact preview");
+assert.match(textOf(preview), /右側 Message Rail/);
+assert.doesNotMatch(textOf(preview), /Read \d|Run \d|Pi:|13:42|工具數量/, "no busy metadata in preview");
+marker = find(tree, "agent-ui-rail-marker-t-rail");
+marker.handlers.on_hover(false, context);
+assert.equal(find(ui.render(context), "agent-ui-rail-preview"), null, "hover exit removes preview");
+find(ui.render(context), "agent-ui-rail-marker-t-failure").handlers.on_hover(true, context);
+const failurePreview = find(ui.render(context), "agent-ui-rail-preview");
+assert.match(textOf(failurePreview), /需要處理/, "only exceptional second line");
+click(ui.render(context), "agent-ui-rail-marker-t-rail");
+assert.equal(ui.activeTurn, "t-rail", "click jumps by stable turn identity");
+assert.equal(ui.hoveredTurn, null);
+
+ui.composer.set_value("本地測試訊息");
+click(ui.render(context), "agent-ui-send");
+assert.equal(ui.turns.length, 8);
+assert.equal(ui.composer.value(), "");
+assert.ok(find(ui.render(context), "agent-ui-user-t-local-1"));
+assert.match(find(ui.render(context), "agent-ui-message-a-local-1-md").markdown, /Local preview only/);
+
+ui.changeSize({ width: 420 }, context);
+assert.equal(find(ui.render(context), "agent-ui-rail"), null, "narrow mode hides the rail");
+
+// Layout is derived from the existing personal layout by an isolated mod declaration.
+const layout = spawnSync("awk", [
+  "-v", "prefix=agent-ui-demo", "-v", "mod=agent-ui",
+  "-f", path.join(root, "scripts/demo-layout.awk"),
+  path.join(root, "layouts/herdr-mods.json"),
+], { encoding: "utf8" });
+assert.equal(layout.status, 0, layout.stderr);
+const json = JSON.parse(layout.stdout);
+const work = json.children.find((x) => x.id === "work");
+const stack = work.children.find((x) => x.id === "work-body").children[0];
 assert.equal(stack.id, "agent-ui-demo-surface");
-assert.equal(stack.type, "stack");
 assert.equal(stack.active, "agent-ui-demo-terminal");
-const ui = stack.children.find((child) => child.id === "agent-ui-demo-ui");
-const terminal = stack.children.find((child) => child.id === "agent-ui-demo-terminal");
-assert.equal(ui.content.mod, "agent-ui");
-assert.equal(terminal.content.tab, "active");
-assert.equal(body.children[1].id, "panel", "the generated stack replaces only the tab renderer");
-assert.equal(work.children.find((x) => x.id === "status").content.mod, "project-open");
-assert.ok(!JSON.stringify(layout).includes("terminal.park"));
-console.log("PASS: native fixture UI, three scenarios, disclosure, search, mock composer, safe demo stack.");
+assert.equal(stack.children[0].content.mod, "agent-ui");
+assert.equal(stack.children[1].content.tab, "active");
+assert.equal(work.children.find((x) => x.id === "status").content.mod, "workspace-status",
+  "status is patched only when project-open is installed");
+const manifest = JSON.parse(fs.readFileSync(path.join(root, "mods/agent-ui/mod.json"), "utf8"));
+assert.equal(manifest.install, "derive:agent-ui-demo");
+for (const blocked of ["terminal.kill", "pane.close", "exec(", "fetch(", "Session JSONL"]) {
+  assert.ok(!src.includes(blocked), "agent-ui must not invoke live agent behavior: " + blocked);
+}
+console.log("PASS: Agent UI fixtures, native Markdown, activity grouping, hover rail, stable jump window, mock-only composer, standalone layout.");

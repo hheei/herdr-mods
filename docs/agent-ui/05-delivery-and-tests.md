@@ -24,7 +24,7 @@ P4  科研內容、性能、多機器、穩定與發布
 
 **交付**：使用合成資料的最小 native GPUI demo、基本組件與可操作 prototype，以及目標 Herdr 版本的 Pane 切換能力報告。**P0 不要求視覺定稿**。
 
-**目前狀態（2026-11-06）**：已建立使用 fixture 的 GPUI UI、互動測試與專用 `agent-ui-demo` Layout，詳見 [08 · 原型實作現況](08-prototype-implementation.md)。但現階段以 **chrome stack 切換整個 active Tab 的畫面區**，不能把它當成真正的模型 split-Pane 切換；原生 Pane Gate 和實機 GUI 驗證仍待完成。
+**目前狀態（2026-11-06）**：唯一的 `mods/agent-ui` 已更新為目前設計的 fixture GPUI Demo，包含工具整組折疊、原生 Markdown API、極簡 Rail 與 Status Bar 單 SVG，詳見 [11 · Demo 實作現況](11-agent-ui-demo-implementation.md)。**chrome stack 仍切換整個 active Tab 顯示區**，不能把它當作真正的模型 split-Pane 切換；原生 Pane Gate 和實機 GUI 驗證仍待完成。
 
 - 先畫出底部 **Status Bar 的 Terminal／UI 切換控制**（不放在 Pane Header）、Chat timeline、工具活動摘要、折疊卡片、Composer、回底、空態／錯誤態。控制應與現有 Machine／Agents／Commands／Project Open 排在**同一個 renderer**，不新增獨立 Layout 格。
 - 由 [R1/R2](01-evidence.md#r1) 取「答案優先、工具可折疊、閱覽錨點、精緻排版」，由 [Moshi](01-evidence.md#m2) 取「同會話兩種呈現、視覺隔離、保留狀態」，但**不搬 React/HTML、Moshi 私有程式碼**。
@@ -43,16 +43,22 @@ P4  科研內容、性能、多機器、穩定與發布
 
 **交付**：根據原型發現進行第二輪設計的 `mods/agent-ui` 元件、theme tokens、mock event store、tool renderer registry、同場景修改前後對照與 UI 行為測試。完整逐項工作見 [07](07-post-prototype-polish.md)。
 
+**P1 首批必做（來自實際 P0 試用）**：按 [09 · 回饋查核與修改規格](09-p0-feedback-round1.md) 完成 **FB-01～06**，包括移除常駐 fixture 情境列／preview 搜尋、Status Bar 單 SVG icon、群組級預設折疊與真正的原生 Markdown。先做這些減法，再考慮額外的工具卡或功能。
+
+**新增的詳細設計**：Tool Activity 採分層／typed detail，不只是取消 box；同時評估 [10 · Live Conversation Rail](10-tool-activity-live-rail.md) 是否可代替常駐 Search 的導航用途。**工具分層是 P1 必做**；Rail 先做 fixture-driven 互動 spike，再決定是否納入 UI（不以不成熟的 native overlay／scroll API 造成 P1 核心功能延誤）。
+
 完成條件：
 
-- `StatusBarModeToggle`：Terminal／UI 的唯一切換入口，位於原有 Status Bar 內；隨 focused Pane 呈現正確模式，非 Pi 或身分不明停用；保留鍵盤與可及性標籤，不能只靠 hover。
+- `StatusBarModeToggle`：Terminal／UI 的唯一切換入口，位於原有 Status Bar 內；**單一 SVG（比照 Project Open 22×22／15px）**，不再使用 `Terminal | UI` 兩段式文字控制；隨 focused Pane 呈現正確模式，非 Pi 或身分不明停用；保留鍵盤與可及性標籤。
 - `Header`：Pane 內只顯示 Agent、host、工作狀態，不再包含 Terminal／UI 切換控制。
 - `Conversation`：user/assistant 視覺分層、streaming 文字、結果優先、活動摘要、錯誤有清楚視覺權重。
-- `ToolCard`：read/search/bash/edit/diff/custom 的摘要／詳情，未知工具可有界降級；失敗不能被所有工具群組折疊藏掉。
+- `ToolActivity`：**整個工具群組預設只佔一行摘要**（失敗／pending 計數可見）；手動展開後是無 box 的簡潔文字列表；單項詳情再按需展開，未知工具有界降級。
+- `ToolDetailRenderer`：有統一槽位＋專用呈現：Read 範圍／內容、Search 命中、Bash 真實 exit/stdout/stderr、Edit 有證據的 diff／A/M/D、圖片／未知工具的安全 fallback；大型輸出按需分頁。
+- `LiveRailSpike`（候選）：**對話區內**右側窄 rail，一輪一 marker、**唯一 active turn**、點擊穩定 TurnKey 跳轉；hover／focus 預設**只一行短提問**，僅真正未解決異常才加一行警示。參考 pi-harness 的精簡設計而非其目前較繁複的完整 preview；先驗證 native GPUI 定位、Overlay 與長對話效能，**不加全文 Search**。
 - `Thinking`：僅顯示提供的內容，auto/user-open/user-closed 互動不因新資料而跳變。
 - `Scroll`：follow-tail／reading／restoring；使用者上捲後不被 stream 拉回底，回底按鈕可用。
 - `Composer`：auto-grow、草稿保存、送出 revision、中文／日文 IME、Shift+Enter；此階段只 mock dispatch，不真的送 Agent。
-- `Code/Science`：CJK、code block、diff、表格、可複製的 LaTeX source；原生公式 renderer 需單獨驗證。
+- `Markdown/Code/Science`：優先用官方 `TextView.markdown(id, text)` 驗證**真正的 headings／bold／list／link／code**，不能繼續使用 `para()` 的假 Markdown；CJK、diff、表格與可複製 LaTeX source 均須驗證／降級，原生公式 renderer 需單獨核實。
 - `Empty/Error`：初次開啟、未連線、Agent 已退出、stale、bridge 版本不支援，都有可讀文案與回 Terminal。
 - 多 Pane／窄寬度（360／520／900 logical px）與 keyboard-only／screen-reader baseline。
 
@@ -111,8 +117,8 @@ P4  科研內容、性能、多機器、穩定與發布
 | --- | --- | --- |
 | 01 | UI tokens、synthetic conversation fixtures、state model | 無真實個人 Session；mock events 可重播 |
 | 02 | Native Pane prototype＋**Status Bar 聚焦 Pane 切換**／最小 SurfaceHost 支援 | 只切指定 Pane；100 次切換無 detach／runtime restart；不破壞既有 Status Bar／Project Open |
-| 03 | **原型後 UI／UX polish**：conversation／tool cards／thinking／composer mock UI | 先附原型問題清單與對照，再通過 keyboard、IME、copy、scroll、theme、a11y baseline；[07](07-post-prototype-polish.md) |
-| 04 | 原型後搜尋／分頁／長內容與窄 Pane 精修 | 1000 tools、超長內容、有界 rendering，無 file index；修正前／後實機對照 |
+| 03 | **原型回饋修正**：隱藏 fixture controls、單 SVG Status Bar、工具整群預設摺疊、原生 Markdown、Composer／thinking | 先通過 [FB-01～06](09-p0-feedback-round1.md)，再通過 keyboard、IME、copy、scroll、theme、a11y baseline；[07](07-post-prototype-polish.md) |
+| 04 | 原型後長內容／分頁／窄 Pane；**Live Rail 實驗**（HW1 功能參考，外觀獨立） | 1000 tools、超長內容、有界 rendering；Rail 的 marker/focus/jump/hover 通過實機才能採用，**不新增 Search**，無 file index |
 | 05 | Pi extension runtime identity + bounded snapshot | 同一 Pi；不啟動第二 Agent；不讀磁碟 Session |
 | 06 | Message/tool event transport、stale/reconnect | 非阻塞、同 Session、事件 epoch／cursor 檢查 |
 | 07 | 安全 Composer + command receipts | 防錯送／雙送／不確定重試；private transport |
@@ -137,6 +143,9 @@ UI 與宿主 Pane spike 可以平行；Pi bridge 不阻礙 UI mock prototype。�
 | UI-04 | 長內容／窄 Pane | 360／520／900 px、1000 tools、CJK/code/math 不溢出或卡死 |
 | UI-05 | IME／草稿／focus | 組字時 Enter 不誤發；切模式不清草稿；焦點可預期 |
 | POL-01~07 | 原型後 UI／UX 打磨 | 完成 [07 的驗收矩陣](07-post-prototype-polish.md#h-原型後的審查與-done-gate)；記錄原型問題、修改前後對照與未解限制 |
+| FB-01～06 | P0 使用者回饋 | 正式 UI 無 fixture 場景列／常駐 preview search；Status Bar 單 SVG；工具群組折疊＋錯誤摘要；Markdown 正常解析／可複製。詳細標準見 [09](09-p0-feedback-round1.md) |
+| TA-01～05 | 工具卡重新設計 | [10](10-tool-activity-live-rail.md)：group summary → compact rows → typed details；長輸出有界；失敗與 pending 不可被遮蔽 |
+| RL-01～09（設計候選） | 點擊跳轉、**單行 prompt hover**、單一 active turn、長會話 cluster、跨 Pane 身分驗證 | [10](10-tool-activity-live-rail.md)：正常 hover 不出現回答／工具計數／時間／大卡；實機可用性與 GPUI 技術 Gate；不影響主對話的閱讀、Composer、Status Bar |
 | PI-01 | 兩個相同 cwd 的 Pi | Session、model、工具狀態不串到另一 Pane |
 | PI-02 | `/new`、resume、bridge restart | 舊 events 不閃現；新 epoch 只顯示新 Session |
 | PI-03 | 多工具並行與不完整 end | card ID／parent 關聯準確，不補假成功 |

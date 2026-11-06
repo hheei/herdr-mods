@@ -10,6 +10,12 @@ Minimal one-icon launcher for Herdr App, **embedded directly inside the bottom S
 
 Initial choice is **VS Code**. The icon is 15 px inside a 22 px button integrated into the original Status Bar row, with no permanent label, arrow, tooltip, hover highlight or separated background. Long-press is not included because Herdr's documented GPUI API does not guarantee a long-press recognizer.
 
+### Agent UI demo control in the same renderer
+
+The **`agent-ui-demo`** Layout shows a **single SVG button** (15px icon inside a 22px target) next to the Commands hint. When Terminal is visible, its conversation icon switches to the Agent UI; when UI is visible, its Terminal icon switches back. The old two-button segmented control has been removed. In ordinary Layouts, the demo icon is hidden and Project Open works normally.
+
+This is still a **Tab-display chrome-stack preview**, not a per-model split-Pane switch. It does not start or stop Pi. See [Agent UI limitations](../agent-ui/README.md).
+
 ## Install
 
 Run from the project root on the desktop computer running Herdr App.

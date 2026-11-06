@@ -4,6 +4,10 @@
 
 **實作順序**：本文件定義目標 UX，不代表 P0 原型就必須全部完成。**P0 先做能切換、能閱讀、能測試的最小原型；P1 再依真機使用結果打磨排版、資訊層級、工具卡、Composer、回饋與無障礙。** 逐項精修工作與可觀察的 Done Gate 見 [07 · 原型後打磨](07-post-prototype-polish.md)。不中斷 Pi、只切 focused Pane、必須可返回 Terminal 是 P0 就不能延後的安全要求。
 
+**P0 實際使用者回饋已確定 P1 的簡化方向**：移出 Working／Completed／Needs attention 開發場景按鈕、移除常駐 preview search、Status Bar 改單一 SVG、工具先群組折疊、使用真正的原生 Markdown renderer。原因和驗收詳見 [09 · 第一輪原型回饋](09-p0-feedback-round1.md)。
+
+**第二輪設計（HW1、pi-harness、四倉研究）**：工具活動不僅要縮減數量，更要有依類型的高品質細節呈現；不新增 Search，而是評估一條**對話區右邊緣的 Live Conversation Rail**：點擊按輪次跳轉、hover／鍵盤 focus **只看一行短使用者提問**（真正需要處理的異常才加第二行）。**單一 active turn，不加回答摘要／工具計數／時間戳／大 hover 卡片**。完整規格、事件模型、效能與驗收見 [10 · Tool Activity + Live Rail](10-tool-activity-live-rail.md)。Rail 是 P1 試驗候選，實測不佳可延後。
+
 ## 1. 使用情境與成功定義
 
 | 情境 | 使用者要做的事 | 成功標準 |
@@ -22,7 +26,7 @@
 
 **切換按鈕固定放在 Herdr 視窗最下方 Status Bar**，不放 Pane Header，也不插入額外 Pane。Status Bar 是視窗級 UI，因此按鈕永遠只操作**目前聚焦的 Pane**：按下時由宿主同步捕捉 active PaneId、Terminal instance、binding epoch，判斷是否為受支援的 Pi；非 Pi、沒有 active Pane 或綁定不明確時，按鈕停用並有可讀的狀態說明。
 
-外觀預設是一個緊湊的 `Terminal | UI` 兩段式切換控制（或空間不足時單一可及的圖示切換鈕），顯示**當前聚焦 Pane 的模式**；聚焦其他 Pane 時，狀態立即更新，**不能自動切換其他 Pane 的模式**。切換入口在兩種呈現中始終位於 Status Bar，不能只在 hover 才出現，也不能因 UI Mod 本身崩潰而失去返回 Terminal 的能力。
+**定稿方向改為單一 SVG icon button**，而非 `Terminal | UI` 兩段式文字選擇器：對齊現有 `project-open` 的 **22×22 點擊區／15px SVG**、同背景、無額外外框與常駐文字、無 hover tooltip／色塊。視覺 variant／狀態應反映**目前聚焦 Pane 的模式或點擊後將切換的目標模式**，避免語義模糊；accessible name 與鍵盤 focus 仍須清楚。聚焦其他 Pane 只更新 icon／enabled 狀態，**不能自動切換其他 Pane 的模式**。入口始終在 Status Bar，即使 UI Mod 崩潰也必須能返回 Terminal。詳見 [FB-02](09-p0-feedback-round1.md)。
 
 這裡是**模式切換**，與既有 `project-open` 的單 icon launcher 無關；不復用「選工具」的右鍵邏輯，也不改動它。按鈕應**嵌入既有 Status Bar 的同一個 GPUI renderer／組合容器**，共用原有背景、頂部邊框、高度與 spacing，保留 Machine、Agent 數量、Commands、Project Open 的排列；**禁止再把 Status Bar 拆成相鄰 Block、額外 32px slot 或浮動 Overlay**，避免畫面像被挖空。需驗證狀態列組合擴充點；若沒有，應在可控的 Status Bar host／renderer 層整合，不能以覆蓋其他 Mod 解決。
 
@@ -36,7 +40,7 @@
 | UI：相同 binding 的 AgentUiView                                   |
 |                                                                  |
 +-- Herdr Status Bar (原本的同一列、同一背景與邊框) ------------------+
-| Machine · 2 agents       Commands   Project Open   [Terminal | UI]|
+| Machine · 2 agents       Commands   Project Open     [SVG]      |
 +------------------------------------------------------------------+
 ```
 
@@ -92,9 +96,9 @@ Pi
 
 | 狀態 | auto 預設 | 使用者手動後 |
 | --- | --- | --- |
-| 正在工作 | 一行當前活動＋必要的最新工具摘要；不是所有日誌全開 | 維持手動選擇 |
+| 正在工作 | **一行工具群組摘要**（必要時顯示目前工具名）；不自動展開個別工具列／輸出 | 維持手動選擇 |
 | 已完成且有可讀答案 | 過程摺疊，答案可見 | 維持手動選擇 |
-| 結束但無答案、錯誤、截斷、未確認終態 | 展開相關失敗／最後活動，顯示說明 | 可收起正文，但錯誤摘要不能消失 |
+| 結束但無答案、錯誤、截斷、未確認終態 | 群組仍預設折疊，但在**摘要層可見錯誤數、需要處理／未確認狀態**，必要時另列一行警示 | 可收起正文，但錯誤摘要不能消失 |
 | thinking 進行中 | 小型「思考中」摘要，正文預設關閉 | 明確展開後顯示 provider／Pi 實際提供的內容 |
 | 搜尋命中收起內容 | 暫時 reveal 命中項並標記來源 | 搜尋離開後恢復原 disclosure，不改永久偏好 |
 
@@ -102,9 +106,11 @@ Pi
 
 ### 工具活動分組
 
-按同一 turn 中的相鄰活動與類型產生摘要，如「讀取 8 個檔案，修改 2 個檔案，執行 3 個命令」。成功工具可分組；失敗、等待使用者、未知結果必須有獨立可見標記。並行工具不能靠 completion order 冒充執行順序，使用 `toolCallId`／parent 關係呈現。
+**群組本身就是第一個可折疊單位**：同一 turn 的操作初始只顯示一條 `▸ 已執行 12 個操作 · 讀取 8 次 · 1 failed` 等摘要；不要把每個工具先畫成獨立圓角 box 再各自收起 details。按相鄰活動與類型產生有根據的摘要，如「讀取 8 次，修改 2 次，執行 3 次」。失敗、等待使用者、未知結果要在**未展開的群組摘要**就有獨立可辨認的文字／數量提示；並行工具不能靠 completion order 冒充執行順序，使用 `toolCallId`／parent 關係呈現。
 
-群組是索引，不能丟掉原始呼叫。預設展開群組顯示前 20 項，其餘用「再顯示 20 項」或列表虛擬化；不是一次掛載 1000 張卡。工具卡不隨 chunk 自動伸縮至數千像素。
+展開群組後先顯示**無額外 card 背景／邊框的緊湊工具文字列**，每個工具的參數／結果**仍預設收起**；再點擊指定工具才展開詳細。群組是索引，不能丟掉原始呼叫。展開群組預設顯示前 20 項，其餘用「再顯示 20 項」或列表虛擬化；不是一次掛載 1000 張卡。工具細節不隨 chunk 自動伸縮至數千像素。完整例子和例外規則見 [FB-04](09-p0-feedback-round1.md)。
+
+**工具詳情不能一刀切成通用純文字卡**：展開後使用同一個簡潔外殼，但 `Read` 強調路徑和 range、`Search` 顯示命中上下文、`Bash` 顯示可信 exit/stdout/stderr、`Edit` 顯示有證據的 patch/diff；圖片／未知工具也要有安全 fallback。專用 detail 只在使用者打開時掛載，避免為所有 tools 付出渲染成本。完整類型矩陣見 [10 §3](10-tool-activity-live-rail.md)。
 
 ### Renderer registry
 
@@ -130,11 +136,11 @@ Anchor 不是單一 scroll offset，而是 `{rowRenderKey, intraRowOffset, follo
 
 離開末端顯示固定位置的「有新內容 ↓」，點擊才回末端。選取文字時暫停自動跟隨；新圖片解碼不得讓正在閱讀的上一行移走。頂部補歷史先保存 anchor，插入後恢復，而不是靠固定加 scrollTop 猜測高度。
 
-### 搜尋
+### 不用常駐搜尋；評估 Live Conversation Rail 導航
 
-搜尋 **本地 Pi event store 與已取得的記憶體 snapshot**，不只搜尋目前掛載的 GUI rows。第一版限目前 Pi Session／當前分支，可選「對話／工具結果／thinking」；當資料不在目前 window 時，可透過 Pi runtime API 要求有界的較早內容，沒有可用 API 就明示搜尋範圍限制。**不**另外建立跨 Session 磁碟搜尋或 host index。
+**P1 正常畫面不放 `Search this preview…` 常駐輸入框，也不把搜尋換成另一個常駐文字框。** 改先評估對話區右邊緣的**即時輪次導航 rail**：以使用者提問為一個 marker，點擊精確跳轉到該輪；hover／鍵盤 focus **只顯示截短提問**，若有真正未解決且需要處理的問題才多顯示一行簡短警示。不要將回答、工具統計、時間戳變成 hover 內容。不放到 Herdr 的全域 Spaces／Agents Sidebar；長會話 cluster、窄 Pane 隱藏策略、焦點與閱讀錨點見 [10 §4](10-tool-activity-live-rail.md)。此 rail 是 P1 prototype candidate，須先做可用性測試，不能把設計當成已完成的 GPUI 功能。
 
-第一版用搜尋與 turn list；小地圖是後續增強，不因未做小地圖而犧牲基本捲動穩定。科學長篇內容要求 CJK、Unicode、跨 code block 的字詞定位測試。
+**Rail 是「導航已知輪次」，不是全文搜尋**；hover 不會自行跳頁、額外生成 LLM 摘要或讀檔。後續真有全文檢索需求再另案評估，其範圍才是**本地 Pi event store 與已取得的記憶體 snapshot**（當前 Session／分支），不建立 host index；詳見 [FB-03](09-p0-feedback-round1.md)。
 
 ### 有界呈現預算（設計值）
 
@@ -198,7 +204,7 @@ Pi 及其 extensions 未必提供統一的 plan／permission／question event。
 
 ## 9. UX-08：科研與程式碼內容
 
-Markdown 採 native text renderer；程式碼採可選取、可複製的等寬原生 code view。完整支援不能僅以 JSON 成功解析來宣告。[H1](01-evidence.md#h1)
+**P0 的 `para()` 並不是 Markdown parser**：它僅分段及特殊處理 `##`，所以 `**bold**`、列表、連結、code 等被當純文字顯示，與是否接入 Pi 無關。P1 優先驗證 [Herdr 官方 GPUI `TextView.markdown(id, text)`](https://github.com/herdrdev/herdr-app/blob/master/defaults/AGENTS.md) 作為原生 Markdown 呈現，再依目標 App 生成的 `gpui-kit.d.ts` 確認 import 和支援範圍。程式碼可按官方 `EditorState + Editor` 方案做可選取、可複製的只讀預覽；**數學／GFM 表格／全部連結行為尚未證實**，缺少支援時保留可複製原始文本，不能因 JSON 能解析就宣稱全功能。[FB-05](09-p0-feedback-round1.md)
 
 | 內容 | 必須的基線 | 未通過原型前的降級 |
 | --- | --- | --- |

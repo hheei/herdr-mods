@@ -138,24 +138,31 @@ async function main() {
   assert.ok(calls.some((x) => Array.isArray(x) && x[0] === "code"
     && x[1][0] === "--remote" && x[1][1] === "ssh-remote+gpu-server"));
 
+  // One canonical Agent UI demo, one SVG button, no segmented legacy toggle.
   calls.length = 0;
   preferences.layout = "agent-ui-demo";
   const previewStatus = mod.render(cx);
-  assert.ok(findButton(previewStatus), "project-open still exists beside preview toggle");
-  const previewToggle = findById(previewStatus, "agent-ui-demo-toggle");
-  assert.ok(previewToggle, "mode controls should be embedded in the same status renderer");
-  findById(previewStatus, "demo-ui").handlers.on_click(null, cx);
-  assert.ok(calls.some((x) => x[0] === "run" && x[1] === "layout.select"
+  assert.ok(findButton(previewStatus), "Project Open remains available");
+  assert.equal(findById(previewStatus, "agent-ui-demo-toggle"), null,
+    "legacy segmented control must not exist");
+  let switcher = findById(previewStatus, "agent-ui-mode");
+  assert.ok(switcher, "one mode icon in the existing Status Bar");
+  assert.equal(switcher.kids.length, 1);
+  assert.equal(switcher.kids[0].icon, "mods/project-open/agent-ui.svg");
+  switcher.handlers.on_click(null, cx);
+  assert.ok(calls.some(x => x[0] === "run" && x[1] === "layout.select"
     && x[2].stack === "agent-ui-demo-surface" && x[2].child === "agent-ui-demo-ui"));
-  assert.equal(calls.some((x) => x[0] === "exec" || x[0] === "terminal.kill" || x[0] === "pane.close"), false);
   state.layout.children[0].active = "agent-ui-demo-ui";
+  switcher = findById(mod.render(cx), "agent-ui-mode");
+  assert.equal(switcher.kids[0].icon, "mods/project-open/agent-terminal.svg");
   calls.length = 0;
-  findById(mod.render(cx), "demo-terminal").handlers.on_click(null, cx);
-  assert.ok(calls.some((x) => x[0] === "run" && x[1] === "layout.select"
+  switcher.handlers.on_click(null, cx);
+  assert.ok(calls.some(x => x[0] === "run" && x[1] === "layout.select"
     && x[2].child === "agent-ui-demo-terminal"));
+  assert.equal(calls.some(x => x[0] === "terminal.kill" || x[0] === "pane.close"), false);
   preferences.layout = "herdr-mods";
-  assert.equal(findById(mod.render(cx), "agent-ui-demo-toggle"), null,
-    "preview control must not appear in regular layouts");
+  assert.equal(findById(mod.render(cx), "agent-ui-mode"), null,
+    "demo icon must not appear in normal layouts");
   console.log("PASS: default click; popup; preference+icon; local opener; remote guard; remote VS Code.");
 }
 
