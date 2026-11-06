@@ -4,7 +4,7 @@
 export const SOURCE_KEY = "agent-ui-source";
 
 export function initialBridge() {
-  return { epoch: null, doneRevision: -1, liveRevision: -1 };
+  return { epoch: null, doneRevision: -1, liveRevision: -1, asking: null };
 }
 
 // Payload is whatever three files existed: {meta, done, live}. Missing files are
@@ -19,11 +19,17 @@ export function readBridge(previous, payload) {
 
   if (!meta) return { state: initialBridge(), events, health };
 
+  // The question ask-user is waiting on is its own event: it changes while the
+  // turn itself is untouched, and it must arrive even if nothing else moved.
+  const asking = live?.asking ?? null;
+  if (previous?.asking !== asking) events.push({ type: "asking", question: asking });
+
   const sameEpoch = previous?.epoch === meta.epoch;
   const state = {
     epoch: meta.epoch,
     doneRevision: sameEpoch ? previous.doneRevision : -1,
     liveRevision: sameEpoch ? previous.liveRevision : -1,
+    asking,
   };
 
   // A new epoch is a new Pi process: the old transcript is not this one's.

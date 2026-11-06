@@ -48,19 +48,55 @@ const meta = (extra = {}) => ({ version: 2, epoch: "e1", revision: 1,
     "a throttled flush of the live turn is one replace, not a delta stream");
   state = result.state;
 
-  result = source.readBridge(state, {
+  const settledEvents = source.readBridge(source.initialBridge(), {
+    meta: meta(), done: { version: 2, epoch: "e1", revision: 6,
+      turns: [turn("t-1", "done", { status: "done" }), turn("t-2", "half a sentence more", { status: "done" })] },
+    live: { version: 2, epoch: "e1", revision: 7, turn: null },
+  }).events;
+  let askState = state;
+  result = source.readBridge(askState, {
     meta: meta(), done: { version: 2, epoch: "e1", revision: 6,
       turns: [turn("t-1", "done", { status: "done" }), turn("t-2", "half a sentence more", { status: "done" })] },
     live: { version: 2, epoch: "e1", revision: 7, turn: null },
   });
   assert.deepEqual(result.events.map((event) => event.type), ["snapshot"],
     "a settled turn is already inside the snapshot; no second replace");
-  state = result.state;
+  askState = result.state;
+
+  result = source.readBridge(askState, {
+    meta: meta(), done: { version: 2, epoch: "e1", revision: 6,
+      turns: [turn("t-1", "done", { status: "done" }), turn("t-2", "half a sentence more", { status: "done" })] },
+    live: { version: 2, epoch: "e1", revision: 8, turn: turn("t-2", "half a sentence more", { status: "done" }), asking: "which database?" },
+  });
+  assert.deepEqual(result.events.filter((event) => event.type === "asking"),
+    [{ type: "asking", question: "which database?" }],
+    "a question arrives even when no turn changed shape");
+  assert.equal(result.events.some((event) => event.type === "snapshot"), false,
+    "asking does not reshuffle the transcript");
+  askState = result.state;
+
+  result = source.readBridge(askState, {
+    meta: meta(), done: { version: 2, epoch: "e1", revision: 6,
+      turns: [turn("t-1", "done", { status: "done" }), turn("t-2", "half a sentence more", { status: "done" })] },
+    live: { version: 2, epoch: "e1", revision: 8, turn: turn("t-2", "half a sentence more", { status: "done" }), asking: "which database?" },
+  });
+  assert.deepEqual(result.events, [], "the same question is not re-announced");
+  assert.equal(askState.asking, "which database?", "the reader remembers what it reported");
+
+  result = source.readBridge(askState, {
+    meta: meta(), done: { version: 2, epoch: "e1", revision: 6,
+      turns: [turn("t-1", "done", { status: "done" })] },
+    live: { version: 2, epoch: "e1", revision: 9, turn: turn("t-2", "half a sentence more", { status: "done" }), asking: null },
+  });
+  assert.equal(result.events.find((event) => event.type === "asking").question, null,
+    "an answered question closes");
+  askState = result.state;
+  assert.equal(askState.asking, null);
 
   const transcript = reducer.createTranscript([]);
   let applied = transcript;
   let grew = [];
-  for (const event of result.events) {
+  for (const event of settledEvents) {
     const next = reducer.applyEvent(applied, event);
     if (next.grew) grew.push(event.type);
     applied = next.state;

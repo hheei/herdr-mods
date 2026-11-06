@@ -6,7 +6,13 @@
 //
 //   meta.json   {version, epoch, revision, pid, sessionId, cwd, startedAt, closed?}
 //   done.json   {version, epoch, revision, turns}   settled turns, capped like the view
-//   live.json   {version, epoch, revision, turn}    the turn in flight, or null
+//   live.json   {version, epoch, revision, turn, asking}  the turn in flight, or null
+//
+// `asking` is the question @hheei/pi-ask-user is waiting on, taken from the
+// `pi-ask-user:blocked` event it already emits. Pi has no structured "the agent
+// is waiting for you" event of its own, so we adapt to the plugin that does
+// rather than guessing from punctuation. Without that plugin the field is null
+// and no turn claims to need an answer.
 //
 // The files are rewritten in place, so a reader's latest read simply wins: no
 // sequence numbers, no gap detection, no pruning. Read-only in both directions:
@@ -56,13 +62,11 @@ export function usageOf(message) {
   };
 }
 
-// Pi has no structured "I am asking you something" event, so this is a heuristic:
-// a settled turn whose last words are a question. The view labels it as a
-// question, never as an approval request -- approving a tool still needs the
-// Terminal.
-export function asksForAnswer(messages) {
-  const last = [...(messages ?? [])].reverse().find((message) => String(message.text ?? "").trim() !== "");
-  return Boolean(last) && /[?？]\s*$/.test(String(last.text).trim());
+// The ask-user plugin reports both edges; anything else is not our question.
+export function askState(current, channel, data) {
+  if (channel === "pi-ask-user:blocked") return data?.active ? String(data.question ?? "") : null;
+  if (channel === "ask:answered" || channel === "ask:cancelled") return null;
+  return current;
 }
 
 export function clip(value, max) {
@@ -170,12 +174,12 @@ export function createWriter(dir, info = {}) {
       write("done.json", { version: 2, epoch, revision, turns });
     },
     // The turn in flight: throttled unless told to flush now.
-    live(turn, force = false) {
+    live(turn, force = false, asking = null) {
       const now = Date.now();
       if (turn !== null && !force && now - lastLive < LIVE_MS) return null;
       lastLive = now;
       revision += 1;
-      write("live.json", { version: 2, epoch, revision, turn });
+      write("live.json", { version: 2, epoch, revision, turn, asking });
       return revision;
     },
     close() {
@@ -188,6 +192,7 @@ export default function (pi) {
   let box = null;
   let done = [];
   let turn = null;
+  let asking = null;
   let count = 0;
 
   const guard = (fn) => {
@@ -198,7 +203,7 @@ export default function (pi) {
     }
   };
 
-  const flush = (force) => guard(() => box?.live(turn, force));
+  const flush = (force) => guard(() => box?.live(turn, force, asking));
 
   const openTurn = (prompt) => {
     turn = { id: `t-${++count}`, prompt, status: "working", messages: [], tools: [] };
@@ -211,8 +216,9 @@ export default function (pi) {
   const settle = () => {
     if (!turn) return;
     done = [...done, { ...turn, status: "done",
-      requiresUserAction: asksForAnswer(turn.messages) }].slice(-DONE_LIMIT);
+      requiresUserAction: turn.asked === true }].slice(-DONE_LIMIT);
     turn = null;
+    asking = null;
     guard(() => {
       box?.live(null, true);
       box?.done(done);
@@ -279,4 +285,18 @@ export default function (pi) {
   });
 
   pi.on("agent_settled", async () => settle());
+
+  // Adapting to @hheei/pi-ask-user rather than inventing a signal Pi lacks: it
+  // emits blocked(true) while the prompt is on screen and blocked(false) plus
+  // ask:answered|ask:cancelled when it closes.
+  const onAsk = (channel) => (data) => guard(() => {
+    const next = askState(asking, channel, data);
+    if (next === asking) return;
+    asking = next;
+    if (asking !== null && turn) turn.asked = true;
+    flush(true);
+  });
+  for (const channel of ["pi-ask-user:blocked", "ask:answered", "ask:cancelled"]) {
+    pi.events?.on?.(channel, onAsk(channel));
+  }
 }

@@ -77,9 +77,16 @@ function messageEntry(id, message) {
     cost: { input: 0.001, output: 0.002, cacheRead: 0, cacheWrite: 0, total: 0.003 } } });
   assert.deepEqual({ ...usage }, { input: 10, output: 5, cacheRead: 100, total: 115, cost: 0.003 });
   assert.equal(project.usageOf({ role: "assistant" }), null, "no usage is null, not zeroes");
-  assert.equal(project.asksForAnswer([{ text: "which database should I use?" }]), true);
-  assert.equal(project.asksForAnswer([{ text: "done. ¿" }]), false);
-  assert.equal(project.asksForAnswer([]), false);
+  assert.equal(project.askState(null, "pi-ask-user:blocked", { active: true, question: "which db?" }), "which db?",
+    "the plugin's blocked edge is the question");
+  assert.equal(project.askState("which db?", "pi-ask-user:blocked", { active: false }), null,
+    "and its unblocked edge closes it");
+  assert.equal(project.askState("which db?", "ask:answered", { question: "which db?" }), null);
+  assert.equal(project.askState("which db?", "ask:cancelled", {}), null);
+  assert.equal(project.askState("which db?", "tool_execution_end", {}), "which db?",
+    "an unrelated channel cannot clear a question");
+  assert.equal(project.askState(null, "pi-ask-user:blocked", { active: true }), "",
+    "a batch heading is still a question");
 
   const long = project.entriesToTurns([
     messageEntry("u9", { role: "user", content: "big", timestamp: 0 }),

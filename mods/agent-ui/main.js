@@ -48,6 +48,7 @@ export default class AgentUi extends View {
     this.source = fixtureSource(DEMO_TURNS);
     this.bridge = null;
     this.bridgeHealth = null;
+    this.asking = null;
     // null until the check runs: "unknown" is not "not installed".
     this.bridgeInstalled = null;
     this.transcript = createTranscript(this.source.snapshot());
@@ -178,21 +179,25 @@ export default class AgentUi extends View {
     return event.type === "turn.start" && this.turns.length >= this.transcript.limit;
   }
 
-  // Pi has no structured question event; a settled turn that ends in a question
-  // is the one honest signal we have, so it gets a nudge and nothing more.
-  notifyQuestion(event) {
-    if (!this.bridge || event.type !== "turn.replace" || !event.turn?.requiresUserAction) return;
-    const before = this.turns.find((turn) => turn.id === event.turn.id);
-    if (before?.requiresUserAction) return;
+  // The question comes from @hheei/pi-ask-user, which reports both edges. Pi
+  // itself has no "waiting for you" event, so nothing here is guessed.
+  ask(question) {
+    const asked = this.asking === null && question !== null;
+    this.asking = question;
+    if (!asked) return;
     try {
-      notify({ title: "Pi is asking", body: shortPrompt(event.turn.prompt), level: "warning" });
+      notify({ title: "Pi is asking", body: shortPrompt(question), level: "warning" });
     } catch {
-      // A host without notifications still shows the badge.
+      // A host without notifications still shows the banner.
     }
   }
 
   apply(event) {
-    this.notifyQuestion(event);
+    if (event.type === "asking") {
+      const before = this.asking;
+      this.ask(event.question ?? null);
+      return this.asking !== before;
+    }
     const top = this.atLimit(event)
       ? visibleTurnIds(turnGeometry(this.turns, this.turnHeights).ranges,
         this.scrollY, this.viewportHeight)[0]
@@ -750,6 +755,12 @@ export default class AgentUi extends View {
         .bg(t.raised).border_b(1).border_color(t.border)
         .child(div().flex_1().truncate().text_size(11).text_color(t.blocked)
           .child("! Pi GUI integration is not enabled · copy bridge/herdr-agent-ui.js into ~/.pi/agent/extensions/ and restart Pi"))))
+      .when(this.asking !== null, (el) => el.child(h_flex().id("agent-ui-asking")
+        .h(27).flex_none().px(12).gap(9).items_center().bg(t.raised)
+        .border_b(1).border_color(t.blocked)
+        .child(div().text_size(11).flex_none().text_color(t.blocked).child("?"))
+        .child(div().flex_1().truncate().text_size(11).text_color(t.dim).child(this.asking))
+        .child(div().text_size(10).flex_none().text_color(t.dim).child("answer in the Terminal"))))
       .when(this.demo === "offline", (el) => el.child(h_flex().id("agent-ui-offline")
         .h(27).flex_none().px(12).gap(9).items_center().bg(t.raised)
         .border_b(1).border_color(t.border)

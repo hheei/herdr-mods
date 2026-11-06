@@ -727,13 +727,15 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
 
   box.notes.length = 0;
   bridged.turns = [];
-  bridged.apply({ type: "turn.replace", turn: { id: "q-1", prompt: "which db?", status: "done",
-    requiresUserAction: true, messages: [], tools: [] } });
+  bridged.apply({ type: "asking", question: "which db?" });
   assert.deepEqual(box.notes.map((note) => note.title), ["Pi is asking"],
-    "a settled question is the one nudge Pi can honestly signal");
-  bridged.apply({ type: "turn.replace", turn: { id: "q-1", prompt: "which db?", status: "done",
-    requiresUserAction: true, messages: [], tools: [] } });
+    "the ask-user plugin's blocked edge is what raises a notification");
+  assert.ok(find(bridged.render(context), "agent-ui-asking"), "and it shows above the transcript");
+  bridged.apply({ type: "asking", question: "which db?" });
   assert.equal(box.notes.length, 1, "the same question is not announced twice");
+  bridged.apply({ type: "asking", question: null });
+  assert.equal(bridged.asking, null);
+  assert.equal(find(bridged.render(context), "agent-ui-asking"), null, "answering takes the banner away");
 
   bridged.bridgeInstalled = false;
   const missing = bridged.render(context);
