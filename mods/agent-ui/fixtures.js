@@ -1,5 +1,8 @@
 // Native Agent UI fixtures. Synthetic only: no Pi session files or commands.
-export const DEMO_TURNS = [
+// The scripted turns are also the contract the tests drive; the shipped demo
+// appends generated turns so a long history (bucketed rail, real scrolling)
+// can be judged by hand.
+export const FIXTURE_TURNS = [
   {
     id: "t-intro",
     prompt: "先幫我分析 Herdr Agent UI 的問題，Terminal 和 UI 要能無中斷切換。",
@@ -104,3 +107,68 @@ export const DEMO_TURNS = [
     ],
   },
 ];
+
+const LONG_PROMPTS = [
+  "把剛才的結論整理成三點，不要重複推導過程。",
+  "這段排版在窄視窗會擠在一起，幫我檢查一下。",
+  "把測試指令整理成一份可以貼給同事的清單。",
+  "先解釋你為什麼選 Layout Stack，而不是另開一個 Pane。",
+  "失敗的那個工具，錯誤訊息在哪一行？",
+  "把這輪的改動寫成 commit message 草稿。",
+  "如果我中途切回 Terminal，背景工作會斷嗎？",
+  "幫我把 Rail 的行為寫成驗收條件。",
+  "確認一下我的個人 Layout 沒有被安裝器改壞。",
+  "這份 fixture 的資料是亂數產生的嗎？",
+  "把 Hover 的第二行條件再說一次。",
+  "最後檢查一次有沒有說成已支援逐 Pane 切換。",
+];
+
+const LONG_ANSWERS = [
+  "1. 呈現層與 runtime 分離\n2. 設定與內容各自獨立\n3. 失敗只影響該次執行",
+  "窄視窗下 Rail 會保留圓點，只有 **極短的 viewport** 才整條隱藏，避免溢出。\n\n主要內容區仍以文字寬度為先，不為了塞控件犧牲閱讀空間。",
+  "```sh\nsh scripts/install.sh agent-ui project-open\nnode tests/agent-ui.test.cjs\n```",
+  "因為 **Layout Stack** 只換 chrome，不動 model Pane；另開 Pane 會讓同一份 Agent 出現兩個呈現者。",
+  "在展開後的工具列點開該項，錯誤字串在 `detail` 的第一行，不會出現在折疊摘要裡。",
+  "```\nrail: anchor dots in one centred column\n```\n\n只描述行為，不寫入未驗證的宿主能力。",
+  "不會。切換只改呈現層，PTY 與背景程序繼續跑；這也是不在切換時重啟 Agent 的原因。",
+  "1. 圓點固定中線、間距 3px\n2. 整列不高於 40% 高度\n3. 過密按桶合併並顯示 `+N`",
+  "安裝器只 patch `herdr-mods` 一次，並且先備份；`main` 與其他 Layout 完全不動。",
+  "不是。全部是固定內容，**沒有亂數**，所以每次開啟都看到同一份對話。",
+  "只有 `requiresUserAction === true` 這種明確需要你回應的事件才加第二行；工具失敗不算。",
+  "沒有。目前仍**不是**逐 split Pane 切換，相關宿主 API 尚未驗證。",
+];
+
+const LONG_TOOLS = [
+  [],
+  [{ id: "l-read", kind: "read", title: "Read layout contract", status: "done", target: "layouts/herdr-mods.json", detail: "work-body children: tab renderer and panel." }],
+  [
+    { id: "l-search", kind: "search", title: "Search rail tests", status: "done", target: "tests", detail: "railLayout · dotSize · railHit" },
+    { id: "l-edit", kind: "edit", title: "Tighten rail column", status: "done", target: "mods/agent-ui/model.js", detail: "@@ railLayout\n- const pitch = 16\n+ const pitch = 14" },
+  ],
+  [{ id: "l-exec", kind: "exec", title: "Run demo checks", status: "done", target: "node tests/agent-ui.test.cjs", detail: "PASS: dots-only scroll rail, scrubbing, dot jump." }],
+  [
+    { id: "l-read2", kind: "read", title: "Read docs 09", status: "done", target: "docs/agent-ui/09-p0-feedback-round1.md", detail: "Single SVG mode switch only in the Status Bar." },
+    { id: "l-exec2", kind: "exec", title: "Screenshot the demo", status: "failed", target: "herdr-app shot", detail: "$ herdr-app shot\nSynthetic failure fixture: no GUI on this machine." },
+  ],
+];
+
+function longTurn(id, index) {
+  const tools = LONG_TOOLS[index % LONG_TOOLS.length].map((tool) => ({ ...tool, id: `${tool.id}-${id}` }));
+  return {
+    id,
+    prompt: LONG_PROMPTS[index % LONG_PROMPTS.length],
+    status: "done",
+    messages: [{ id: `${id}-answer`, role: "assistant", text: LONG_ANSWERS[index % LONG_ANSWERS.length] }],
+    tools,
+  };
+}
+
+const LONG_TURNS = Array.from({ length: 53 }, (_, i) => {
+  const id = `t-long-${String(i + 1).padStart(2, "0")}`;
+  const turn = longTurn(id, i);
+  if (i === 13 || i === 37) turn.requiresUserAction = true;
+  return turn;
+});
+LONG_TURNS[LONG_TURNS.length - 1].status = "working";
+
+export const DEMO_TURNS = [...FIXTURE_TURNS, ...LONG_TURNS];

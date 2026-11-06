@@ -31,7 +31,7 @@ The goal of P0 is to obtain a **working native GPUI interaction prototype** whil
 mods/
   agent-ui/
     main.js                   Native GPUI fixture view
-    fixtures.js               Seven deterministic synthetic Pi turns (current)
+    fixtures.js               Scripted 7 turns + 53 generated = 60-turn demo
     model.js                  Tool activity and rail projections (current)
     mod.json                  place:none; focusable:true
     README.md                 Install, use, safety, known limitations

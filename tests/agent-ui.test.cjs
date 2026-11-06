@@ -68,20 +68,25 @@ const box = {
 };
 const modelSrc = fs.readFileSync(path.join(root, "mods/agent-ui/model.js"), "utf8").replace(/^export /gm, "");
 const fixtureSrc = fs.readFileSync(path.join(root, "mods/agent-ui/fixtures.js"), "utf8")
-  .replace("export const DEMO_TURNS", "const DEMO_TURNS");
+  .replace(/^export const /gm, "const ");
 vm.runInNewContext(modelSrc + "\n" + fixtureSrc
-  + "\nthis.summarizeActivity=summarizeActivity;this.toRailNodes=toRailNodes;this.shortPrompt=shortPrompt;this.turnGeometry=turnGeometry;this.clampScroll=clampScroll;this.visibleTurnIds=visibleTurnIds;this.railLayout=railLayout;this.dotSize=dotSize;this.railHit=railHit;this.previewTop=previewTop;this.railScrubOffset=railScrubOffset;this.DEMO_TURNS=DEMO_TURNS;", box);
+  + "\nthis.summarizeActivity=summarizeActivity;this.toRailNodes=toRailNodes;this.shortPrompt=shortPrompt;this.turnGeometry=turnGeometry;this.clampScroll=clampScroll;this.visibleTurnIds=visibleTurnIds;this.railLayout=railLayout;this.dotSize=dotSize;this.railHit=railHit;this.previewTop=previewTop;this.railScrubOffset=railScrubOffset;this.FIXTURE_TURNS=FIXTURE_TURNS;this.DEMO_TURNS=DEMO_TURNS;", box);
 
-assert.equal(box.DEMO_TURNS.length, 7);
+assert.equal(box.FIXTURE_TURNS.length, 7);
+assert.equal(box.DEMO_TURNS.length, 60, "the shipped demo ships a long history");
+assert.equal(new Set(box.DEMO_TURNS.map((turn) => turn.id)).size, 60, "rail keys stay unique");
+assert.equal(box.DEMO_TURNS.filter((turn) => turn.requiresUserAction).length, 2,
+  "only two turns explicitly ask the user for something");
+assert.equal(box.DEMO_TURNS.at(-1).status, "working", "the demo ends on an in-flight turn");
 assert.equal(box.summarizeActivity([]).total, 0);
 assert.deepEqual(
-  [box.summarizeActivity(box.DEMO_TURNS[5].tools).failed, box.summarizeActivity(box.DEMO_TURNS[5].tools).pending],
+  [box.summarizeActivity(box.FIXTURE_TURNS[5].tools).failed, box.summarizeActivity(box.FIXTURE_TURNS[5].tools).pending],
   [1, 1],
 );
-assert.equal(box.toRailNodes(box.DEMO_TURNS).length, 7);
-assert.equal(box.toRailNodes(box.DEMO_TURNS)[5].actionable, false,
+assert.equal(box.toRailNodes(box.FIXTURE_TURNS).length, 7);
+assert.equal(box.toRailNodes(box.FIXTURE_TURNS)[5].actionable, false,
   "failed/pending tools must not create a user-action warning");
-assert.equal(box.toRailNodes(box.DEMO_TURNS)[0].actionable, false);
+assert.equal(box.toRailNodes(box.FIXTURE_TURNS)[0].actionable, false);
 assert.equal(box.toRailNodes([{ id: "request", prompt: "Approve?", requiresUserAction: true }])[0].actionable, true,
   "user action must be explicit, never derived from a failed tool");
 assert.ok(box.shortPrompt("a".repeat(120)).length <= 39);
@@ -147,6 +152,9 @@ vm.runInNewContext(src.replace(/^import\s+\{[\s\S]*?\}\s+from\s+"[^"]+";\s*/gm, 
   + "\nthis.AgentUi=AgentUi;", box);
 const ui = new box.AgentUi();
 ui.init();
+ui.turns = box.FIXTURE_TURNS.map((turn) => ({
+  ...turn, messages: [...turn.messages], tools: [...turn.tools],
+}));
 let tree = ui.render(context);
 assert.ok(find(tree, "agent-ui-root"));
 assert.ok(find(tree, "agent-ui-composer"));
@@ -391,5 +399,26 @@ assert.ok(find(ui.render(context), "agent-ui-rail-marker-t-intro"),
 ui.changeSize({ width: 210 }, context);
 assert.equal(find(ui.render(context), "agent-ui-rail-preview"), null,
   "extremely narrow panes do not overflow with a hover preview");
+
+// The shipped demo is a full-length conversation: 60 turns must still fit.
+ui.turns = box.DEMO_TURNS.map((turn) => ({
+  ...turn, messages: [...turn.messages], tools: [...turn.tools],
+}));
+ui.turnHeights = new Map();
+ui.scrollY = 0;
+ui.changeSize({ width: 800 }, context);
+ui.measureViewport({ height: 460 }, context);
+const longGeometry = box.turnGeometry(ui.turns, ui.turnHeights);
+const longRail = box.railLayout(longGeometry.ranges, ui.viewportHeight,
+  box.visibleTurnIds(longGeometry.ranges, ui.scrollY, ui.viewportHeight));
+assert.equal(longRail.dots.length, 12, "60 turns collapse into 12 dots at 460px");
+assert.equal(longRail.perDot, 5);
+assert.ok(longRail.dots.length * longRail.pitch <= ui.viewportHeight * 0.4,
+  "the long-history column still respects the 40% bound");
+const longRender = ui.render(context);
+assert.ok(find(longRender, "agent-ui-rail"));
+assert.ok(find(longRender, `agent-ui-rail-marker-${longRail.dots.at(-1).id}`),
+  "the last bucket is reachable");
+assert.ok(find(longRender, "agent-ui-user-t-long-01"), "generated turns are mounted");
 
 console.log("PASS: dots-only scroll rail, scrubbing, dot jump, multi-highlight, bounded hover, tools, Markdown and Stack view.");

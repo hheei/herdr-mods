@@ -20,7 +20,7 @@ sh scripts/install.sh agent-ui project-open
 | 位置 | 用途 |
 | --- | --- |
 | `mods/agent-ui/main.js` | 新的 Native GPUI View、工具群組／行／細節、Markdown、Rail、模擬 Composer |
-| `mods/agent-ui/fixtures.js` | 七輪完整合成對話，含 Markdown、工具類型、failed／pending／working |
+| `mods/agent-ui/fixtures.js` | 60 輪合成對話（7 輪腳本 + 53 輪長度不一的生成輪次），含 Markdown、工具類型、failed／pending／working；`DEMO_TURNS` 給人工感受、`FIXTURE_TURNS`（前 7 輪）供測試固定 |
 | `mods/agent-ui/model.js` | 純函式：工具數量與狀態摘要、極短問題 preview、rail node、window target |
 | `mods/agent-ui/mod.json` | `place:none` + `install:derive:agent-ui-demo` |
 | `mods/project-open/main.js` | **僅在 agent-ui-demo Layout** 嵌入原 Status Bar 的單一 SVG 按鈕；不再有舊式 segmented 控制 |
@@ -80,6 +80,6 @@ node tests/project-open.test.cjs
 sh tests/agent-ui-demo-install.test.sh
 ```
 
-已覆蓋的行為：七輪 fixtures、group 和 tool detail 的折疊、失敗摘要（**右側不顯示狀態**）、工具失敗不觸發 `requiresUserAction`、Markdown 的原生 API 參數、**所有可見輪次的 Rail multi-highlight**、按 ID 捲動完整 transcript、Hover／Pin 可視範圍 clamp、**Dots-only Rail：圓點點擊、空白處點擊／拖曳、5px Gesture 門檻、上下邊界、Wheel／Resize 同步，且不渲染 Track／Thumb**、圓角 root、本地 Composer、窄畫面、單 SVG status control、獨立 derive layout、不覆蓋一般個人 Layout／main、備份。
+已覆蓋的行為：七輪腳本 fixtures（Demo 另載入 60 輪，並斷言 460px 下收斂為 12 個圓點）、group 和 tool detail 的折疊、失敗摘要（**右側不顯示狀態**）、工具失敗不觸發 `requiresUserAction`、Markdown 的原生 API 參數、**所有可見輪次的 Rail multi-highlight**、按 ID 捲動完整 transcript、Hover／Pin 可視範圍 clamp、**Dots-only Rail：圓點點擊、空白處點擊／拖曳、5px Gesture 門檻、上下邊界、Wheel／Resize 同步，且不渲染 Track／Thumb**、圓角 root、本地 Composer、窄畫面、單 SVG status control、獨立 derive layout、不覆蓋一般個人 Layout／main、備份。
 
 實機進行以下 QA 才算完成下一個 Gate：`herdr-app check`、真實視窗截圖、Markdown code blocks、Hover 是否裁切、click 過程是否跳動、窄 Pane／IME／鍵盤 focus、當實際 UI 初始化失敗時是否仍能從 Status Bar 回 Terminal。**這台 Linux 執行環境沒有 `herdr-app` desktop binary，故無法代替目標 Mac 上的實機結果。**
