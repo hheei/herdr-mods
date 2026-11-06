@@ -35,6 +35,8 @@ The installer derives `agent-ui-demo.json` from your own `herdr-mods.json` if av
    cp -r mods/agent-ui/bridge ~/.pi/agent/extensions/herdr-agent-ui
    ```
 
+   Reading it back needs the bridge source: `main.js` switches to it when a Mod sets `shared("agent-ui-source", "bridge")` (the hook P2's pane binding will use; today it is opt-in and off by default). `bridge-source.js` then watches the newest producer folder, seeds from `done.json`, and replaces one turn per `live.json` revision — no polling, no delta log.
+
    It is read-only and guarded: a failed write never stops the agent, and nothing is sent to Pi. Remove it by deleting that folder. `bridge/mailbox.js` and `bridge/project.js` are the tested parts (`node tests/agent-ui-bridge.test.cjs`); `index.ts` is the thin hook glue and is not typechecked by CI.
 9. **Bounded history.** The reducer keeps the newest 200 turns and reports what fell off; the view forgets those heights and puts the turn that was on top back on top. Rendering, not geometry, is what grows: 200 turns build in ~2ms a frame, 2000 in ~27ms. The rail lays out the turn *order*, never heights, so an unmeasured turn cannot wrong-foot it.
 10. **Layering.** `model.js` is geometry, `state.js` is the event reducer (`applyEvent` returns a new transcript), `fixtures.js` is one source (`snapshot/take/step`), and `main.js` only pumps and renders. A bridge is a second source emitting the same events — not a rewrite of the view.

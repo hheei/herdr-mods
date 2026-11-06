@@ -51,7 +51,9 @@ function stateObj(spec) {
     set_value(value) { this.text = value; },
   };
 }
-const context = { notify() {}, stop_propagation() {}, focus_handle: () => ({ focus() {} }), timer: { every(ms, callback) { context.tick = callback; } } };
+const context = { notify() {}, stop_propagation() {}, focus_handle: () => ({ focus() {} }),
+  timer: { every(ms, callback) { context.tick = callback; } },
+  spawn(task) { context.task = task; } };
 const box = {
   View: class {}, div: node, h_flex: node, v_flex: node,
   theme: () => ({
@@ -64,6 +66,11 @@ const box = {
     return n;
   } },
   TextareaState: { new: stateObj },
+  appHome: () => "/tmp/apphome",
+  exec: async () => ({ code: 0, stdout: "", stderr: "" }),
+  readTextFile: async () => null,
+  shared: () => null,
+  watchFolder: async () => [],
   Textarea: { new: () => node() },
 };
 const modelSrc = fs.readFileSync(path.join(root, "mods/agent-ui/model.js"), "utf8").replace(/^export /gm, "");
@@ -71,8 +78,10 @@ const stateSrc = fs.readFileSync(path.join(root, "mods/agent-ui/state.js"), "utf
   .replace(/^export /gm, "");
 const fixtureSrc = fs.readFileSync(path.join(root, "mods/agent-ui/fixtures.js"), "utf8")
   .replace(/^export (const|function) /gm, "$1 ");
-vm.runInNewContext(modelSrc + "\n" + stateSrc + "\n" + fixtureSrc
-  + "\nthis.summarizeActivity=summarizeActivity;this.toRailNodes=toRailNodes;this.shortPrompt=shortPrompt;this.turnGeometry=turnGeometry;this.clampScroll=clampScroll;this.visibleTurnIds=visibleTurnIds;this.railLayout=railLayout;this.dotSize=dotSize;this.railHit=railHit;this.previewTop=previewTop;this.railScrubOffset=railScrubOffset;this.FIXTURE_TURNS=FIXTURE_TURNS;this.DEMO_TURNS=DEMO_TURNS;this.fixtureSource=fixtureSource;this.applyEvent=applyEvent;this.createTranscript=createTranscript;", box);
+const bridgeSrc = fs.readFileSync(path.join(root, "mods/agent-ui/bridge-source.js"), "utf8")
+  .replace(/^export /gm, "");
+vm.runInNewContext(modelSrc + "\n" + stateSrc + "\n" + bridgeSrc + "\n" + fixtureSrc
+  + "\nthis.summarizeActivity=summarizeActivity;this.toRailNodes=toRailNodes;this.shortPrompt=shortPrompt;this.turnGeometry=turnGeometry;this.clampScroll=clampScroll;this.visibleTurnIds=visibleTurnIds;this.railLayout=railLayout;this.dotSize=dotSize;this.railHit=railHit;this.previewTop=previewTop;this.railScrubOffset=railScrubOffset;this.FIXTURE_TURNS=FIXTURE_TURNS;this.DEMO_TURNS=DEMO_TURNS;this.fixtureSource=fixtureSource;this.applyEvent=applyEvent;this.createTranscript=createTranscript;this.createBridgeSource=createBridgeSource;this.readBridge=readBridge;this.initialBridge=initialBridge;this.SOURCE_KEY=SOURCE_KEY;", box);
 
 assert.equal(box.FIXTURE_TURNS.length, 7);
 assert.equal(box.DEMO_TURNS.length, 60, "the shipped demo ships a long history");
@@ -650,4 +659,54 @@ assert.equal(box.visibleTurnIds(
   box.turnGeometry(bounded.turns, bounded.turnHeights).ranges, bounded.scrollY, bounded.viewportHeight)[0],
   topBefore, "the turn that was on top stays on top after the trim");
 
-console.log("PASS: dots-only scroll rail, scrubbing, dot jump, keyboard focus, narrow turn list, empty and offline states, sticky bottom, streaming replay, bounded hover, tool detail edges, Markdown and Stack view, bounded history.");
+const bridgeTurn = { id: "t-b1", prompt: "read the bridge", status: "working",
+  messages: [{ id: "a-b1", role: "assistant", text: "so far", open: true }],
+  tools: [{ id: "c-b1", kind: "exec", title: "bash", target: "npm test", status: "running", detail: "" }] };
+const files = {
+  "/tmp/apphome/agent-ui/bridge/4242/meta.json": JSON.stringify({ version: 2, epoch: "e-bridge",
+    revision: 9, pid: 4242, sessionId: "s-bridge", cwd: "/tmp/project" }),
+  "/tmp/apphome/agent-ui/bridge/4242/done.json": JSON.stringify({ version: 2, epoch: "e-bridge",
+    revision: 8, turns: [{ id: "t-b0", prompt: "earlier", status: "done",
+      messages: [{ id: "a-b0", role: "assistant", text: "done", open: false }], tools: [] }] }),
+  "/tmp/apphome/agent-ui/bridge/4242/live.json": JSON.stringify({ version: 2, epoch: "e-bridge",
+    revision: 9, turn: bridgeTurn }),
+};
+let watched = 0;
+box.shared = (key) => (key === box.SOURCE_KEY ? "bridge" : null);
+box.exec = async (command, args) => {
+  assert.equal(command, "ls");
+  assert.deepEqual(Array.from(args), ["-1t", "/tmp/apphome/agent-ui/bridge"]);
+  return { code: 0, stdout: "4242\n", stderr: "" };
+};
+box.readTextFile = async (file) => files[file] ?? null;
+box.watchFolder = async () => {
+  watched += 1;
+  if (watched > 1) throw new Error("teardown");
+  return [];
+};
+const bridged = new box.AgentUi();
+const bridgeContext = { ...context, spawn(task) { bridgeContext.task = task; } };
+bridged.init({}, bridgeContext);
+assert.ok(bridged.bridge, "a layout that asks for the bridge gets the bridge source");
+assert.equal(bridged.turns.length, 60, "the demo stays visible until the first read lands");
+assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn, not a timer");
+
+(async () => {
+  await bridgeContext.task(bridgeContext);
+  assert.equal(bridged.source.health, "live");
+  assert.equal(watched, 2, "the loop waits on watchFolder after each read");
+  assert.deepEqual(Array.from(bridged.turns, (turn) => [turn.id, turn.status]),
+    [["t-b0", "done"], ["t-b1", "working"]], "the transcript is the snapshot plus the turn in flight");
+  assert.equal(bridged.turns[1].messages[0].text, "so far", "the in-flight turn arrives with its text");
+  assert.equal(bridged.turns[1].tools[0].status, "running");
+
+  box.shared = () => null;
+  const demoOnly = new box.AgentUi();
+  demoOnly.init({}, context);
+  assert.equal(demoOnly.bridge, null, "without the shared flag the demo source stays");
+
+  console.log("PASS: dots-only scroll rail, scrubbing, dot jump, keyboard focus, narrow turn list, empty and offline states, sticky bottom, streaming replay, bounded hover, tool detail edges, Markdown and Stack view, bounded history, bridge reader.");
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

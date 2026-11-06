@@ -26,6 +26,15 @@ export function createTranscript(turns = [], limit = TURN_LIMIT) {
   return { turns: kept.turns, seen: [], limit };
 }
 
+// A bridge republishes the whole turn in flight, so growth is what a reader sees:
+// longer text or a longer tool output means something arrived.
+function weight(turn) {
+  let total = String(turn?.prompt ?? "").length;
+  for (const message of turn?.messages ?? []) total += String(message?.text ?? "").length;
+  for (const tool of turn?.tools ?? []) total += String(tool?.detail ?? "").length;
+  return total;
+}
+
 export function deriveStatus(turn) {
   if (turn.requiresUserAction) return "needs-input";
   const open = (turn.messages ?? []).some((message) => message.open);
@@ -63,6 +72,25 @@ export function applyEvent(state, event) {
       const kept = keep([...state.turns, next], state.limit);
       return { state: { ...withSeen(kept.turns), limit: state.limit },
         changed: true, grew: true, dropped: kept.dropped };
+    }
+    case "turn.replace": {
+      const turn = event.turn ?? {};
+      if (!turn.id) return unchanged(state);
+      const existing = findTurn(state, turn.id);
+      const next = cloneTurn({
+        ...turn,
+        id: turn.id,
+        prompt: turn.prompt ?? "",
+        status: turn.status ?? "working",
+        messages: turn.messages ?? [],
+        tools: turn.tools ?? [],
+      });
+      const turns = existing
+        ? state.turns.map((item) => (item.id === turn.id ? next : item))
+        : [...state.turns, next];
+      const kept = keep(turns, state.limit);
+      return { state: { ...withSeen(kept.turns), limit: state.limit }, changed: true,
+        grew: !existing || weight(next) > weight(existing), dropped: kept.dropped };
     }
     default:
       break;

@@ -184,6 +184,21 @@ Herdr Mod 端的 `exec` **不能被假設**可帶任意私有 stdin stream。需
 
 **為什麼不是 SQLite**：SQLite 解決的是「多寫者、需耐久、要查詢」；這裡是**單寫者、可丟、問題固定**（「給我目前的完整狀態」每秒 5 次）。而且成本方向相反：Mod 端沒有 sqlite 綁定，只能 `exec sqlite3 -json`，每次讀換一次程序啟動（~10 ms）且無法 watch（WAL／shm 檔案變動會變成假 wakeup），反而得輪詢；5 Hz 覆寫單列狀態在 WAL 下也是持續的 frame 累積。**真正適合 SQLite 的是它後面的歷史層**（跨 session 檢索、多 Pane 查詢），那時是一張 DB 配 `sessions/turns/messages/tools`，而 live 路徑仍是狀態檔。
 
+**讀者側**（`mods/agent-ui/bridge-source.js`）：`refresh()` 取三個檔案 → `readBridge()` 只做差分，輸出給 reducer 的兩種事件：
+
+| 情況 | 事件 |
+| --- | --- |
+| `epoch` 變（Pi 重啟／`/new`／resume） | `snapshot`（舊 transcript 不屬於這個 process）＋（若有）`turn.replace` |
+| `done.revision` 變（一輪結束） | `snapshot`（已完成的輪都在裡面） |
+| `live.revision` 變（200 ms 一次） | `turn.replace`（只換進行中那一輪，不重畫整份） |
+| revision 都沒變 | 什麼都沒有（不重繪） |
+
+`turn.replace` 與 `snapshot` 的 `grew` 由內容長度決定，所以「↓ N new」氣泡只對真正長出來的內容計數，不會每 200 ms 被節流覆寫吵到。目錄消失（`meta` 讀不到）→ 重新 `ls -1t` 找新的 pid，不猜。
+
+發現 producer 只有一次 `exec("ls", ["-1t", "<appHome>/agent-ui/bridge"])`：Mod 沒有 `readdir`，也不給 `env`，所以用 `appHome()` 這個 host 函式，取 mtime 最新的那個目錄，等的是 `watchFolder`，不是 timer 輪詢。
+
+**目前沒有 UI 開關**：reader 由 `shared("agent-ui-source") === "bridge"` 觸發，那條線是留給 P2 pane 綁定（哪個 Pane 綁哪個 pid）用的接點；在綁定定案前，它由測試與手動 `setShared` 觸發。
+
 **尚未解決**：寫入方向（P3 `prompt`／`steer`／`abort`）需要回執與不確定語義，`writeTextFile` 的 CAS 只能當 command 檔的載體，不能證明 Pi 收到；那仍待安全通道，或先停用 Send。
 
 ## 8. Bridge／傳輸失效時

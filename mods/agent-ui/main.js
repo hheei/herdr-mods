@@ -1,8 +1,9 @@
 // Agent UI · standalone synthetic GPUI demo. NEVER starts or controls Pi.
 import { View, div } from "gpui-kit";
 import { h_flex, v_flex, TextView, TextareaState, Textarea } from "gpui-base";
-import { theme } from "herdr";
+import { theme, appHome, exec, readTextFile, shared, watchFolder } from "herdr";
 import { DEMO_TURNS, fixtureSource } from "./fixtures.js";
+import { SOURCE_KEY, createBridgeSource } from "./bridge-source.js";
 import { applyEvent, createTranscript } from "./state.js";
 import {
   summarizeActivity, toRailNodes, shortPrompt, turnGeometry, clampScroll,
@@ -44,6 +45,8 @@ export default class AgentUi extends View {
   init(_props, cx) {
     // One source, one reducer: a bridge later supplies the same shape of events.
     this.source = fixtureSource(DEMO_TURNS);
+    this.bridge = null;
+    this.bridgeHealth = null;
     this.transcript = createTranscript(this.source.snapshot());
     // Herdr Mod guide: cx.focus_handle() in init, .track_focus(h), h.focus().
     this.h = cx.focus_handle();
@@ -77,6 +80,61 @@ export default class AgentUi extends View {
       placeholder: "Message (demo only — nothing is sent)",
     });
     this.composer.on("change", (_event, cx) => cx.notify());
+    this.attachBridge(cx);
+  }
+
+  // The bridge is opt-in: a layout asks for it with shared("agent-ui-source").
+  // A Mod has neither env nor readdir, so discovery is one `ls -1t` and the
+  // waiting is watchFolder -- never a timer poll.
+  attachBridge(cx) {
+    if (typeof shared !== "function" || shared(SOURCE_KEY) !== "bridge") return;
+    const root = () => `${appHome()}/agent-ui/bridge`;
+    const host = {
+      async find() {
+        let listing;
+        try {
+          listing = await exec("ls", ["-1t", root()]);
+        } catch {
+          return null; // no bridge folder yet: nothing has ever run
+        }
+        const name = String(listing.stdout ?? "").split("\n").map((line) => line.trim())
+          .filter(Boolean)[0];
+        return name ? `${root()}/${name}` : null;
+      },
+      async read(dir) {
+        const parse = (text) => {
+          try {
+            return text ? JSON.parse(text) : null;
+          } catch {
+            return null; // a half-written file is a retry, not a crash
+          }
+        };
+        const [meta, done, live] = await Promise.all([
+          readTextFile(`${dir}/meta.json`),
+          readTextFile(`${dir}/done.json`),
+          readTextFile(`${dir}/live.json`),
+        ]);
+        return { meta: parse(meta), done: parse(done), live: parse(live) };
+      },
+      watch(dir) {
+        return watchFolder(dir);
+      },
+    };
+    this.bridge = createBridgeSource(host);
+    this.source = this.bridge;
+    cx.spawn(async (context) => {
+      try {
+        for (;;) {
+          if (await this.bridge.refresh()) this.pump(context);
+          this.bridgeHealth = this.bridge.health;
+          context.notify();
+          await host.watch(this.bridge.dir ?? root());
+        }
+      } catch {
+        // A dead watch ends the loop; the transcript stays readable.
+        this.bridgeHealth = this.bridge.health;
+      }
+    });
   }
 
   get turns() {
@@ -648,6 +706,9 @@ export default class AgentUi extends View {
         .when(this.width >= 520 && Boolean(last), (el) => el.child(control(t,
           "agent-ui-append-turn", "+ turn", (context) => this.demoAppend(context), true)))
         .when(Boolean(last), (el) => el.child(this.statusLine(t, last.status)))
+        .when(Boolean(this.bridge) && this.bridgeHealth !== "live" && this.demo === "demo",
+          (el) => el.child(div().id("agent-ui-bridge-health").text_size(10).text_color(t.blocked)
+            .truncate().child(`bridge ${this.bridgeHealth ?? "…"}`)))
         .child(h_flex().id("agent-ui-demo-state").h(24).px(8).items_center().rounded(6)
           .cursor_pointer().border_1().border_color(t.border)
           .on_click((_event, context) => this.cycleMode(context))
