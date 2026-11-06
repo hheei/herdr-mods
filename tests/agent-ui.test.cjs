@@ -51,7 +51,7 @@ function stateObj(spec) {
     set_value(value) { this.text = value; },
   };
 }
-const context = { notify() {}, stop_propagation() {}, focus_handle: () => ({ focus() {} }) };
+const context = { notify() {}, stop_propagation() {}, focus_handle: () => ({ focus() {} }), timer: { every(ms, callback) { context.tick = callback; } } };
 const box = {
   View: class {}, div: node, h_flex: node, v_flex: node,
   theme: () => ({
@@ -574,4 +574,49 @@ assert.equal(ui.newTurns, 0, "a following reader is not told about new turns");
 assert.ok(ui.scrollY > bottomY, "a following reader moves with the content");
 assert.equal(find(ui.render(context), "agent-ui-new-turns-pill"), null);
 
-console.log("PASS: dots-only scroll rail, scrubbing, dot jump, keyboard focus, narrow turn list, empty and offline states, sticky bottom, bounded hover, tool detail edges, Markdown and Stack view.");
+// A stream arrives in pieces through the same appendTurn() path a bridge uses.
+ui.changeSize({ width: 800 }, context);
+ui.measureViewport({ height: 460 }, context);
+ui.jumpToBottom(context);
+ui.scrollY = 0;
+ui.render(context);
+assert.equal(typeof context.tick, "function", "init registers the only tick Mods have");
+const streamCount = ui.turns.length;
+find(ui.render(context), "agent-ui-stream").handlers.on_click({}, context);
+assert.equal(ui.turns.length, streamCount + 1, "replay appends a working turn");
+const streamId = ui.stream.id;
+const streamed = ui.turns.find((turn) => turn.id === streamId);
+assert.equal(streamed.status, "working");
+assert.equal(textOf(find(ui.render(context), "agent-ui-stream")), "⏭ finish");
+for (let i = 0; i < 4; i += 1) context.tick(context);
+assert.ok(streamed.messages[0].text.length > 0, "chunks land in the message");
+assert.equal(ui.scrollY, 0, "a stream never yanks a reader who is above");
+assert.equal(ui.live, 4, "arrivals are counted while reading above");
+assert.match(textOf(find(ui.render(context), "agent-ui-new-turns-pill")), /live/);
+const streamGeometry = box.turnGeometry(ui.turns, ui.turnHeights);
+assert.equal(streamGeometry.ranges.at(-1).id, streamId,
+  "the rail geometry includes the streaming turn");
+assert.ok(find(ui.render(context), `agent-ui-turn-${streamId}`), "the turn renders while streaming");
+find(ui.render(context), "agent-ui-stream").handlers.on_click({}, context);
+assert.equal(ui.stream, null, "finish closes the stream");
+assert.equal(streamed.status, "done");
+const finalText = streamed.messages[0].text;
+assert.ok(finalText.length > 0);
+context.tick(context);
+assert.equal(streamed.messages[0].text, finalText, "a finished stream ignores later ticks");
+assert.equal(ui.live, 4, "no tick after the end changes the counter");
+
+// At the bottom, the same stream follows instead of counting.
+ui.jumpToBottom(context);
+assert.equal(ui.live, 0, "jumping clears the live counter");
+find(ui.render(context), "agent-ui-stream").handlers.on_click({}, context);
+context.tick(context);
+context.tick(context);
+assert.equal(ui.live, 0, "a following reader is not told about arrivals");
+assert.equal(ui.stick, true, "the reader stays stuck to the bottom");
+assert.equal(find(ui.render(context), "agent-ui-new-turns-pill"), null);
+ui.stopStream(context);
+assert.equal(ui.stream, null);
+assert.equal(ui.turns.at(-1).status, "done");
+
+console.log("PASS: dots-only scroll rail, scrubbing, dot jump, keyboard focus, narrow turn list, empty and offline states, sticky bottom, streaming replay, bounded hover, tool detail edges, Markdown and Stack view.");

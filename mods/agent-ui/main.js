@@ -36,6 +36,16 @@ function toolLabel(tool) {
   return names[kind] ?? (kind ? kind.toUpperCase() : "Tool");
 }
 
+// A stream is delivered in these pieces; the real bridge sends its own.
+const STREAM_CHUNKS = [
+  "Retries are **exponential with jitter**: ", "1s, then 2s, then 4s, ",
+  "capped at 30s. ", "\n\n", "The cap matters more than the curve — ",
+  "a long outage should look slow, not hung. ", "\n\n", "- 429 and 5xx retry; ",
+  "- 4xx except 429 fail at once; ", "- timeouts retry only while the budget lasts.\n\n",
+  "Give up after **5 attempts**, then surface the last error instead of ",
+  "another spinner. ", "The user can always retry by hand; ", "the ceiling is a promise, not a guess.",
+];
+
 const DETAIL_LINES = 18;
 const DETAIL_CHARS = 4000;
 
@@ -63,6 +73,12 @@ export default class AgentUi extends View {
     this.saved = null;
     this.stick = false;
     this.newTurns = 0;
+    this.live = 0;
+    this.stream = null;
+    // Pacing needs a clock, and Mods have no setTimeout: cx.timer is the only
+    // documented tick. It returns at once when nothing is streaming, so the
+    // cost is one no-op callback per 140ms, not a redraw.
+    cx.timer.every(140, (context) => this.tick(context));
     this.composer = TextareaState.new({
       value: "",
       rows: 3,
@@ -135,6 +151,68 @@ export default class AgentUi extends View {
     this.pendingJump = null;
     this.stick = true;
     this.newTurns = 0;
+    this.live = 0;
+    cx.notify();
+  }
+
+  // The replay pushes chunks through the same appendTurn() path a bridge event
+  // will use: geometry, rail buckets and the reading anchor are not special-cased.
+  startStream(cx) {
+    if (this.demo !== "demo" || this.stream) return;
+    const n = ++this.localCount;
+    this.stream = { id: `t-stream-${n}`, step: 0 };
+    this.live = 0;
+    this.appendTurn({
+      id: this.stream.id,
+      prompt: "How should the client retry a failed request?",
+      status: "working",
+      messages: [{ id: `a-stream-${n}`, role: "assistant", text: "" }],
+      tools: [{ id: `tool-stream-${n}`, kind: "read", title: "Read", status: "running",
+        target: "src/retry.ts", detail: "Reading the retry policy so the answer can cite it." }],
+    }, cx);
+  }
+
+  stopStream(cx) {
+    if (!this.stream) return;
+    this.stream.step = STREAM_CHUNKS.length;
+    this.tick(cx);
+  }
+
+  streamTurn() {
+    if (!this.stream) return null;
+    return this.turns.find((turn) => turn.id === this.stream.id) ?? null;
+  }
+
+  tick(cx) {
+    const turn = this.streamTurn();
+    if (!turn) {
+      this.stream = null;
+      return;
+    }
+    const step = this.stream.step;
+    if (step >= STREAM_CHUNKS.length) {
+      turn.status = "done";
+      turn.messages[0].text = STREAM_CHUNKS.join("");
+      for (const tool of turn.tools) tool.status = "done";
+      this.stream = null;
+      cx.notify();
+      return;
+    }
+    turn.messages[0].text += STREAM_CHUNKS[step];
+    this.stream.step = step + 1;
+    if (this.stream.step >= STREAM_CHUNKS.length) {
+      turn.status = "done";
+      for (const tool of turn.tools) tool.status = "done";
+      this.stream = null;
+    }
+    // Following the bottom is the reader's choice; otherwise count what arrived.
+    if (this.stick) {
+      const geometry = turnGeometry(this.turns, this.turnHeights);
+      this.scrollY = clampScroll(geometry.total, geometry.total, this.viewportHeight);
+      this.live = 0;
+    } else {
+      this.live += 1;
+    }
     cx.notify();
   }
 
@@ -628,13 +706,13 @@ export default class AgentUi extends View {
           (el) => el.child(this.hoverPreview(t, geometry)))
         .when(listEnabled && this.turnList, (el) => el.child(this.turnListPanel(t,
           railLayout(geometry.ranges, this.viewportHeight, [...visible]))))
-        .when(this.newTurns > 0, (el) => el.child(h_flex().id("agent-ui-new-turns")
+        .when(this.newTurns > 0 || this.live > 0, (el) => el.child(h_flex().id("agent-ui-new-turns")
           .absolute().bottom(10).left(0).right(0).justify_center()
           .child(h_flex().id("agent-ui-new-turns-pill").h(24).px(10).gap(6)
             .items_center().rounded(12).bg(t.accent).cursor_pointer()
             .on_click((_event, context) => this.jumpToBottom(context))
             .child(div().text_size(10.5).text_color(t.background)
-              .child(`↓ ${this.newTurns} new`))))))
+              .child(this.live > 0 ? "↓ live" : `↓ ${this.newTurns} new`))))))
       .child(v_flex().id("agent-ui-composer").flex_none().px(compact ? 13 : 21)
         .pt(10).pb(12).gap(8).border_t(1).border_color(t.border).bg(t.chrome)
         .child(Textarea.new(this.composer).id("agent-ui-textarea").w_full()
@@ -646,6 +724,10 @@ export default class AgentUi extends View {
             .child(this.notice || (this.demo === "demo"
               ? "Synthetic data · no live Pi connection"
               : "Read-only in this state · the draft is kept")))
+          .when(this.width >= 520 && this.demo === "demo", (el) => el.child(control(t,
+            "agent-ui-stream", this.stream ? "⏭ finish" : "▶ stream",
+            (context) => (this.stream ? this.stopStream(context) : this.startStream(context)),
+            true)))
           .child(control(t, "agent-ui-send", "Try send · demo",
             (context) => this.send(context), Boolean(draft) && this.demo === "demo"))));
   }

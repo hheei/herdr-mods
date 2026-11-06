@@ -29,7 +29,8 @@ The installer derives `agent-ui-demo.json` from your own `herdr-mods.json` if av
 5. **Keyboard** works without a pointer: the Stack view takes focus (`track_focus` + `on_key_down`), **↑/↓ move the selected dot**, **Home/End** jump to the first/last bucket, **Enter** jumps to it, **Esc** clears focus and the preview. The focused dot is drawn solid, and it shows the same preview hover shows.
 6. **States are rendered, not implied.** The chip in the header cycles **DEMO → OFFLINE → EMPTY**: offline shows a banner, keeps the last turns readable and refuses to send ("nothing was sent or queued"); empty replaces the transcript with what is actually missing instead of a spinner. **Sticky bottom:** a turn that arrives while you are reading above does **not** move the transcript — a `↓ N new` counter appears and jumping clears it. `+ turn` (wide panes) simulates such an arrival; at the bottom, growth follows.
 7. **Narrow panes** (under 240px wide, or a very short view) drop the strip and show a **Turns** button that opens the same buckets as a short list, so navigation is not lost.
-8. **Composer (demo only)** echoes your input as a synthetic user turn with a local response. It never sends, queues or changes a real Pi prompt.
+8. **Streaming replay.** `▶ stream` appends a working turn, then pushes it in 14 chunks on `cx.timer.every(140, …)` — the same `appendTurn()` path a real bridge event will use, so bucket recalc, sticky bottom and the `↓ live` counter are not special cases. Read above and nothing moves; sit at the bottom and it follows; `⏭ finish` completes it. Completing is honest: the turn ends `done` with the full text, and further ticks are ignored.
+9. **Composer (demo only)** echoes your input as a synthetic user turn with a local response. It never sends, queues or changes a real Pi prompt.
 
 ### Scope limits
 
