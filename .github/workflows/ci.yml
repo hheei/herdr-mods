@@ -18,9 +18,12 @@ jobs:
           node --check mods/agent-ui/fixtures.js
           node --check mods/agent-ui/model.js
           node --check mods/agent-ui/state.js
+          node --check mods/agent-ui/bridge/mailbox.js
+          node --check mods/agent-ui/bridge/project.js
           node --check tests/project-open.test.cjs
           node --check tests/agent-ui.test.cjs
           node --check tests/agent-ui-state.test.cjs
+          node --check tests/agent-ui-bridge.test.cjs
           node -e "const f=require('fs'); for(const p of ['mods/project-open/mod.json','mods/agent-ui/mod.json','layouts/herdr-mods.json']) JSON.parse(f.readFileSync(p))"
           sh -n scripts/install.sh
           sh -n scripts/tui.sh
@@ -32,6 +35,7 @@ jobs:
           node tests/project-open.test.cjs
           node tests/agent-ui.test.cjs
           node tests/agent-ui-state.test.cjs
+          node tests/agent-ui-bridge.test.cjs
           node tests/layout-status.test.cjs
       - name: Installer test
         run: |

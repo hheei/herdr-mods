@@ -150,6 +150,36 @@ interface LocalViewState {
 
 Herdr Mod 端的 `exec` **不能被假設**可帶任意私有 stdin stream。需要經目標版驗證的 request-body／stdio／owner-only IPC 通道；無法建置時可以先發佈 UI reading / live 展示但停用 Send，不改用 `hc send`／`hc keys` 盲打現有 Terminal。
 
+### P2 實際採用：file mailbox（讀取方向）
+
+以 `defaults/herdr.d.ts`（目標版）核對過的 Mod 能力：
+
+| 原語 | 能不能當事件流 |
+| --- | --- |
+| `exec` / `hc` | 一次性、緩衝到結束（8 MiB），無法讀中途輸出 |
+| socket／http／WebSocket | **沒有**這類 API |
+| `readTextFile` / `writeTextFile(expected)` | 整檔讀取（1 MiB）；寫入是 CAS |
+| `watchFolder(dir)` | 資料夾變更會**推送**路徑批次 |
+| `cx.timer.every` | 可行，但每次 `notify` 重繪整個視窗 |
+
+因此讀取方向不是 relaying socket，而是一個**信箱目錄**，單一寫者、多讀者：
+
+```
+<HERDR_APP_HOME>/agent-ui/bridge/<pid>/
+  meta.json      {version, epoch, seq, pid, sessionId, cwd, updatedAt, closed?}
+  snapshot.json  {version, epoch, seq, turns}      // 這個 seq 之後的狀態
+  ev-000123.json 一個事件一個檔（6 位零填充，字典序＝數序）
+```
+
+- 寫：先寫 `<name>.tmp` 再 `rename`，讀者不會看到半個檔。
+- 讀：`watchFolder` 收到批次 → 讀 `seq+1..n`；檔案缺失或 `snapshot.seq >= next` 就是 gap → 讀 `snapshot.json` resync。
+- 界：每 64 個事件由寫者折一次 snapshot，並刪掉 `seq <= snapshot.seq` 的事件檔。目錄因此有界。
+- 身分：`meta.json` 帶 `sessionId`／`cwd`／`pid`。P2 只讀，挑錯也只是看到別的 session 的內容，UI header 顯示 sessionId 與 cwd，不靜默猜。
+
+**為什麼不是別的**：unix socket 與 named pipe 需要 Mod 端串流 API（沒有）；用 `exec` 長輪詢可以在每個事件批次換一次程序啟動（約數十 ms）與逾時／孤兒程序管理，比一個資料夾更貴；直接讀 Pi 的 session JSONL 被本文件前面禁止（別的作者、沒有 epoch、無去重依據）。
+
+**尚未解決**：寫入方向（P3 `prompt`／`steer`／`abort`）需要回執與不確定語義，`writeTextFile` 的 CAS 只能當 command 檔的載體，不能證明 Pi 收到；那仍待安全通道，或先停用 Send。
+
 ## 8. Bridge／傳輸失效時
 
 | 情況 | GUI 行為 |
