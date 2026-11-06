@@ -14,32 +14,22 @@ Initial choice is **VS Code**. The icon is 15 px inside a 22 px button integrate
 
 Run from the project root on the desktop computer running Herdr App.
 
-**macOS/Linux**
-
 ~~~sh
-sh scripts/install.sh
+sh scripts/install.sh project-open
 ~~~
 
-**Windows PowerShell**
-
-~~~powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
-~~~
+Without a mod name the installer installs every mod in the repository. On Windows run the same command from **Git Bash** or **WSL**.
 
 This installs the Mod under **~/.config/herdr-app/mods/project-open/** and creates/patches the shared personal layout **~/.config/herdr-app/layouts/herdr-mods.json**. It backs up existing layouts before changes, does not duplicate the button, and never modifies the shipped main layout. Select **herdr-mods** in the layout picker once; future Mods are added to the same layout.
 
-The installer looks before it writes and, in a terminal, asks `? patch layout herdr-mods [Y/n]`; answering `n` leaves the layout untouched (a `--no-layout` install skips the question entirely). An already-integrated status bar is left alone, and a status bar that has been customized (any `content.mod` other than the stock `workspace-status`) is left **byte-identical**: the Mod files are still installed and you are asked to wire it in by hand. Sidebar Mods are only appended when their id is absent, so existing entries and file formatting survive.
+The installer looks before it writes and, in a terminal, asks `? patch layout herdr-mods [Y/n]`; answering `n` leaves the layout untouched (a `--no-layout` install skips the question entirely). An already-integrated status bar is left alone, and a status bar that has been customized (any `content.mod` other than the stock `workspace-status`) is left **byte-identical**: the Mod files are still installed and you are asked to wire it in by hand. A new Mod is only added when its id is absent, so existing entries and file formatting survive.
 
 ### Install without touching any layout
 
-Add `--no-layout` (shell) or `-NoLayout` (PowerShell) to copy the Mod files only, then wire it into your own layout by hand.
+Add `--no-layout` to copy the Mod files only, then wire it into your own layout by hand.
 
 ~~~sh
 sh scripts/install.sh --no-layout
-~~~
-
-~~~powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -NoLayout
 ~~~
 
 The Mod **replaces** the status bar renderer, so change the existing `status` node instead of adding a second block. In **~/.config/herdr-app/layouts/your-layout.json**, inside the `work` column, the node looks like this:

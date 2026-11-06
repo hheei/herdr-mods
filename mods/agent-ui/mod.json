@@ -1,0 +1,5 @@
+{
+  "place": "none",
+  "focusable": true,
+  "install": "derive:agent-ui-demo"
+}

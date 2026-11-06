@@ -3,7 +3,7 @@
 import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import {
-  theme, window, focused, spaces, agents, keys, run, exec, shared, setShared,
+  theme, window, focused, spaces, agents, keys, run, layout, exec, shared, setShared,
   notify, openOverlay, closeOverlay, props,
 } from "herdr";
 
@@ -13,6 +13,28 @@ const ICON = {
   vscode: "mods/project-open/vscode.svg",
   finder: "mods/project-open/finder.svg",
 };
+
+// P0 only: the opt-in agent-ui-demo layout has a *chrome stack*, not a
+// model-pane replacement API. Never modify the current pane or running PTY.
+const DEMO_STACK = "agent-ui-demo-surface";
+function findNode(tree, id) {
+  if (!tree || typeof tree !== "object") return null;
+  if (tree.id === id) return tree;
+  for (const child of tree.children ?? []) {
+    const found = findNode(child, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+function demoMode() {
+  if (shared("layout") !== "agent-ui-demo") return null;
+  const stack = findNode(layout(), DEMO_STACK);
+  if (stack?.type !== "stack") return null;
+  if (stack.active === "agent-ui-demo-ui") return "ui";
+  if (stack.active === "agent-ui-demo-terminal") return "terminal";
+  return null;
+}
 
 function lastAction() {
   const saved = shared(LAST_ACTION_KEY);
@@ -105,6 +127,19 @@ export default class ProjectOpen extends View {
         ]);
     }
 
+    const mode = demoMode();
+    const toggle = (id, label, child) =>
+      div().id(id).h(22).px(8).flex_none().rounded(5)
+        .flex().items_center().justify_center().text_size(11.2)
+        .text_color(mode === child ? t.foreground : t.muted)
+        .when(mode === child, (el) => el.bg(t.selected))
+        .cursor_pointer()
+        .on_click((_e, cx) => {
+          cx.stop_propagation();
+          if (shared("layout") !== "agent-ui-demo" || demoMode() === null) return;
+          run("layout.select", { stack: DEMO_STACK, child: child === "ui" ? "agent-ui-demo-ui" : "agent-ui-demo-terminal" });
+        })
+        .child(label);
     const action = lastAction();
     const button = div().id("project-open-button").size(22).flex_none()
       .flex().items_center().justify_center()
@@ -131,10 +166,17 @@ export default class ProjectOpen extends View {
       .child(h_flex().gap(6).items_center()
         .child(div().size(6).rounded(3).bg(t.dim))
         .child(`${list.length} agents`)
-        .when(needs > 0, (el) => el.child(div().text_color(t.blocked).child(`· ${needs} needs you`))))
+        .when(needs > 0, (el) => el.child(div().text_color(t.blocked).child(`· ${needs} needs you`)))
+        // The launcher belongs to the existing left status cluster, not in
+        // a new far-right slot after the Commands hint.
+        .child(button))
       .child(div().flex_1())
+      .when(mode !== null, (el) => el.child(h_flex().id("agent-ui-demo-toggle")
+        .h(24).items_center().gap(2).px(3).rounded(7)
+        .border_1().border_color(t.border)
+        .child(toggle("demo-terminal", "Terminal", "terminal"))
+        .child(toggle("demo-ui", "UI · demo", "ui"))))
       .child(div().id("palette").text_color(t.dim)
-        .on_click(() => run("app.palette")).child(this.hint()))
-      .child(button);
+        .on_click(() => run("app.palette")).child(this.hint()));
   }
 }

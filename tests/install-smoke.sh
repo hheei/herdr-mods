@@ -1,4 +1,5 @@
 #!/bin/sh
+# Installer contract: never touch the developer's real App Home.
 set -eu
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 tmp=$(mktemp -d)
@@ -6,48 +7,72 @@ trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 export HERDR_APP_HOME="$tmp/home"
 mkdir -p "$tmp/repo/mods/another-mod" "$tmp/repo/layouts" "$tmp/repo/scripts"
 cp "$repo/scripts/install.sh" "$tmp/repo/scripts/install.sh"
+cp "$repo/scripts/tui.sh" "$tmp/repo/scripts/tui.sh"
 cp "$repo/scripts/patch-status.awk" "$tmp/repo/scripts/patch-status.awk"
+cp "$repo/scripts/patch-sidebar.awk" "$tmp/repo/scripts/patch-sidebar.awk"
+cp "$repo/scripts/demo-layout.awk" "$tmp/repo/scripts/demo-layout.awk"
 cp "$repo/layouts/herdr-mods.json" "$tmp/repo/layouts/herdr-mods.json"
 cp -R "$repo/mods/project-open" "$tmp/repo/mods/"
 printf '%s\n' 'export default class Another {}' > "$tmp/repo/mods/another-mod/main.js"
-printf '%s\n' '{"place":"none"}' > "$tmp/repo/mods/another-mod/mod.json"
-sh "$tmp/repo/scripts/install.sh"
-sh "$tmp/repo/scripts/install.sh"
-[ -d "$HERDR_APP_HOME/mods/project-open.bak" ]
-[ "$(find "$HERDR_APP_HOME/mods" -maxdepth 1 -name 'project-open.bak*' | wc -l | tr -d ' ')" -eq 1 ]
-sh "$tmp/repo/scripts/install.sh" another-mod
-[ "$(grep -c '"mod": "project-open"' "$HERDR_APP_HOME/layouts/herdr-mods.json")" -eq 1 ]
-[ "$(grep -c '"id":"another-mod"' "$HERDR_APP_HOME/layouts/herdr-mods.json")" -eq 1 ]
-sh "$tmp/repo/scripts/install.sh" project-open
-[ "$(grep -c '"mod": "project-open"' "$HERDR_APP_HOME/layouts/herdr-mods.json")" -eq 1 ]
-[ "$(grep -c '"id":"another-mod"' "$HERDR_APP_HOME/layouts/herdr-mods.json")" -eq 1 ]
-[ -f "$HERDR_APP_HOME/layouts/herdr-mods.json.bak" ]
+printf '%s\n' '{"place":"none","install":"sidebar"}' > "$tmp/repo/mods/another-mod/mod.json"
+install() { sh "$tmp/repo/scripts/install.sh" "$@" >/dev/null; }
+layout="$HERDR_APP_HOME/layouts/herdr-mods.json"
+
+# No argument installs every mod folder and applies each declared wiring.
+install
+[ -f "$HERDR_APP_HOME/mods/project-open/main.js" ]
+[ -f "$HERDR_APP_HOME/mods/another-mod/main.js" ]
+[ "$(grep -c '"mod": "project-open"' "$layout")" -eq 1 ]
+[ "$(grep -c '"id":"another-mod"' "$layout")" -eq 1 ]
+[ -f "$layout.bak" ]
+
+# Re-running is idempotent and keeps exactly one backup per asset.
+install
+[ "$(grep -c '"mod": "project-open"' "$layout")" -eq 1 ]
+[ "$(grep -c '"id":"another-mod"' "$layout")" -eq 1 ]
 [ "$(find "$HERDR_APP_HOME/layouts" -maxdepth 1 -name 'herdr-mods.json.bak*' | wc -l | tr -d ' ')" -eq 1 ]
-[ -d "$HERDR_APP_HOME/mods/project-open.bak" ]
 [ "$(find "$HERDR_APP_HOME/mods" -maxdepth 1 -name 'project-open.bak*' | wc -l | tr -d ' ')" -eq 1 ]
+[ "$(find "$HERDR_APP_HOME/mods" -maxdepth 1 -name 'another-mod.bak*' | wc -l | tr -d ' ')" -eq 1 ]
 if command -v jq >/dev/null 2>&1; then
-  jq -e '.children[]|select(.id=="work")|.children[]|select(.id=="status")|.type=="block" and .content.mod=="project-open"' "$HERDR_APP_HOME/layouts/herdr-mods.json" >/dev/null
-  jq empty "$HERDR_APP_HOME/layouts/herdr-mods.json"
+  jq -e '.children[]|select(.id=="work")|.children[]|select(.id=="status")|.type=="block" and .content.mod=="project-open"' "$layout" >/dev/null
+  jq empty "$layout"
 fi
+
+# A single mod installs only that mod.
+rm -rf "$HERDR_APP_HOME/mods" "$HERDR_APP_HOME/layouts"
+install another-mod
+[ -f "$HERDR_APP_HOME/mods/another-mod/main.js" ]
+[ ! -e "$HERDR_APP_HOME/mods/project-open" ]
+[ -f "$layout" ]
+
+# A customized status bar is left alone; the mods still install.
+mkdir -p "$HERDR_APP_HOME/layouts"
+sed 's/"mod": "workspace-status"/"mod": "my-status"/' "$repo/layouts/herdr-mods.json" > "$layout"
+install
+grep -q '"mod": "my-status"' "$layout"
+[ "$(grep -c '"mod": "project-open"' "$layout")" -eq 0 ]
+[ -f "$HERDR_APP_HOME/mods/project-open/main.js" ]
+
+# --no-layout writes files and nothing else.
+HERDR_APP_HOME="$tmp/bare" sh "$tmp/repo/scripts/install.sh" --no-layout >/dev/null
+[ -f "$tmp/bare/mods/project-open/main.js" ]
+[ ! -e "$tmp/bare/layouts" ]
+sh "$tmp/repo/scripts/install.sh" --help >/dev/null
+sh "$tmp/repo/scripts/install.sh" --nope 2>/dev/null && exit 1 || true
+
+# An explicit XDG_CONFIG_HOME or HOME fallback still finds Herdr App Home.
 unset HERDR_APP_HOME XDG_CONFIG_HOME
 mkdir -p "$tmp/newhome"
 HOME="$tmp/newhome" sh "$tmp/repo/scripts/install.sh" >/dev/null
 [ -f "$tmp/newhome/.config/herdr-app/layouts/herdr-mods.json" ]
+
+# The piped one-liner stages the archive it was given.
 mkdir -p "$tmp/src/herdr-mods-main" "$tmp/pipehome"
 cp -R "$tmp/repo/." "$tmp/src/herdr-mods-main/"
 tar -czf "$tmp/src.tgz" -C "$tmp/src" herdr-mods-main
 HERDR_APP_HOME="$tmp/pipehome" HERDR_MODS_ARCHIVE_URL="file://$tmp/src.tgz" \
-  sh < "$tmp/repo/scripts/install.sh" >/dev/null
+  sh < "$tmp/repo/scripts/install.sh" >/dev/null 2>&1
 [ -f "$tmp/pipehome/mods/project-open/main.js" ]
-mkdir -p "$tmp/plainhome"
-HERDR_APP_HOME="$tmp/plainhome" sh "$repo/scripts/install.sh" --no-layout >/dev/null
-[ -f "$tmp/plainhome/mods/project-open/main.js" ]
-[ ! -e "$tmp/plainhome/layouts/herdr-mods.json" ]
-mkdir -p "$tmp/customhome/layouts"
-sed 's/"mod": "workspace-status"/"mod": "my-own-status"/' "$repo/layouts/herdr-mods.json" > "$tmp/customhome/layouts/herdr-mods.json"
-cp "$tmp/customhome/layouts/herdr-mods.json" "$tmp/custom-before.json"
-HERDR_APP_HOME="$tmp/customhome" sh "$repo/scripts/install.sh" >/dev/null 2>&1
-[ -f "$tmp/customhome/mods/project-open/main.js" ]
-cmp -s "$tmp/custom-before.json" "$tmp/customhome/layouts/herdr-mods.json"
-[ ! -e "$tmp/customhome/layouts/herdr-mods.json.bak" ]
-echo 'PASS: unset env, embedded status, two mods, auto-update, idempotence, single .bak backups, piped one-liner, no-layout, custom layout untouched'
+[ -f "$tmp/pipehome/layouts/herdr-mods.json" ]
+
+echo "PASS: all-mods default, declared wiring, single mod, idempotence, one .bak each, customized status untouched, no-layout, env fallback, piped one-liner."

@@ -6,7 +6,20 @@ Small independent mods for [Herdr App](https://github.com/herdrdev/herdr-app). C
 
 | Mod | Function |
 | --- | --- |
-| [Project Open](mods/project-open/README.md) | One icon at the **right end of the status bar**; left-click opens with the last chosen app; right-click changes the default without opening. Remote SSH supported for VS Code. |
+| [Project Open](mods/project-open/README.md) | One icon in the status bar, left of the Commands hint; left-click opens with the last chosen app; right-click changes the default without opening. Remote SSH supported for VS Code. |
+| [Pi Agent UI (P0 preview)](mods/agent-ui/README.md) | Native GPUI fixture conversation, tool disclosure, search and mock Composer. Derived `agent-ui-demo` layout with a Status Bar preview switch; **not** production per-Pane switching or a live Pi client. |
+
+### Experimental Pi Agent UI preview
+
+Install Herdr App first, then run this **on the computer hosting the GUI**, from a checkout:
+
+```sh
+sh scripts/install.sh agent-ui project-open
+```
+
+It copies both Mod folders into Herdr App Home (one `.bak` per replaced folder) and **generates** `layouts/agent-ui-demo.json` from your own `herdr-mods` layout — only the tab renderer is wrapped in the demo stack, so every existing layout stays byte-identical.
+
+Then select **agent-ui-demo** in the Layout picker (or `herdr-app do layout.switch --name agent-ui-demo`) and use **Terminal | UI · demo** in its Status Bar. The switch swaps the active **Tab display**, not a single split Pane; strict per-Pane switching needs a separate Herdr host presenter API. It never edits `herdr-mods.json`, sends anything to Pi or restarts terminals. Re-running the command refreshes the demo. [Full steps](mods/agent-ui/README.md#install-the-demo) · [prototype scope and test status](docs/agent-ui/08-prototype-implementation.md).
 
 ## Quick install
 
@@ -18,19 +31,15 @@ Install [Herdr App](https://github.com/herdrdev/herdr-app#install) first. Run **
 curl -fsSL https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/install.sh | sh
 ~~~
 
-**Windows PowerShell — one line:**
+With no mod name it installs **every** mod under `mods/` and applies the layout wiring each `mod.json` declares; name mods to install a subset. The same installer runs two ways: from a checkout it installs the local files, and when piped it downloads a temporary source archive, installs, and deletes the archive. It is [scripts/install.sh](scripts/install.sh); review any downloaded script before execution. Requires `sh`, curl and tar.
 
-~~~powershell
-irm https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/install.ps1 | iex
-~~~
+**Windows:** there is no PowerShell installer. Run the same commands from **Git Bash** or **WSL** — the Mod files go to the same `~/.config/herdr-app` folder.
 
-The same installer runs two ways: from a checkout it installs the local files, and when piped it downloads a temporary source archive, installs, and deletes the archive. Both are [scripts/install.sh](scripts/install.sh) and [scripts/install.ps1](scripts/install.ps1); review any downloaded script before execution. Requires curl and tar (macOS/Linux) or built-in PowerShell download/ZIP commands (Windows).
+**If you already downloaded the repository**, run `sh scripts/install.sh`.
 
-**If you already downloaded the repository**, run `sh scripts/install.sh` on macOS/Linux or `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1` on Windows.
+To install the Mod files without touching any layout, add `--no-layout` and wire it into your own layout by hand; see the [Project Open notes](mods/project-open/README.md#install-without-touching-any-layout) for the exact JSON.
 
-To install the Mod files without touching any layout, add `--no-layout` (`-NoLayout` on PowerShell) and wire it into your own layout by hand; see the [Project Open notes](mods/project-open/README.md#install-without-touching-any-layout) for the exact JSON.
-
-No Python, Node, jq, sudo, or additional dependency required for installation. Both scripts install the Mod and **patch a shared personal layout** named `herdr-mods`. **Project Open is embedded inside the bottom Status Bar renderer**, immediately after the Commands hint, with the same background and border (not a separate 32px layout block). It preserves machine, agent count, and Commands information. On first install, the installer copies the official `main` layout (or the bundled template) to a personal copy; each subsequent Mod is added to the **same layout**, with a single fixed **`.bak`** backup per changed file/directory (the previous `.bak` is replaced on each update). Shipped layouts are never modified. In a terminal the installer asks `? patch layout herdr-mods [Y/n]` before writing and leaves the layout (even a copy it just created) alone if you answer `n`; non-interactive runs take the default.
+No Python, Node, jq, sudo, or additional dependency required for installation. The installer copies the mods and **patches a shared personal layout** named `herdr-mods`; a mod that declares a derived layout (the Agent UI preview) also writes that extra file. **Project Open is embedded inside the bottom Status Bar renderer**, immediately after the Commands hint, with the same background and border (not a separate 32px layout block). It preserves machine, agent count, and Commands information. On first install, the installer copies the official `main` layout (or the bundled template) to a personal copy; each subsequent Mod is added to the **same layout**, with a single fixed **`.bak`** backup per changed file/directory (the previous `.bak` is replaced on each update). Shipped layouts are never modified. In a terminal the installer asks `? patch layout herdr-mods [Y/n]` before writing and leaves the layout (even a copy it just created) alone if you answer `n`; non-interactive runs take the default.
 
 **Next:** in Herdr App switch to layout **herdr-mods** (from the layout picker or command palette); alternatively:
 
@@ -42,14 +51,10 @@ The source is available at **https://github.com/hheei/herdr-mods**. Direct-insta
 
 ### Update
 
-Run the same command again: an existing Mod is moved to `project-open.bak` and replaced, and the layout is only touched when it actually changes.
+Run the same command again: an existing Mod is moved to `<mod>.bak` and replaced, and a layout is only touched when it actually changes.
 
 ~~~sh
 curl -fsSL https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/install.sh | sh
-~~~
-
-~~~powershell
-irm https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/install.ps1 | iex
 ~~~
 
 Backups are fixed `.bak` names, so each install or update replaces the previous one instead of piling up archives. Layout patching is idempotent and never overwrites an existing layout: a Mod is only added when its id is absent, and a customized status bar is left byte-identical (the Mod files are still installed, for manual wiring). The installer migrates earlier Sidebar and split-row Status Bar versions into a seamless single Status Bar renderer. Right-click changes only the default tool and icon; left-click performs the actual open.
@@ -61,7 +66,7 @@ The official Herdr App home is **~/.config/herdr-app**, even on Windows. XDG_CON
 ~~~text
 mods/<name>/        each mod is self-contained (main.js, mod.json, assets, README)
 layouts/herdr-mods.json fallback base for the shared personal layout
-scripts/            portable sh and PowerShell installer (local or piped)
+scripts/            sh installer (local or piped), layout patchers, shared tui.sh
 tests/              developer checks
 .github/workflows/  CI
 ~~~
@@ -73,9 +78,12 @@ Future mods follow the same structure and can be installed by name. Every instal
 ~~~sh
 node tests/project-open.test.cjs
 node tests/layout-status.test.cjs
+node tests/agent-ui.test.cjs
 node --check mods/project-open/main.js
+node --check mods/agent-ui/main.js
 sh -n scripts/install.sh
 sh tests/install-smoke.sh
+sh tests/agent-ui-demo-install.test.sh
 ~~~
 
 Node is for **developer tests only**. If Herdr App is installed, additionally validate with its official command:

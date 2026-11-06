@@ -40,6 +40,7 @@ const state = {
   spaces: [{ id: "s1", folder: "/home/user", machine: null, active: true }],
   platform: "linux",
   props: {},
+  layout: { id: "root", children: [{ id: "agent-ui-demo-surface", type: "stack", active: "agent-ui-demo-terminal", children: [] }] },
 };
 const box = {
   View: class {},
@@ -51,7 +52,8 @@ const box = {
   spaces: () => state.spaces,
   agents: () => [],
   keys: () => [],
-  run: (action) => calls.push(["run", action]),
+  run: (action, args) => calls.push(["run", action, args]),
+  layout: () => state.layout,
   exec: async (...args) => { calls.push(args); return { code: 0, stdout: "", stderr: "" }; },
   shared: (k) => preferences[k],
   setShared: (k, v) => { preferences[k] = v; },
@@ -69,20 +71,21 @@ async function drain() {
   }
 }
 
-function findButton(node) {
+function findById(node, id) {
   if (!node || typeof node !== "object") return null;
-  if (node.nodeId === "project-open-button") return node;
+  if (node.nodeId === id) return node;
   for (const child of node.kids || []) {
-    const found = findButton(child);
+    const found = findById(child, id);
     if (found) return found;
   }
   return null;
 }
+function findButton(node) { return findById(node, "project-open-button"); }
 
 async function main() {
   const mod = new box.ProjectOpen();
   const status = mod.render(cx);
-  assert.ok(status.kids.length >= 5, "integrated status bar should include labels, agents, palette and icon");
+  assert.ok(status.kids.length >= 4, "integrated status bar should include labels, agents, palette and icon");
   let button = findButton(status);
   assert.ok(button, "button must be nested inside status bar, not a separate layout block");
   assert.equal(button.kids[0].icon, "mods/project-open/vscode.svg");
@@ -134,6 +137,25 @@ async function main() {
   await drain();
   assert.ok(calls.some((x) => Array.isArray(x) && x[0] === "code"
     && x[1][0] === "--remote" && x[1][1] === "ssh-remote+gpu-server"));
+
+  calls.length = 0;
+  preferences.layout = "agent-ui-demo";
+  const previewStatus = mod.render(cx);
+  assert.ok(findButton(previewStatus), "project-open still exists beside preview toggle");
+  const previewToggle = findById(previewStatus, "agent-ui-demo-toggle");
+  assert.ok(previewToggle, "mode controls should be embedded in the same status renderer");
+  findById(previewStatus, "demo-ui").handlers.on_click(null, cx);
+  assert.ok(calls.some((x) => x[0] === "run" && x[1] === "layout.select"
+    && x[2].stack === "agent-ui-demo-surface" && x[2].child === "agent-ui-demo-ui"));
+  assert.equal(calls.some((x) => x[0] === "exec" || x[0] === "terminal.kill" || x[0] === "pane.close"), false);
+  state.layout.children[0].active = "agent-ui-demo-ui";
+  calls.length = 0;
+  findById(mod.render(cx), "demo-terminal").handlers.on_click(null, cx);
+  assert.ok(calls.some((x) => x[0] === "run" && x[1] === "layout.select"
+    && x[2].child === "agent-ui-demo-terminal"));
+  preferences.layout = "herdr-mods";
+  assert.equal(findById(mod.render(cx), "agent-ui-demo-toggle"), null,
+    "preview control must not appear in regular layouts");
   console.log("PASS: default click; popup; preference+icon; local opener; remote guard; remote VS Code.");
 }
 

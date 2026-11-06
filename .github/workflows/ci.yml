@@ -14,20 +14,22 @@ jobs:
       - name: Static checks
         run: |
           node --check mods/project-open/main.js
+          node --check mods/agent-ui/main.js
+          node --check mods/agent-ui/fixtures.js
           node --check tests/project-open.test.cjs
-          node -e "const f=require('fs'); JSON.parse(f.readFileSync('mods/project-open/mod.json')); JSON.parse(f.readFileSync('layouts/herdr-mods.json'))"
+          node --check tests/agent-ui.test.cjs
+          node -e "const f=require('fs'); for(const p of ['mods/project-open/mod.json','mods/agent-ui/mod.json','layouts/herdr-mods.json']) JSON.parse(f.readFileSync(p))"
           sh -n scripts/install.sh
+          sh -n scripts/tui.sh
           awk -f scripts/patch-status.awk layouts/herdr-mods.json > /dev/null
+          awk -v name=probe -f scripts/patch-sidebar.awk layouts/herdr-mods.json > /dev/null
+          awk -f scripts/demo-layout.awk layouts/herdr-mods.json > /dev/null
       - name: Behavior and layout tests
         run: |
           node tests/project-open.test.cjs
+          node tests/agent-ui.test.cjs
           node tests/layout-status.test.cjs
       - name: Installer test
-        run: sh tests/install-smoke.sh
-  powershell-installer:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Installer test
-        shell: pwsh
-        run: ./tests/install-smoke.ps1
+        run: |
+          sh tests/install-smoke.sh
+          sh tests/agent-ui-demo-install.test.sh
