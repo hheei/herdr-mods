@@ -3,7 +3,7 @@
 **日期：2026-11-06｜狀態：設計參考；已有部分原生 GPUI Demo 實作，其餘仍待實機驗證。** Tool Activity 已有第一版；Live Rail 的高密度歷史／可及性仍待完整驗證，測試不佳可延後，不能因加入側邊控件犧牲閱讀空間。
 **最新修改**：[11](11-agent-ui-demo-implementation.md) 已把連續 transcript 的多輪可視高亮、量測式 click 捲動、限界 hover 和圓角實作成 Demo；以下早期「單一 active turn／工具狀態 Pin」描述以最新規格為準。
 
-**最新決策：Message Rail 就是 Scrollbar，而不是兩種控件的視覺合併。** Agent UI 保留在 Chrome Layout Stack 子 View。唯一 18px 右側操作區**只畫訊息圓點**；**不畫 Scroll Track、Thumb 或第二條垂直提示**。圓點固定在右側垂直中線、間距 3px，整列不高於 viewport 40%；大小是**以閱讀位置為中心的高斯波包**（11px 焦點遞減到 6px 下限），因此「可視範圍」不再用整段放大表示，而是由一個焦點與其衰減表達。歷史過長時**按桶合併**（每點代表連續 N 輪，Hover 顯示 `+N`），不抽樣、不縮成細線。點擊圓點跳至其輪次；沿 Rail 向上／下拖曳直接 scrub 完整 transcript；圓點間的空白區也可以點擊或拖曳捲動。短按和 drag 以 5px 門檻區分，避免誤跳。Wheel／Pin click／Scrub／resize／工具展開只使用一份 `scrollY`。工具失敗不改圓點色。早期將 Track 和 Thumb 疊在 Rail 上的規格已作廢；以 [11](11-agent-ui-demo-implementation.md) 的實作為準。
+**最新決策：Message Rail 就是 Scrollbar，而不是兩種控件的視覺合併。** Agent UI 保留在 Chrome Layout Stack 子 View。唯一 18px 右側操作區**只畫訊息圓點**；**不畫 Scroll Track、Thumb 或第二條垂直提示**。圓點**靠右對齊（距右緣 3px）**、固定右側垂直中線、間距 3px、70% 不透明度，整列不高於 viewport 40%；大小是**以閱讀位置為中心的高斯波包**（9px 焦點遞減到 4px 下限），因此「可視範圍」不再用整段放大表示，而是由一個焦點與其衰減表達。歷史過長時**按桶合併**（每點代表連續 N 輪，Hover 顯示 `+N`），不抽樣、不縮成細線。點擊圓點跳至其輪次；沿 Rail 向上／下拖曳直接 scrub 完整 transcript；圓點間的空白區也可以點擊或拖曳捲動。短按和 drag 以 5px 門檻區分，避免誤跳。Wheel／Pin click／Scrub／resize／工具展開只使用一份 `scrollY`。工具失敗不改圓點色。早期將 Track 和 Thumb 疊在 Rail 上的規格已作廢；以 [11](11-agent-ui-demo-implementation.md) 的實作為準。
 
 本文件回應 P0 試用後兩項新增要求：**工具卡參考其他 Agent UI 重新設計**，以及**不加 Search，改評估即時對話導航側欄：點擊跳轉、hover 預覽**。沿用 [02 UI／UX](02-ux-spec.md) 和 [07 P1 polish](07-post-prototype-polish.md)；不修改現有 Pi 程序／Session、不建立 JSONL Reader。
 
@@ -168,7 +168,7 @@ Pi
 
 - 普通 turn：neutral marker；**當 viewport 同時顯示多個 turn，就同時 Highlight 其所有 marker**；條件是量測的輪次區間與 `[scrollY, scrollY + viewportHeight)` 相交。非可視 Pin 中性；**工具 fail／pending／running 絕不修改 Pin 顏色**。Streaming 不新增 tool marker。
 - **不**為每個工具做一個節點；如要定位 tool failure，先跳至對應 turn，再可選聚焦其 Tool Activity summary。
-- **長會話**有界群集：可點圓點數量由高度推導（`floor(0.4 × viewportHeight / 14)`），超出的輪次**按連續區間合併**成 `+N` 桶節點，**不合併任何輪次的內容、也不抽樣丟棄**；工具失敗不是圓點顏色或優先級。已實作的是一個固定上限的桶合併；多層 cluster 選單、首末輪永遠保留的變體仍屬 P1 候選。Rail 不自行建立另一份 scroll／resize observer；只讀 conversation viewport owner 提供的 measured turn ranges、scrollY 與 viewportHeight。
+- **長會話**有界群集：可點圓點數量由高度推導（`floor(0.4 × viewportHeight / 12)`），超出的輪次**按連續區間合併**成 `+N` 桶節點，**不合併任何輪次的內容、也不抽樣丟棄**；工具失敗不是圓點顏色或優先級。已實作的是一個固定上限的桶合併；多層 cluster 選單、首末輪永遠保留的變體仍屬 P1 候選。Rail 不自行建立另一份 scroll／resize observer；只讀 conversation viewport owner 提供的 measured turn ranges、scrollY 與 viewportHeight。
 - 有 cluster 時，hover 預覽先顯示「第 17–30 輪／14 段」之類，不偽裝成單一問題；Click 開啟有界的子選單／zoom-in rail，**不能跳到任意抽樣輪就稱為精確跳轉**。
 - marker key 必須是 `(hostKey, runtimeId, sessionId, branchEpoch, turnId)`，而不是 DOM row index 或目前第 N 個項目。新事件插入、Compaction、pagination、remount 後也不可跳到錯 turn。**Rail markers、hover preview 必須 clamp 在 viewport，外框使用 Herdr Pane 圓角與 overflow clipping。**
 
@@ -303,7 +303,7 @@ interface RailViewState {
 | **RL-09** | 一般輪次／未解決異常的 Hover 簡潔度 | **正常單行短 prompt**；異常最多加一行 `需要處理`；沒有回答摘要、tool badges、時間、模型、token、heading outline 或大卡片 |
 | **RL-10** | 視窗同時包含 3 個 user turns | **3 個 Pin 同時高亮**；滑鼠捲動即時更新，Click 保留連續 transcript 的 earlier turns |
 | **RL-11** | Hover 頂部／底部 Pin、折疊展開、Resize | Hover 與所有 Pin 不超出 viewport；量測高度更新後閱讀位置穩定，Stack 子視圖的外框對齊 Herdr Theme |
-| **RL-12** | 可視多輪與不可視輪次交替 | 圓點固定中線、間距 3px、整列 ≤40% 高度；大小為高斯波包（焦點 11px → 兩端 6px），可視輪次提亮但不一定同尺寸；過密時按桶合併並顯示 `+N`；Pin 不使用工具狀態色，也沒有縱向高亮條 |
+| **RL-12** | 可視多輪與不可視輪次交替 | 圓點靠右對齊（距右緣 3px）、間距 3px、70% 不透明度、整列 ≤40% 高度；大小為高斯波包（焦點 9px → 兩端 4px），可視輪次提亮但不一定同尺寸；過密時按桶合併並顯示 `+N`；Pin 不使用工具狀態色，也沒有縱向高亮條 |
 
 ### 交付 Gate
 

@@ -54,8 +54,8 @@ sh scripts/install.sh agent-ui project-open
 
 ### Message Rail
 
-- **Message Rail 本身就是 Scrollbar**：唯一的 18px 寬操作區**只繪製訊息圓點**；沒有 1px Track、4px Thumb，也沒有獨立的視野高亮條。圓點固定在右側垂直中線、**間距 3px（pitch 14px）**，整列不高於 viewport 的 **40%**。大小是**以閱讀位置為中心的高斯波包**：焦點 11px，往兩側遞減至 **6px 下限**；焦點取「與 viewport 相交、且最靠列中央」的圓點，因此可見輪次不必然全部同尺寸，視覺上只有一個焦點。顏色只用 Theme 中性的 `dim`／`muted`，可視僅提高亮度。
-- 高密度歷史**按桶合併**：`maxDots = floor(viewportHeight × 0.4 / 14)`、`perDot = ceil(turns / maxDots)`，一個圓點代表連續 `perDot` 輪，跳轉到該桶第一輪，Hover 追問 `+N`。**不抽樣丟棄任何輪次**，也不把每點縮成 1–2px 細線；這與編輯器 scrollbar decoration 的處理方式一致（比例定位＋密集處合併），而不是 minimap 的全量縮小。
+- **Message Rail 本身就是 Scrollbar**：唯一的 18px 寬操作區**只繪製訊息圓點**；沒有 1px Track、4px Thumb，也沒有獨立的視野高亮條。圓點**靠右對齊、距右緣 3px**、固定右側垂直中線、**間距 3px（pitch 12px）**、整體 **70% 不透明度**，整列不高於 viewport 的 **40%**。大小是**以閱讀位置為中心的高斯波包**：焦點 9px，往兩側遞減至 **4px 下限**；焦點取「與 viewport 相交、且最靠列中央」的圓點，因此可見輪次不必然全部同尺寸，視覺上只有一個焦點。顏色只用 Theme 中性的 `dim`／`muted`，可視僅提高亮度。
+- 高密度歷史**按桶合併**：`maxDots = floor(viewportHeight × 0.4 / 12)`、`perDot = ceil(turns / maxDots)`，一個圓點代表連續 `perDot` 輪，跳轉到該桶第一輪，Hover 追問 `+N`。**不抽樣丟棄任何輪次**，也不把每點縮成 1–2px 細線；這與編輯器 scrollbar decoration 的處理方式一致（比例定位＋密集處合併），而不是 minimap 的全量縮小。
 - 合併軌使用 `.on_mouse_move` 依位置找最近的圓點，Hover 只顯示**一行截短 user prompt**，離開控制軌即關閉。只有 `requiresUserAction === true` 的明確介入事件才加第二行 `需要處理`；**工具 failed／pending 不等於使用者需要介入**，也**不影響 Pin 顏色**。
 - 點擊固定 turn ID 時，在**同一份完整對話**內更新 `scrollY` 到該輪的**實際量測高度位置**；**不再將 earlier turns 切掉／換一份 window**。目前使用 Herdr 已有的 `on_scroll_wheel`、`on_size_change`、`overflow_hidden` 和絕對位置來建立手動可捲動 viewport；不是宣稱 Herdr 已有 public `scroll-to-id`。
 - `turnGeometry` 由每輪 `.on_size_change` 實測高度構成；群組展開導致高度變化時保留原閱讀錨點，滑鼠滾動更新 `scrollY`，所有與 viewport 區間相交的 turn 同時高亮。Hover 預覽及 rail pin 的 top 都以 viewport 高度 clamp，容器本身裁切。
@@ -80,6 +80,6 @@ node tests/project-open.test.cjs
 sh tests/agent-ui-demo-install.test.sh
 ```
 
-已覆蓋的行為：七輪腳本 fixtures（Demo 另載入 60 輪，並斷言 460px 下收斂為 12 個圓點）、group 和 tool detail 的折疊、失敗摘要（**右側不顯示狀態**）、工具失敗不觸發 `requiresUserAction`、Markdown 的原生 API 參數、**所有可見輪次的 Rail multi-highlight**、按 ID 捲動完整 transcript、Hover／Pin 可視範圍 clamp、**Dots-only Rail：圓點點擊、空白處點擊／拖曳、5px Gesture 門檻、上下邊界、Wheel／Resize 同步，且不渲染 Track／Thumb**、圓角 root、本地 Composer、窄畫面、單 SVG status control、獨立 derive layout、不覆蓋一般個人 Layout／main、備份。
+已覆蓋的行為：七輪腳本 fixtures（Demo 另載入 60 輪，並斷言 460px 下收斂為 15 個圓點）、group 和 tool detail 的折疊、失敗摘要（**右側不顯示狀態**）、工具失敗不觸發 `requiresUserAction`、Markdown 的原生 API 參數、**所有可見輪次的 Rail multi-highlight**、按 ID 捲動完整 transcript、Hover／Pin 可視範圍 clamp、**Dots-only Rail：圓點點擊、空白處點擊／拖曳、5px Gesture 門檻、上下邊界、Wheel／Resize 同步，且不渲染 Track／Thumb**、圓角 root、本地 Composer、窄畫面、單 SVG status control、獨立 derive layout、不覆蓋一般個人 Layout／main、備份。
 
 實機進行以下 QA 才算完成下一個 Gate：`herdr-app check`、真實視窗截圖、Markdown code blocks、Hover 是否裁切、click 過程是否跳動、窄 Pane／IME／鍵盤 focus、當實際 UI 初始化失敗時是否仍能從 Status Bar 回 Terminal。**這台 Linux 執行環境沒有 `herdr-app` desktop binary，故無法代替目標 Mac 上的實機結果。**

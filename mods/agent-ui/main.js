@@ -350,13 +350,14 @@ export default class AgentUi extends View {
           cx.notify();
         }
       })
-      // One fixed centred column: 3px apart, never taller than 40% of the view.
+      // One fixed column, 3px from the right edge, 3px apart, never taller than
+      // 40% of the view.
       .when(showPins, (el) => el.children(layout.dots.map((dot) =>
         h_flex().id(`agent-ui-rail-marker-${dot.id}`).w(18).h(layout.pitch).absolute()
           .left(0).top(dot.center - layout.pitch / 2)
-          .items_center().justify_center().rounded(6)
+          .items_center().justify_end().pr(3).rounded(6)
           // Size is the Gaussian focus packet; the fill only says "on screen".
-          .child(div().size(dot.size).rounded(999)
+          .child(div().size(dot.size).rounded(999).opacity(0.7)
             .bg(dot.visible ? t.muted : t.dim)))));
   }
 

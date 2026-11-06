@@ -100,12 +100,12 @@ assert.deepEqual(Array.from(box.visibleTurnIds(positions.ranges, 430, 480)),
   ["n-3", "n-4", "n-5", "n-6", "n-7", "n-8"],
   "every turn overlapping the viewport is highlighted, not just one active turn");
 const rail = box.railLayout(positions.ranges, 340);
-assert.equal(rail.pitch, 14, "an 11px dot plus a 3px gap");
+assert.equal(rail.pitch, 12, "a 9px dot plus a 3px gap");
 assert.equal(rail.perDot, 2, "15 turns collapse into the 40% column, not 15 dots");
 assert.equal(rail.dots.length, 8);
 const centers = rail.dots.map((dot) => dot.center);
 centers.slice(1).forEach((center, i) =>
-  assert.equal(center - centers[i], 14, "dots are 3px apart"));
+  assert.equal(center - centers[i], 12, "dots are 3px apart"));
 assert.equal(box.railHit(rail.dots, 9, centers[4]), rail.dots[4].id);
 assert.equal(box.railHit(rail.dots, 0, centers[4]), null,
   "the rail margin is not a dot target");
@@ -119,23 +119,23 @@ assert.ok(box.previewTop(columnTop, 340, false) >= 4);
 
 // The focused dot is the widest and neighbours fall away to the 6px floor.
 const sizes = rail.dots.map((dot) => dot.size);
-assert.equal(sizes[rail.focus], 11, "peak at the reading position");
-assert.equal(sizes[0], 6, "the far end of the packet is a 6px floor dot");
-assert.equal(sizes.at(-1), 6);
+assert.equal(sizes[rail.focus], 9, "peak at the reading position");
+assert.equal(sizes[0], 4, "the far end of the packet is a 4px floor dot");
+assert.equal(sizes.at(-1), 4);
 sizes.slice(rail.focus).slice(1).forEach((size, i) =>
   assert.ok(size <= sizes[rail.focus + i], "the packet decays away from focus"));
-assert.equal(box.dotSize(3, 3, 6, 11), 11);
-assert.equal(box.dotSize(9, 3, 6, 11), 6);
-assert.equal(box.dotSize(4, 3, 6, 11), 9);
+assert.equal(box.dotSize(3, 3, 4, 9), 9);
+assert.equal(box.dotSize(9, 3, 4, 9), 4);
+assert.equal(box.dotSize(4, 3, 4, 9), 7);
 
 // A long history buckets several turns per dot instead of overflowing.
 const many = Array.from({ length: 400 }, (_, i) =>
   ({ id: `m-${i}`, start: i * 100, end: i * 100 + 90 }));
 const dense = box.railLayout(many, 340);
-assert.equal(dense.dots.length, 9, "a 400-turn history still fits the column");
-assert.equal(dense.perDot, 45);
-assert.equal(dense.dots[0].turnIds.length, 45);
-assert.equal(dense.dots.at(-1).id, "m-360");
+assert.equal(dense.dots.length, 11, "a 400-turn history still fits the column");
+assert.equal(dense.perDot, 37);
+assert.equal(dense.dots[0].turnIds.length, 37);
+assert.equal(dense.dots.at(-1).id, "m-370");
 assert.ok(dense.dots.at(-1).center + dense.pitch / 2 <= 340 * 0.7);
 assert.equal(box.clampScroll(100000, 1650, 480), 1170);
 assert.equal(box.railScrubOffset(8, 1650, 480), 0);
@@ -161,6 +161,10 @@ assert.ok(find(tree, "agent-ui-composer"));
 assert.ok(find(tree, "agent-ui-rail"));
 assert.ok(find(tree, "agent-ui-rail-marker-t-inspect"));
 assert.equal(find(tree, "agent-ui-rail").style.w[0], 18);
+assert.deepEqual(Array.from(find(tree, "agent-ui-rail-marker-t-inspect").style.justify_end), [],
+  "dots are right-aligned in the strip");
+assert.equal(find(tree, "agent-ui-rail-marker-t-inspect").style.pr[0], 3,
+  "dots keep a 3px inset from the right edge");
 assert.equal(find(tree, "agent-ui-scrollbar"), null);
 assert.equal(find(tree, "agent-ui-scrollbar-track"), null,
   "dots replace the visual scrollbar track");
@@ -181,7 +185,8 @@ assert.ok(find(tree, "agent-ui-root").style.overflow_hidden,
 assert.equal(find(tree, "agent-ui-header").style.h[0], 38,
   "header is aligned with Herdr's 38px Terminal-style chrome");
 const inactiveDot = find(tree, "agent-ui-rail-marker-t-live").kids[0];
-assert.equal(inactiveDot.style.size[0], 6, "a dot away from the focus sits at the 6px floor");
+assert.equal(inactiveDot.style.size[0], 4, "a dot away from the focus sits at the 4px floor");
+assert.equal(inactiveDot.style.opacity[0], 0.7, "dots are drawn at 70% opacity");
 assert.equal(inactiveDot.style.rounded[0], 999, "pin is circular, not a line");
 assert.equal(find(tree, "agent-ui-rail-preview"), null);
 assert.equal(find(tree, "agent-ui-scenes"), null);
@@ -411,8 +416,8 @@ ui.measureViewport({ height: 460 }, context);
 const longGeometry = box.turnGeometry(ui.turns, ui.turnHeights);
 const longRail = box.railLayout(longGeometry.ranges, ui.viewportHeight,
   box.visibleTurnIds(longGeometry.ranges, ui.scrollY, ui.viewportHeight));
-assert.equal(longRail.dots.length, 12, "60 turns collapse into 12 dots at 460px");
-assert.equal(longRail.perDot, 5);
+assert.equal(longRail.dots.length, 15, "60 turns collapse into 15 dots at 460px");
+assert.equal(longRail.perDot, 4);
 assert.ok(longRail.dots.length * longRail.pitch <= ui.viewportHeight * 0.4,
   "the long-history column still respects the 40% bound");
 const longRender = ui.render(context);

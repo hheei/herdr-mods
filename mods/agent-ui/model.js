@@ -69,7 +69,7 @@ export function visibleTurnIds(ranges, scrollY, viewportHeight) {
 // into one dot per bucket, the way editor scrollbar markers collapse dense runs
 // instead of shrinking to meaningless hairlines.
 export function railLayout(ranges, viewportHeight, visibleIds = []) {
-  const gap = 3, minDot = 6, peakDot = 11, cap = 0.4;
+  const gap = 3, minDot = 4, peakDot = 9, cap = 0.4;
   const pitch = peakDot + gap;
   const maxDots = Math.max(1, Math.floor((viewportHeight * cap) / pitch));
   const perDot = Math.max(1, Math.ceil(ranges.length / maxDots));
@@ -105,15 +105,15 @@ export function railLayout(ranges, viewportHeight, visibleIds = []) {
 }
 
 // A Gaussian wave packet: the dot at the reading position is widest and its
-// neighbours fall away to the 6px floor, so the column reads as one focus.
-export function dotSize(index, focus, min = 6, peak = 11, sigma = 1.5) {
+// neighbours fall away to the 4px floor, so the column reads as one focus.
+export function dotSize(index, focus, min = 4, peak = 9, sigma = 1.5) {
   const z = (index - focus) / sigma;
   return Math.max(min, Math.round(min + (peak - min) * Math.exp(-z * z)));
 }
 
 // A dot click selects that dot's first turn. Space outside the dots scrubs;
 // there is no independent scrollbar track or thumb.
-export function railHit(dots, x, y, centerX = 9, radius = 7) {
+export function railHit(dots, x, y, centerX = 13, radius = 8) {
   if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x - centerX) > radius) return null;
   let winner = null, distance = radius + 1;
   for (const dot of dots) {

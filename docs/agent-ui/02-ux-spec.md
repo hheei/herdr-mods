@@ -6,7 +6,7 @@
 
 **P0 實際使用者回饋已確定 P1 的簡化方向**：移出 Working／Completed／Needs attention 開發場景按鈕、移除常駐 preview search、Status Bar 改單一 SVG、工具先群組折疊、使用真正的原生 Markdown renderer。原因和驗收詳見 [09 · 第一輪原型回饋](09-p0-feedback-round1.md)。
 
-**最新實測回饋優先於早期「單一 active turn」提案**：工具活動保留 group-first 折疊，但右側不獨立顯示狀態；工具失敗不等於需要使用者處理。對話區右側的 Live Conversation Rail 是**固定中線、間距 3px、整體不高於 40% 高度的圓點列**，大小呈以閱讀位置為中心的高斯波包（焦點 11px → 兩端 6px），過密時按桶合併並顯示 `+N`；不再用「可視輪次全部放大」表示範圍。Click 在**同一份完整 transcript**捲至該輪（不是換一段 window），Hover 是邊界內的一行短問題；Pin 著色只代表視野，不由工具失敗／狀態決定。外框按 Herdr pane 風格使用圓角。實作現況見 [11](11-agent-ui-demo-implementation.md)，設計理由見 [10](10-tool-activity-live-rail.md)。
+**最新實測回饋優先於早期「單一 active turn」提案**：工具活動保留 group-first 折疊，但右側不獨立顯示狀態；工具失敗不等於需要使用者處理。對話區右側的 Live Conversation Rail 是**靠右對齊、間距 3px、70% 不透明度、整體不高於 40% 高度的圓點列**，大小呈以閱讀位置為中心的高斯波包（焦點 9px → 兩端 4px），過密時按桶合併並顯示 `+N`；不再用「可視輪次全部放大」表示範圍。Click 在**同一份完整 transcript**捲至該輪（不是換一段 window），Hover 是邊界內的一行短問題；Pin 著色只代表視野，不由工具失敗／狀態決定。外框按 Herdr pane 風格使用圓角。實作現況見 [11](11-agent-ui-demo-implementation.md)，設計理由見 [10](10-tool-activity-live-rail.md)。
 
 ## 1. 使用情境與成功定義
 
