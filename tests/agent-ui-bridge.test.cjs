@@ -56,6 +56,17 @@ function messageEntry(id, message) {
   assert.equal(turns[1].prompt, "and the cap?");
   assert.equal(project.entriesToTurns([]).length, 0);
 
+  const long = project.entriesToTurns([
+    messageEntry("u9", { role: "user", content: "big", timestamp: 0 }),
+    messageEntry("a9", { role: "assistant", timestamp: 0, content: [
+      { type: "toolCall", id: "c9", name: "bash", arguments: { command: "cat huge" } }] }),
+    messageEntry("r9", { role: "toolResult", toolCallId: "c9", toolName: "bash", isError: false,
+      content: [{ type: "text", text: "x".repeat(50000) }], timestamp: 0 }),
+  ]);
+  assert.ok(long[0].tools[0].detail.length < project.LIMIT.detail + 60,
+    "a snapshot stays readable inside the reader's 1 MiB read");
+  assert.match(long[0].tools[0].detail, /\[truncated 48000 chars\]$/);
+
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-ui-bridge-"));
   let built = [];
   const box = mailbox.createMailbox(dir, { sessionId: "s-1", cwd: "/tmp/project",

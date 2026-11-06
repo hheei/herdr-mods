@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createMailbox } from "./mailbox.js";
-import { entriesToTurns, kindOf, targetOf, textOf } from "./project.js";
+import { clip, entriesToTurns, kindOf, LIMIT, targetOf, textOf } from "./project.js";
 
 export default function (pi: ExtensionAPI) {
   let box: ReturnType<typeof createMailbox> | null = null;
@@ -85,7 +85,8 @@ export default function (pi: ExtensionAPI) {
   pi.on("tool_execution_end", async (event) => {
     if (turn === "") return;
     emit({ type: "tool.update", turnId: turn, toolId: event.toolCallId,
-      patch: { status: event.isError ? "failed" : "done", detail: textOf(event.result) } });
+      patch: { status: event.isError ? "failed" : "done",
+        detail: clip(textOf(event.result), LIMIT.detail) } });
   });
 
   pi.on("agent_settled", async () => {

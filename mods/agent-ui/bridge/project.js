@@ -9,6 +9,15 @@ export function kindOf(name) {
   return KINDS[String(name ?? "").toLowerCase()] ?? "custom";
 }
 
+// A reader may only read 1 MiB at a time, so a snapshot stays small on purpose:
+// the view truncates what it shows anyway, and the reducer caps the turn count.
+export const LIMIT = { text: 20000, detail: 2000 };
+
+export function clip(value, max) {
+  const text = String(value ?? "");
+  return text.length > max ? `${text.slice(0, max)}\n\n[truncated ${text.length - max} chars]` : text;
+}
+
 export function textOf(message) {
   if (typeof message === "string") return message;
   const content = message?.content;
@@ -52,7 +61,7 @@ export function entriesToTurns(entries = []) {
         ? message.content.filter((block) => block?.type === "toolCall") : [];
       const text = textOf(message);
       if (text || calls.length === 0) {
-        turn.messages.push({ id: entry.id, role: "assistant", text, open: false });
+        turn.messages.push({ id: entry.id, role: "assistant", text: clip(text, LIMIT.text), open: false });
       }
       for (const call of calls) {
         if (!call?.id) continue;
@@ -68,7 +77,7 @@ export function entriesToTurns(entries = []) {
       const tool = tools.get(message.toolCallId);
       if (!tool) continue;
       tool.status = message.isError ? "failed" : "done";
-      tool.detail = textOf(message);
+      tool.detail = clip(textOf(message), LIMIT.detail);
     }
   }
 
