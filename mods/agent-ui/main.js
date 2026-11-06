@@ -3,7 +3,10 @@ import { View, div } from "gpui-kit";
 import { h_flex, v_flex, TextView, TextareaState, Textarea } from "gpui-base";
 import { theme } from "herdr";
 import { DEMO_TURNS } from "./fixtures.js";
-import { summarizeActivity, toRailNodes, shortPrompt, windowFromTurn } from "./model.js";
+import {
+  summarizeActivity, toRailNodes, shortPrompt, turnGeometry, clampScroll,
+  visibleTurnIds, railMarkers, previewTop,
+} from "./model.js";
 
 const STATUSES = {
   working: ["Working", "working"],
@@ -34,10 +37,13 @@ function toolLabel(tool) {
 export default class AgentUi extends View {
   init() {
     this.turns = DEMO_TURNS.map((turn) => ({ ...turn, messages: [...turn.messages], tools: [...turn.tools] }));
-    this.activeTurn = this.turns[0].id;
     this.hoveredTurn = null;
     this.groupOpen = new Set();
     this.toolOpen = new Set();
+    this.turnHeights = new Map();
+    this.viewportHeight = 460;
+    this.scrollY = 0;
+    this.pendingJump = null;
     this.width = 800;
     this.localCount = 0;
     this.notice = "";
@@ -58,12 +64,59 @@ export default class AgentUi extends View {
     }
   }
 
+  measureViewport(size, cx) {
+    const height = Math.max(1, Math.round(size?.height ?? this.viewportHeight));
+    if (Math.abs(height - this.viewportHeight) < 1) return;
+    this.viewportHeight = height;
+    const geometry = turnGeometry(this.turns, this.turnHeights);
+    this.scrollY = clampScroll(this.scrollY, geometry.total, height);
+    cx.notify();
+  }
+
+  measureTurn(id, size, cx) {
+    const height = Number(size?.height);
+    if (!Number.isFinite(height) || height <= 0) return;
+    const oldHeight = this.turnHeights.get(id);
+    if (oldHeight !== undefined && Math.abs(oldHeight - height) < 0.75) return;
+    const before = turnGeometry(this.turns, this.turnHeights);
+    const previous = before.ranges.find((r) => r.id === id);
+    this.turnHeights.set(id, height);
+    // Preserve the current reading anchor if a collapsed/expanded group
+    // above the viewport changes size. Exact jump targets override this.
+    if (!this.pendingJump && oldHeight !== undefined && previous?.end <= this.scrollY) {
+      this.scrollY += height - oldHeight;
+    }
+    const after = turnGeometry(this.turns, this.turnHeights);
+    if (this.pendingJump) {
+      const target = after.ranges.find((r) => r.id === this.pendingJump);
+      if (target) this.scrollY = target.start;
+      if (after.complete) this.pendingJump = null;
+    }
+    this.scrollY = clampScroll(this.scrollY, after.total, this.viewportHeight);
+    cx.notify();
+  }
+
+  scrollWheel(event, cx) {
+    // Herdr's native palette documents the bridge's pixel e.delta.y.
+    const delta = Number(event?.delta?.y);
+    if (!Number.isFinite(delta) || !delta) return;
+    const geometry = turnGeometry(this.turns, this.turnHeights);
+    const next = clampScroll(this.scrollY - delta, geometry.total, this.viewportHeight);
+    this.pendingJump = null;
+    if (next === this.scrollY) return;
+    this.scrollY = next;
+    cx.stop_propagation();
+    cx.notify();
+  }
+
   selectTurn(id, cx) {
     if (!this.turns.some((turn) => turn.id === id)) return;
-    // GPUI does not document scroll-to-key; this demo replaces the
-    // *visible transcript window* starting at this exact stable turn.
-    // Real scroll-anchor geometry is still a host/runtime integration gate.
-    this.activeTurn = id;
+    const geometry = turnGeometry(this.turns, this.turnHeights);
+    const target = geometry.ranges.find((r) => r.id === id);
+    if (!target) return;
+    // Scroll the SAME continuous transcript; do not slice away earlier turns.
+    this.scrollY = clampScroll(target.start, geometry.total, this.viewportHeight);
+    this.pendingJump = geometry.complete ? null : id;
     this.hoveredTurn = null;
     cx.notify();
   }
@@ -167,17 +220,16 @@ export default class AgentUi extends View {
   activity(t, turn) {
     const data = summarizeActivity(turn.tools);
     const open = this.groupOpen.has(turn.id);
-    const warning = data.failed > 0 || data.pending > 0;
+    // Failures remain available after expanding the list; they are not the
+    // same thing as requests for user input and do not drive rail color.
+    const summary = data.failed ? `${data.label} · ${data.failed} failed` : data.label;
     return v_flex().id(`agent-ui-activity-${turn.id}`).w_full().gap(7)
       .child(h_flex().id(`agent-ui-group-trigger-${turn.id}`).h(29)
         .w_full().gap(9).items_center().cursor_pointer()
         .on_click((_event, cx) => this.toggleGroup(turn.id, cx))
         .child(div().w(12).text_color(t.dim).child(open ? "⌄" : "›"))
         .child(div().flex_1().min_w(0).truncate().text_size(11.5)
-          .text_color(t.muted).child(data.label))
-        .child(div().flex_none().text_size(10.5)
-          .text_color(warning ? t.blocked : data.running ? t.working : t.dim)
-          .child(data.status)))
+          .text_color(t.muted).child(summary)))
       .when(open, (el) => el.child(v_flex().id(`agent-ui-group-list-${turn.id}`)
         .w_full().pl(16).gap(3)
         .children(turn.tools.slice(0, 20).map((tool) => this.toolRow(t, tool)))
@@ -196,6 +248,7 @@ export default class AgentUi extends View {
 
   turn(t, turn) {
     return v_flex().id(`agent-ui-turn-${turn.id}`).w_full().gap(13)
+      .on_size_change((size, cx) => this.measureTurn(turn.id, size, cx))
       .child(this.userMessage(t, turn))
       .child(v_flex().w_full().gap(9).px(4)
         .child(div().text_size(10.5).font_semibold().text_color(t.accent).child("Pi"))
@@ -205,29 +258,46 @@ export default class AgentUi extends View {
       .child(div().w_full().h(1).bg(t.border));
   }
 
-  rail(t) {
+  rail(t, geometry, visible) {
     const nodes = toRailNodes(this.turns);
-    return v_flex().id("agent-ui-rail").w(29).flex_none().h_full()
-      .pt(16).gap(5).items_center()
-      .children(nodes.slice(0, 20).map((node) =>
-        h_flex().id(`agent-ui-rail-marker-${node.id}`).size(23).flex_none()
+    const marks = railMarkers(geometry.ranges, geometry.total, this.viewportHeight);
+    const byId = new Map(marks.map((mark) => [mark.id, mark]));
+    const rangeStart = 7 + Math.max(0, this.viewportHeight - 30) *
+      (this.scrollY / Math.max(1, geometry.total));
+    const rangeEnd = 7 + Math.max(0, this.viewportHeight - 30) *
+      (Math.min(geometry.total, this.scrollY + this.viewportHeight) / Math.max(1, geometry.total));
+    return div().id("agent-ui-rail").w(29).flex_none().h_full()
+      .relative().overflow_hidden()
+      .child(div().id("agent-ui-rail-window").absolute().left(1).top(rangeStart)
+        .w(2).h(Math.max(3, rangeEnd - rangeStart)).rounded(2)
+        .bg(t.accent).opacity(0.30))
+      .children(nodes.map((node) =>
+        h_flex().id(`agent-ui-rail-marker-${node.id}`).w(23).h(16).absolute()
+          .left(4).top(byId.get(node.id)?.top ?? 7)
           .items_center().justify_center().rounded(6)
           .cursor_pointer()
           .on_hover((on, cx) => this.showHover(node.id, on, cx))
           .on_click((_event, cx) => this.selectTurn(node.id, cx))
-          .child(div().w(this.activeTurn === node.id ? 13 : 9).h(3).rounded(2)
-            .bg(node.actionable ? t.blocked
-              : this.activeTurn === node.id ? t.accent : t.dim))));
+          // The highlight represents ALL turns intersecting the viewport,
+          // never a tool result (including tool failures).
+          .child(div().w(visible.has(node.id) ? 13 : 9).h(3).rounded(2)
+            .bg(visible.has(node.id) ? t.accent : t.dim))));
   }
 
-  hoverPreview(t) {
+  hoverPreview(t, geometry) {
     if (!this.hoveredTurn) return null;
     const nodes = toRailNodes(this.turns);
-    const at = nodes.findIndex((node) => node.id === this.hoveredTurn);
-    if (at < 0) return null;
-    const node = nodes[at];
+    const node = nodes.find((item) => item.id === this.hoveredTurn);
+    if (!node) return null;
+    if (this.viewportHeight < (node.actionable ? 60 : 44)) return null;
+    const mark = railMarkers(geometry.ranges, geometry.total, this.viewportHeight)
+      .find((item) => item.id === this.hoveredTurn);
+    if (!mark) return null;
     return v_flex().id("agent-ui-rail-preview").absolute().right(36)
-      .top(16 + at * 28).w(207).px(11).py(9).gap(5)
+      // Keep preview wholly inside the conversation viewport, even for the
+      // first/last marker. The containing main area clips excess pixels.
+      .top(previewTop(mark.top, this.viewportHeight, node.actionable))
+      .w(207).px(11).py(9).gap(5)
       .rounded(7).bg(t.popover).border_1().border_color(t.border)
       .child(div().text_size(11.5).text_color(t.foreground)
         .truncate().child(shortPrompt(node.preview, 39)))
@@ -238,10 +308,13 @@ export default class AgentUi extends View {
   render(cx) {
     const t = theme();
     const compact = this.width < 520;
-    const active = this.turns.find((turn) => turn.id === this.activeTurn) || this.turns[0];
+    const railEnabled = !compact && this.viewportHeight >= 80;
     const draft = String(this.composer.value() ?? "").trim();
-    const turns = windowFromTurn(this.turns, active.id);
-    return v_flex().id("agent-ui-root").size_full().min_h(0).bg(t.background)
+    const geometry = turnGeometry(this.turns, this.turnHeights);
+    this.scrollY = clampScroll(this.scrollY, geometry.total, this.viewportHeight);
+    const visible = new Set(visibleTurnIds(geometry.ranges, this.scrollY, this.viewportHeight));
+    return v_flex().id("agent-ui-root").size_full().min_h(0)
+      .rounded(6).overflow_hidden().bg(t.background)
       .text_color(t.foreground)
       .on_size_change((size, context) => this.changeSize(size, context))
       .child(h_flex().id("agent-ui-header").h(45).flex_none().px(17).gap(9)
@@ -249,18 +322,19 @@ export default class AgentUi extends View {
         .child(div().flex_1().text_size(13.5).font_semibold().child("Pi · Conversation"))
         .child(this.statusLine(t, this.turns.at(-1).status))
         .child(div().text_color(t.dim).text_size(10).child("DEMO")))
-      .child(h_flex().id("agent-ui-main").flex_1().min_h(0).relative()
-        .child(v_flex().id(`agent-ui-transcript-${active.id}`)
-          .flex_1().min_w(0).min_h(0).overflow_y_scrollbar()
-          .px(compact ? 13 : 23).py(18).gap(19)
-          .when(active.id !== this.turns[0].id, (el) => el.child(
-            h_flex().items_center().gap(8)
-              .child(control(t, "agent-ui-show-earlier", "← Earlier turns",
-                (context) => this.selectTurn(this.turns[0].id, context)))
-              .child(div().text_size(10.5).text_color(t.dim).child("Demo window jump"))))
-          .children(turns.map((turn) => this.turn(t, turn))))
-        .when(!compact, (el) => el.child(this.rail(t)))
-        .when(!compact && Boolean(this.hoveredTurn), (el) => el.child(this.hoverPreview(t))))
+      .child(h_flex().id("agent-ui-main").flex_1().min_h(0)
+        .relative().overflow_hidden()
+        .on_scroll_wheel((event, context) => this.scrollWheel(event, context))
+        .child(div().id("agent-ui-viewport").flex_1().min_w(0).h_full()
+          .relative().overflow_hidden()
+          .on_size_change((size, context) => this.measureViewport(size, context))
+          .child(v_flex().id("agent-ui-transcript").absolute()
+            .left(0).right(0).top(-this.scrollY)
+            .px(compact ? 13 : 23).py(18).gap(19)
+            .children(this.turns.map((turn) => this.turn(t, turn)))))
+        .when(railEnabled, (el) => el.child(this.rail(t, geometry, visible)))
+        .when(railEnabled && Boolean(this.hoveredTurn),
+          (el) => el.child(this.hoverPreview(t, geometry))))
       .child(v_flex().id("agent-ui-composer").flex_none().px(compact ? 13 : 21)
         .pt(10).pb(12).gap(8).border_t(1).border_color(t.border).bg(t.chrome)
         .child(Textarea.new(this.composer).id("agent-ui-textarea").w_full()

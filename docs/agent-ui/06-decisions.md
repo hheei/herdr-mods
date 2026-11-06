@@ -72,7 +72,7 @@
 
 ## ADR-015 · 不加 Search；用原生 Conversation Rail 評估長會話定位
 
-**候選，先做 P1 spike／可用性驗證後再決定是否採納。** 參考 HW1 message rail 的「一個問題一節點、點擊跳轉」**功能**，及 pi-harness `docs/notes/minimap-simplification.md` **已接受但未實作完成**的精簡方向（單一 active turn、簡短 user/custom prompt、transcript owner 控制捲動），而非複製 Web 色彩或大幅 hover 列表。新設計在對話區右緣提供低干擾 rail：**hover/focus 正常只有一行截短提問；只有仍需處理的異常才加第二行；不顯示 assistant 回答、工具數字、時間戳或多層卡片**。Click 準確跳到同一 Pi Session 的指定 turn。小 Pane 隱藏或採緊湊輪次選單，不能遮擋 Scrollbar／Composer。未驗證 native GPUI overlay、定時／scroll-to-turn 前不得宣稱完成，也**不重建 JSONL Reader 或全文索引**。[10](10-tool-activity-live-rail.md)
+**已在 Demo 採用新版互動（實機待驗證）**：參考 HW1／pi-harness，但依使用者最新回饋，**不沿用單一 active turn**；對話 viewport 內有幾個輪次，Rail 就同步 Highlight 幾個 Pin。使用同一份連續 transcript 的量測高度和滾動偏移完成 click-to-jump；Pin 僅表示可見範圍，**絕不根據工具失敗著色**。`requiresUserAction` 必須是獨立確認的使用者互動需求，不由工具 fail／pending 推導。Hover 單行短問題（明確需要人處理時才加第二行），坐標限制在工作區內。原生更完整的 scrollbar／鍵盤／overlay 還未實機驗證，不因此建立 JSONL Reader。[10](10-tool-activity-live-rail.md) [11](11-agent-ui-demo-implementation.md)
 
 ## 決策修訂規則
 

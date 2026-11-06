@@ -73,18 +73,19 @@ export const DEMO_TURNS = [
   {
     id: "t-failure",
     prompt: "測試一下失敗工具會不會被折疊完全藏起來。",
-    status: "needs-input",
+    // A failed tool does not mean that the user must take action.
+    status: "done",
     messages: [
       { id: "a-failure", role: "assistant", text:
-        "測試顯示一項需要處理的結果。**失敗必須在工具群組摘要中可見**，但不應讓所有工具細節自動展開。\n\n你仍可切回 Terminal 繼續工作。" },
+        "測試包含一項**工具失敗**。這只是執行結果，**不等於需要使用者處理**。工具群組仍預設折疊；展開後可以查看失敗原因。\n\n你仍可切回 Terminal 繼續工作。" },
     ],
     tools: [
       { id: "f-read", kind: "read", title: "Read prototype files", status: "done", target: "mods/agent-ui",
         detail: "Read UI and event fixture." },
       { id: "f-test", kind: "exec", title: "Run integration tests", status: "failed", target: "node tests/demo-v2",
         detail: "$ node tests/demo-v2\nFAIL: host per-Pane presentation API is not yet verified.\nThis is a synthetic error fixture, not an actual command." },
-      { id: "f-custom", kind: "custom", title: "Await host capability", status: "pending", target: "Pi runtime binding",
-        detail: "Return to Terminal for unsupported operations. No fake Approve button." },
+      { id: "f-custom", kind: "custom", title: "Check host capability", status: "pending", target: "Pi runtime binding",
+        detail: "Capability not verified. This pending check is not a user approval request." },
     ],
   },
   {

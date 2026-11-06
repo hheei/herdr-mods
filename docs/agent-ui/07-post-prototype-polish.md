@@ -42,7 +42,7 @@
 
 **工具 UX 是確定要做的 P1 工作**：依 [10 §3](10-tool-activity-live-rail.md) 實作 `Group Summary → Compact Tool Rows → typed Detail`，不是單純隱藏 box。借鑑 PI-Desktop 的 typed slots、paseo 的 run-level grouping、ZCode 的專用細節 renderer；Read／Search／Bash／Edit／未知工具都有明確「收起看甚麼／展開看甚麼」和可信的錯誤狀態。
 
-**Live Conversation Rail 是可用性候選，不是加 Search**：參考 [HW1 的 message rail 功能](10-tool-activity-live-rail.md#21-使用者的-hw1-demo只借導航行為不複製外觀)，再對照 **pi-harness 已接受但尚未實作完成的 minimap 精簡設計**：每輪一節點、**單一 active turn**、click jump、hover/focus **只有一行短使用者問題**，只有未解決高優先問題才第二行提示。**不要 assistant 回答、工具統計、時間、heading outline 或大 preview 面板**；不複製 HW1 綠色／波浪 UI。只有證明可定位、不卡、可鍵盤操作並不擠壓正文才加入 P1 成品。完整規格見 [10 §4](10-tool-activity-live-rail.md)。
+**Live Conversation Rail 已有新的 Demo 行為（超越早期 pi-harness 單一 active 提案）**：每輪一節點，**在目前可視範圍內的所有輪次都亮起**；click 在原始連續對話中捲動而不是切換列表；Hover 只有一行短使用者問題（真正要求使用者介入才第二行），不含工具失敗著色／工具統計。節點和預覽的幾何必須限制在畫面內，工作區根容器使用 Herdr pane 同款圓角。仍需測原生 Scrollbar、IME／鍵盤、resize 和大歷史性能。詳見 [11](11-agent-ui-demo-implementation.md)。
 
 ## B. Status Bar 模式切換：融入原生 Herdr，不像補丁
 
@@ -157,7 +157,7 @@
 | POL-07 | 同一個場景與前一版並列比較 | 無新增未解決的操作摩擦；視覺沒有出現新「挖空」、閃爍或焦點倒退 |
 | **FB-01～06** | **本輪試用回饋**：場景列、單 SVG、無常駐搜尋、group-first tools、Markdown | 按 [09 的測試矩陣](09-p0-feedback-round1.md) 逐項核對；最終畫面不再有測試場景大按鈕或每工具一張卡 |
 | **TA-01～05** | Tool Activity 分組、異常、手動展開和專用 detail | [10 的測試矩陣](10-tool-activity-live-rail.md)：20 tools 一行；失敗不隱藏；長 stdout/diff 不卡死 |
-| **RL-01～09（候選）** | 即時右側 turn rail、**單行簡短 prompt hover**、click jump、長會話、窄 Pane | [10 的測試矩陣](10-tool-activity-live-rail.md)：marker 跳到正確輪、只有一個 active turn、hover 無多餘 metadata／回答／工具統計；若原生 GPUI 能力／可用性不足則記錄阻擋而延後 |
+| **RL-01～11** | 右側 turn rail、**可視多 Pin 高亮**、單行短 prompt hover、連續對話捲動、窄 Pane | [10 的測試矩陣](10-tool-activity-live-rail.md)：每個可視 turn 都亮起、Hover 與 Pin 不溢出、工具失敗不改 Pin 顏色；目前 Demo 的 headless checks 已通過，原生 GPUI／長歷史 cluster／a11y 仍待驗證 |
 
 ### 打磨的停止條件
 

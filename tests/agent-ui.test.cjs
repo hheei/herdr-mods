@@ -70,7 +70,7 @@ const modelSrc = fs.readFileSync(path.join(root, "mods/agent-ui/model.js"), "utf
 const fixtureSrc = fs.readFileSync(path.join(root, "mods/agent-ui/fixtures.js"), "utf8")
   .replace("export const DEMO_TURNS", "const DEMO_TURNS");
 vm.runInNewContext(modelSrc + "\n" + fixtureSrc
-  + "\nthis.summarizeActivity=summarizeActivity;this.toRailNodes=toRailNodes;this.shortPrompt=shortPrompt;this.windowFromTurn=windowFromTurn;this.DEMO_TURNS=DEMO_TURNS;", box);
+  + "\nthis.summarizeActivity=summarizeActivity;this.toRailNodes=toRailNodes;this.shortPrompt=shortPrompt;this.turnGeometry=turnGeometry;this.clampScroll=clampScroll;this.visibleTurnIds=visibleTurnIds;this.railMarkers=railMarkers;this.previewTop=previewTop;this.DEMO_TURNS=DEMO_TURNS;", box);
 
 assert.equal(box.DEMO_TURNS.length, 7);
 assert.equal(box.summarizeActivity([]).total, 0);
@@ -79,13 +79,33 @@ assert.deepEqual(
   [1, 1],
 );
 assert.equal(box.toRailNodes(box.DEMO_TURNS).length, 7);
-assert.ok(box.toRailNodes(box.DEMO_TURNS)[5].actionable);
+assert.equal(box.toRailNodes(box.DEMO_TURNS)[5].actionable, false,
+  "failed/pending tools must not create a user-action warning");
 assert.equal(box.toRailNodes(box.DEMO_TURNS)[0].actionable, false);
-assert.equal(box.windowFromTurn(box.DEMO_TURNS, "t-failure")[0].id, "t-failure");
+assert.equal(box.toRailNodes([{ id: "request", prompt: "Approve?", requiresUserAction: true }])[0].actionable, true,
+  "user action must be explicit, never derived from a failed tool");
 assert.ok(box.shortPrompt("a".repeat(120)).length <= 39);
 
+const fifteen = Array.from({ length: 15 }, (_, i) => ({ id: `n-${i}` }));
+const heights = new Map(fifteen.map(x => [x.id, 100]));
+const positions = box.turnGeometry(fifteen, heights, 10, 5);
+assert.equal(positions.complete, true);
+assert.equal(positions.total, 1650);
+assert.deepEqual(Array.from(box.visibleTurnIds(positions.ranges, 430, 480)),
+  ["n-3", "n-4", "n-5", "n-6", "n-7", "n-8"],
+  "every turn overlapping the viewport is highlighted, not just one active turn");
+const marks = box.railMarkers(positions.ranges, positions.total, 340);
+assert.equal(marks.length, 15);
+assert.ok(marks.every(m => m.top >= 7 && m.top <= 340 - 30),
+  "all pins remain within the visible rail height");
+assert.ok(box.previewTop(marks[14].top, 340, true) + 52 <= 340 - 4,
+  "last marker hover preview stays inside viewport");
+assert.ok(box.previewTop(marks[0].top, 340, false) >= 4);
+assert.equal(box.clampScroll(100000, 1650, 480), 1170);
+
 const src = fs.readFileSync(path.join(root, "mods/agent-ui/main.js"), "utf8");
-vm.runInNewContext(src.replace(/^import [^\n]+;\n/gm, "")
+vm.runInNewContext(src.replace(/^import\s+\{[\s\S]*?\}\s+from\s+"[^"]+";\s*/gm, "")
+  .replace(/^import [^\n]+;\n/gm, "")
   .replace("export default class AgentUi", "class AgentUi")
   + "\nthis.AgentUi=AgentUi;", box);
 const ui = new box.AgentUi();
@@ -95,6 +115,11 @@ assert.ok(find(tree, "agent-ui-root"));
 assert.ok(find(tree, "agent-ui-composer"));
 assert.ok(find(tree, "agent-ui-rail"));
 assert.ok(find(tree, "agent-ui-rail-marker-t-inspect"));
+assert.ok(find(tree, "agent-ui-rail-window"));
+assert.equal(find(tree, "agent-ui-root").style.rounded[0], 6,
+  "workspace frame has native Herdr rounded corners");
+assert.ok(find(tree, "agent-ui-root").style.overflow_hidden,
+  "rounded workspace clips child content");
 assert.equal(find(tree, "agent-ui-rail-preview"), null);
 assert.equal(find(tree, "agent-ui-scenes"), null);
 assert.equal(find(tree, "agent-ui-search"), null);
@@ -118,12 +143,40 @@ assert.ok(find(ui.render(context), "agent-ui-detail-i-read"), "typed detail expa
 click(ui.render(context), "agent-ui-tool-trigger-i-read");
 assert.equal(find(ui.render(context), "agent-ui-detail-i-read"), null);
 
+// The collapsed group has only chevron + summary; no separate right status.
+const collapsed = find(ui.render(context), "agent-ui-group-trigger-t-failure");
+assert.equal(collapsed.kids.length, 2);
+assert.match(textOf(collapsed), /1 failed/);
+assert.doesNotMatch(textOf(collapsed), /Needs attention/);
+
+// Fake actual GPUI height reports; a scroll reflects ALL visible turns.
+ui.measureViewport({ height: 360 }, context);
+const measured = [230, 235, 210, 260, 190, 245, 210];
+ui.turns.forEach((turn, i) => ui.measureTurn(turn.id, { height: measured[i] }, context));
+assert.equal(ui.turnHeights.size, 7);
+const oldTree = ui.render(context);
+assert.ok(find(oldTree, "agent-ui-user-t-intro"));
+assert.ok(find(oldTree, "agent-ui-user-t-live"), "continuous transcript remains fully mounted");
+const oldY = ui.scrollY;
+find(oldTree, "agent-ui-main").handlers.on_scroll_wheel({ delta: { y: -380 } }, context);
+assert.equal(ui.scrollY, oldY + 380);
+const scrolled = ui.render(context);
+const visible = box.visibleTurnIds(
+  box.turnGeometry(ui.turns, ui.turnHeights).ranges, ui.scrollY, ui.viewportHeight);
+assert.ok(visible.length >= 2, "viewport contains multiple visible turns");
+for (const turnId of visible) {
+  assert.equal(find(scrolled, `agent-ui-rail-marker-${turnId}`).kids[0].style.w[0], 13,
+    "every visible turn pin must be highlighted");
+}
+assert.ok(ui.scrollY > 0);
+
 ui.selectTurn("t-failure", context);
 tree = ui.render(context);
-assert.ok(find(tree, "agent-ui-transcript-t-failure"), "selection creates target-centered demo window");
-assert.equal(find(tree, "agent-ui-user-t-inspect"), null, "earlier turns outside demo window");
+assert.ok(find(tree, "agent-ui-transcript"), "one permanent transcript scrolled by offset");
+assert.ok(find(tree, "agent-ui-user-t-inspect"), "jump must not delete preceding turns");
 assert.ok(find(tree, "agent-ui-user-t-failure"));
-assert.ok(find(tree, "agent-ui-show-earlier"), "can recover earlier turns");
+assert.equal(ui.pendingJump, null, "measured positions navigate immediately");
+assert.ok(ui.scrollY > 0);
 assert.equal(find(tree, "agent-ui-group-list-t-failure"), null, "failed group remains collapsed");
 assert.match(textOf(find(tree, "agent-ui-group-trigger-t-failure")), /1 failed/, "error visible in collapsed summary");
 
@@ -140,10 +193,35 @@ marker.handlers.on_hover(false, context);
 assert.equal(find(ui.render(context), "agent-ui-rail-preview"), null, "hover exit removes preview");
 find(ui.render(context), "agent-ui-rail-marker-t-failure").handlers.on_hover(true, context);
 const failurePreview = find(ui.render(context), "agent-ui-rail-preview");
-assert.match(textOf(failurePreview), /需要處理/, "only exceptional second line");
+assert.doesNotMatch(textOf(failurePreview), /需要處理/,
+  "a failed tool is NOT an actionable approval request");
+const originalPinColor = find(ui.render(context), "agent-ui-rail-marker-t-failure").kids[0].style.bg[0];
+ui.turns[5].requiresUserAction = true;
+let actionPreview = find(ui.render(context), "agent-ui-rail-preview");
+assert.match(textOf(actionPreview), /需要處理/,
+  "explicit user action can create a second hover line");
+assert.ok(actionPreview.style.top[0] >= 4 &&
+  actionPreview.style.top[0] + 52 <= ui.viewportHeight - 4,
+  "hover preview is clamped even for a marker close to the bottom");
+assert.equal(find(ui.render(context), "agent-ui-rail-marker-t-failure").kids[0].style.bg[0],
+  originalPinColor, "user-action/tool state must not recolor rail pins");
+ui.showHover("t-live", true, context);
+assert.ok(find(ui.render(context), "agent-ui-rail-preview").style.top[0] + 36
+  <= ui.viewportHeight - 4, "last pin hover stays within bounds");
 click(ui.render(context), "agent-ui-rail-marker-t-rail");
-assert.equal(ui.activeTurn, "t-rail", "click jumps by stable turn identity");
+assert.equal(ui.scrollY, box.clampScroll(
+  box.turnGeometry(ui.turns, ui.turnHeights).ranges.find(x => x.id === "t-rail").start,
+  box.turnGeometry(ui.turns, ui.turnHeights).total, ui.viewportHeight),
+  "click scrolls to measured turn location in the same transcript");
 assert.equal(ui.hoveredTurn, null);
+const anchorBefore = ui.scrollY;
+ui.measureTurn("t-intro", { height: measured[0] + 55 }, context);
+assert.equal(ui.scrollY, anchorBefore + 55,
+  "expanding a prior turn preserves the user's current reading anchor");
+ui.measureViewport({ height: 48 }, context);
+assert.equal(find(ui.render(context), "agent-ui-rail"), null,
+  "when the viewport is too short even for markers, hide rather than overflow");
+ui.measureViewport({ height: 360 }, context);
 
 ui.composer.set_value("本地測試訊息");
 click(ui.render(context), "agent-ui-send");
@@ -176,4 +254,4 @@ assert.equal(manifest.install, "derive:agent-ui-demo");
 for (const blocked of ["terminal.kill", "pane.close", "exec(", "fetch(", "Session JSONL"]) {
   assert.ok(!src.includes(blocked), "agent-ui must not invoke live agent behavior: " + blocked);
 }
-console.log("PASS: Agent UI fixtures, native Markdown, activity grouping, hover rail, stable jump window, mock-only composer, standalone layout.");
+console.log("PASS: Agent UI viewport multi-pin highlights, bounded hover, pixel jump, tool groups, Markdown, rounded frame and mock composer.");

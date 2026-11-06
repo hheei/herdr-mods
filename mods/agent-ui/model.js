@@ -1,4 +1,4 @@
-// Deterministic, side-effect-free projections for the v2 synthetic prototype.
+// Deterministic, side-effect-free projections for the synthetic prototype.
 const TYPES = { read: "Read", search: "Search", exec: "Run", edit: "Edit", custom: "Other" };
 export function summarizeActivity(tools = []) {
   const counts = {};
@@ -24,8 +24,9 @@ export function shortPrompt(prompt, max = 39) {
 }
 
 export function actionable(turn) {
-  // Only unresolved user action is important enough for the second hover line.
-  return turn?.status === "needs-input";
+  // Tool failure/pending is NOT a request for user action. This flag must be
+  // explicitly supplied by a runtime event that needs the user's response.
+  return turn?.requiresUserAction === true;
 }
 
 export function toRailNodes(turns) {
@@ -37,7 +38,51 @@ export function toRailNodes(turns) {
   }));
 }
 
-export function windowFromTurn(turns, targetId) {
-  const index = turns.findIndex((t) => t.id === targetId);
-  return index <= 0 ? turns : turns.slice(index);
+// Real turn heights come from GPUI on_size_change, not guessed row numbers.
+// The fallback is only used during the first layout pass.
+export function turnGeometry(turns, measured, gap = 19, padding = 18) {
+  let y = padding, complete = true;
+  const ranges = turns.map((turn) => {
+    const measuredHeight = measured.get(turn.id);
+    if (!Number.isFinite(measuredHeight) || measuredHeight <= 0) complete = false;
+    const height = Number.isFinite(measuredHeight) && measuredHeight > 0
+      ? measuredHeight : 200;
+    const range = { id: turn.id, start: y, end: y + height };
+    y += height + gap;
+    return range;
+  });
+  return { ranges, total: y - (turns.length ? gap : 0) + padding, complete };
+}
+
+export function clampScroll(offset, contentHeight, viewportHeight) {
+  return Math.max(0, Math.min(Number(offset) || 0,
+    Math.max(0, contentHeight - viewportHeight)));
+}
+
+export function visibleTurnIds(ranges, scrollY, viewportHeight) {
+  const end = scrollY + Math.max(0, viewportHeight);
+  return ranges.filter((r) => r.end > scrollY && r.start < end).map((r) => r.id);
+}
+
+export function railMarkers(ranges, contentHeight, viewportHeight) {
+  const margin = 7, pinHeight = 16;
+  const available = Math.max(0, viewportHeight - pinHeight - 2 * margin);
+  const length = Math.max(1, contentHeight);
+  // Keep normal-length histories clickable, while never letting a marker
+  // spill outside the rail. Very dense histories need a future cluster view.
+  const gap = Math.min(16, available / Math.max(1, ranges.length - 1));
+  let previous = -Infinity;
+  return ranges.map((r, i) => {
+    const raw = margin + available * (r.start / length);
+    const maxTop = margin + available - gap * (ranges.length - 1 - i);
+    const top = Math.max(margin + i * gap,
+      Math.min(maxTop, Math.max(raw, previous + gap)));
+    previous = top;
+    return { id: r.id, top };
+  });
+}
+
+export function previewTop(pinTop, viewportHeight, actionablePreview = false) {
+  const height = actionablePreview ? 52 : 36;
+  return Math.max(4, Math.min(pinTop - 5, viewportHeight - height - 4));
 }

@@ -50,7 +50,7 @@
 
 **第二輪需求補充**：不加 Search，但參考 `/home/chlo/Projects/aiphy2026/HW1/homework1/src/hw1_chat/static/app.js` 的 **message rail** 功能，評估對話區右緣的**即時輪次導航**：click 跳轉、hover／focus 顯示內容摘要。該 HW1 Demo 本身只有節點 active/jump 和簡單 `title`，**沒有**完整問題／答案的 hover preview；完整 preview 是新設計。外觀不照抄 HW1 的波浪與綠色，rail 不取代 Herdr 全域 Sidebar。詳細方案見 [10](10-tool-activity-live-rail.md)。
 
-**第三輪精簡決策（pi-harness 參考）**：已將「完整 hover preview」收斂為**一行短使用者提問**；只有確實未解決、需要人處理時可附第二行極短警示。**不顯示 assistant 回答、工具統計、時間戳或 markdown 大綱。** Rail 只標記一個 active turn，細節在 click 跳到對話之後閱讀。pi-harness 的 `docs/notes/minimap-simplification.md` 同樣是這個方向，但它在來源專案仍是**尚未實作完成**的設計。詳見 [10 §4.3](10-tool-activity-live-rail.md)。
+**第三輪精簡決策（pi-harness 參考）**：已將「完整 hover preview」收斂為**一行短使用者提問**；只有確實未解決、需要人處理時可附第二行極短警示。**不顯示 assistant 回答、工具統計、時間戳或 markdown 大綱。** **最新修訂：** 目前會 Highlight 所有與 viewport 相交的 turns，而不是只有一個 active turn；細節在 click 捲到原對話後閱讀。pi-harness 的 `docs/notes/minimap-simplification.md` 同樣是這個方向，但它在來源專案仍是**尚未實作完成**的設計。詳見 [10 §4.3](10-tool-activity-live-rail.md)。
 
 ### F04 · 不是「每個 box 預設收起」，而是「工具群組本身預設收起」
 

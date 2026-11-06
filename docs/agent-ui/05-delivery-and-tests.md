@@ -145,7 +145,7 @@ UI 與宿主 Pane spike 可以平行；Pi bridge 不阻礙 UI mock prototype。�
 | POL-01~07 | 原型後 UI／UX 打磨 | 完成 [07 的驗收矩陣](07-post-prototype-polish.md#h-原型後的審查與-done-gate)；記錄原型問題、修改前後對照與未解限制 |
 | FB-01～06 | P0 使用者回饋 | 正式 UI 無 fixture 場景列／常駐 preview search；Status Bar 單 SVG；工具群組折疊＋錯誤摘要；Markdown 正常解析／可複製。詳細標準見 [09](09-p0-feedback-round1.md) |
 | TA-01～05 | 工具卡重新設計 | [10](10-tool-activity-live-rail.md)：group summary → compact rows → typed details；長輸出有界；失敗與 pending 不可被遮蔽 |
-| RL-01～09（設計候選） | 點擊跳轉、**單行 prompt hover**、單一 active turn、長會話 cluster、跨 Pane 身分驗證 | [10](10-tool-activity-live-rail.md)：正常 hover 不出現回答／工具計數／時間／大卡；實機可用性與 GPUI 技術 Gate；不影響主對話的閱讀、Composer、Status Bar |
+| RL-01～11（Demo 已涵蓋部分） | 點擊在**連續對話**中捲動、同時 Highlight 全部可視輪次、**單行 prompt hover 限界**、長會話 cluster／跨 Pane 身分 | [10](10-tool-activity-live-rail.md)：不能只亮一個 active；工具失敗不改 Pin 色、Hover 不超出；目前 Demo headless test 通過，GPUI／長歷史／鍵盤能力仍需實機驗證 |
 | PI-01 | 兩個相同 cwd 的 Pi | Session、model、工具狀態不串到另一 Pane |
 | PI-02 | `/new`、resume、bridge restart | 舊 events 不閃現；新 epoch 只顯示新 Session |
 | PI-03 | 多工具並行與不完整 end | card ID／parent 關聯準確，不補假成功 |

@@ -1,6 +1,8 @@
 # 10 · Tool Activity 與 Live Conversation Rail：P1 詳細設計
 
-**日期：2026-11-06｜狀態：設計／待實作，不是目前 Mod 已有能力。** Tool Activity 是 P1 必要精修；Live Rail 是需先用 fixtures／目標 App 驗證價值的**候選互動**，測試不佳可延後，不能因加入側邊控件犧牲閱讀空間。  
+**日期：2026-11-06｜狀態：設計參考；已有部分原生 GPUI Demo 實作，其餘仍待實機驗證。** Tool Activity 已有第一版；Live Rail 的高密度歷史／可及性仍待完整驗證，測試不佳可延後，不能因加入側邊控件犧牲閱讀空間。
+**最新修改**：[11](11-agent-ui-demo-implementation.md) 已把連續 transcript 的多輪可視高亮、量測式 click 捲動、限界 hover 和圓角實作成 Demo；以下早期「單一 active turn／工具狀態 Pin」描述以最新規格為準。
+
 本文件回應 P0 試用後兩項新增要求：**工具卡參考其他 Agent UI 重新設計**，以及**不加 Search，改評估即時對話導航側欄：點擊跳轉、hover 預覽**。沿用 [02 UI／UX](02-ux-spec.md) 和 [07 P1 polish](07-post-prototype-polish.md)；不修改現有 Pi 程序／Session、不建立 JSONL Reader。
 
 ## 1. 設計定位：兩個不同、相輔相成的層次
@@ -54,7 +56,7 @@
 Pi
   找到了模型與實驗的兩處差異，分析如下……
 
-  ▸ 12 operations · Read 8 · Search 3 · Run 1      ✓ Done
+  ▸ 12 operations · Read 8 · Search 3 · Run 1
 
   以下是主要發現……
 ```
@@ -62,21 +64,21 @@ Pi
 有異常時：
 
 ```text
-  ▸ 12 operations · Read 8 · Search 3 · Run 1      ! 1 failed
+  ▸ 12 operations · Read 8 · Search 3 · Run 1 · 1 failed
 ```
 
 進行中：
 
 ```text
-  ▸ 5 operations · Reading solver.py…             ● Working
+  ▸ 5 operations · Read 4 · Run 1
 ```
 
-**視覺**：摘要是一行（超窄寬度可以合理換至兩行）淺字文字＋小 chevron＋一個簡短狀態，不使用卡片底色、外框、陰影、進度動畫。成功時統計簡潔；失敗／等待輸入／未知一定可見。**預設不展示每個 tool**，這比只把每張卡的內容收起來更重要。
+**視覺**：摘要是一行（超窄寬度可以合理換至兩行）淺字文字＋小 chevron，**右側無獨立狀態**。不使用卡片底色、外框、陰影、進度動畫。若有工具失敗，最多在**同一行摘要文字**提示 `N failed`，工具失敗不代表使用者必須介入。**預設不展示每個 tool**，這比只把每張卡的內容收起來更重要。
 
 ### 3.2 展開群組後，才看「緊湊 Tool Rows」
 
 ```text
-  ▾ 12 operations · Read 8 · Search 3 · Run 1      ! 1 failed
+  ▾ 12 operations · Read 8 · Search 3 · Run 1 · 1 failed
      ✓  Read    src/window.rs
      ✓  Read    src/layout.rs
      ✓  Search  "TerminalView"                 12 matches
@@ -132,18 +134,18 @@ Pi
 
 ### 4.1 位置與密度
 
-**新比較結論（pi-harness）：Rail 只負責「這是哪輪、我在哪輪、如何跳到它」，Hover 不是另一張內容卡。** 參考 `/home/chlo/Projects/pi-harness/packages/ui/src/components/ChatMinimap.tsx` 的現有多層預覽，以及同專案 `docs/notes/minimap-simplification.md` **已接受但尚未完成的簡化設計**：只留 user/custom turn 簡短提示、單一 active turn、沿用 transcript owner 的幾何／跳轉，不再把 assistant outline、heading jumps、tool-count badges 放進 rail。**以簡化提案作目標，不把提案誤稱為已上線能力。**
+**新比較結論（pi-harness）：Rail 只負責「這是哪輪、我在哪輪、如何跳到它」，Hover 不是另一張內容卡。** 參考 `/home/chlo/Projects/pi-harness/packages/ui/src/components/ChatMinimap.tsx` 的現有多層預覽，以及同專案 `docs/notes/minimap-simplification.md` **已接受但尚未完成的簡化設計**：只留 user/custom turn 簡短提示、沿用 transcript owner 的幾何／跳轉（其**單一 active turn** 思路在 Herdr 被「所有可視輪次同時高亮」取代），不再把 assistant outline、heading jumps、tool-count badges 放進 rail。**以簡化提案作目標，不把提案誤稱為已上線能力。**
 
 ```text
 ┌───────────────────────────────────────────────────────────────────┐
 │ Pi · Project                                      ● Working       │
 ├───────────────────────────────────────────────────────┬───────────┤
 │ User: 檢查...                                         │           │
-│                                                      │   ─ ●     │  ← 目前閱讀中的輪
+│                                                      │   ─ ●     │  ← 可視輪次 1
 │ Pi: 找到兩處差異...                                  │   ─       │
-│ ▸ 12 operations · 1 failed                           │   ─ !     │  ← 含失敗的輪
+│ ▸ 12 operations · 1 failed                           │   ─ ●     │  ← 可視輪次 2；工具失敗不改 Pin 色
 │                                                      │   ─       │
-│ 下一輪提問...                                         │   ─ ●     │  ← live tail
+│ 下一輪提問...                                         │   ─ ·     │  ← 不在視野內
 │                                                      │           │
 ├───────────────────────────────────────────────────────┴───────────┤
 │ Composer                                                         │
@@ -162,11 +164,11 @@ Pi
 
 **每節點**是一個小短橫／點，依狀態傳達有限語義：
 
-- 普通 turn：neutral marker；**同一時間只有一個 active turn**（依 transcript viewport 的閱讀錨點，而非所有與 viewport 相交的輪次）；新生成／正在工作：克制的小亮點；**只有真正需要使用者處理的異常**才附明確警示形狀。已完成且已處理的歷史失敗不需要把 rail 塗滿警示。閱讀助手答案時，active 仍屬於該 user/custom turn；streaming 不會新造 marker。
+- 普通 turn：neutral marker；**當 viewport 同時顯示多個 turn，就同時 Highlight 其所有 marker**；條件是量測的輪次區間與 `[scrollY, scrollY + viewportHeight)` 相交。非可視 Pin 中性；**工具 fail／pending／running 絕不修改 Pin 顏色**。Streaming 不新增 tool marker。
 - **不**為每個工具做一個節點；如要定位 tool failure，先跳至對應 turn，再可選聚焦其 Tool Activity summary。
-- **長會話**有界採樣或群集：例如最多 16–24 個可點 marker（P1 候選），保留**首輪、末輪、單一 active 輪、正在工作的輪、未解決異常輪**，剩餘按時間／turn 位置抽樣並形成 `+N` clustered node；不把異常悄悄抽樣丟掉。Rail 不自行建立另一份 scroll／resize observer；只讀 conversation viewport／turn geometry owner 提供的 activeTurnKey／可見錨點。
+- **長會話**有界採樣或群集：例如最多 16–24 個可點 marker（P1 候選），保留**首輪、末輪與所有可視輪次**，剩餘按時間／turn 位置抽樣並形成 `+N` clustered node；不把可視輪次悄悄抽樣丟掉；**工具失敗不是 Pin 的顏色或優先級**。Rail 不自行建立另一份 scroll／resize observer；只讀 conversation viewport owner 提供的 measured turn ranges、scrollY 與 viewportHeight。
 - 有 cluster 時，hover 預覽先顯示「第 17–30 輪／14 段」之類，不偽裝成單一問題；Click 開啟有界的子選單／zoom-in rail，**不能跳到任意抽樣輪就稱為精確跳轉**。
-- marker key 必須是 `(hostKey, runtimeId, sessionId, branchEpoch, turnId)`，而不是 DOM row index 或目前第 N 個項目。新事件插入、Compaction、pagination、remount 後也不可跳到錯 turn。
+- marker key 必須是 `(hostKey, runtimeId, sessionId, branchEpoch, turnId)`，而不是 DOM row index 或目前第 N 個項目。新事件插入、Compaction、pagination、remount 後也不可跳到錯 turn。**Rail markers、hover preview 必須 clamp 在 viewport，外框使用 Herdr Pane 圓角與 overflow clipping。**
 
 ### 4.3 Hover Preview：一個短提示，而不是資訊卡
 
@@ -207,8 +209,8 @@ Pi
 
 ### 4.5 Rail 和 Tool Activity 的聯動
 
-- **未解決且需要關注**的工具失敗可在原本那一輪的 marker 顯示警示（而非另創工具 marker）；Hover 最多附上 `需要處理`，**不顯示 `Read 8 · Run 1 · 1 failed` 等統計**。Click 回到該 turn，精確錯誤計數與原因由 Tool Activity summary/detail 承擔，且仍保持**collapsed**。
-- 使用者展開某輪工具細節改變行高時，**scroll anchor／當前 rail active mapping 不跳錯**；群組折疊時同理。
+- **工具失敗本身不改變 Pin 顏色，不會觸發 `需要處理`。** Hover 只有明確的 `requiresUserAction` 才附第二行；原始工具計數、失敗原因都留在對話 Tool Activity 內。Click 回到該 turn，精確錯誤計數與原因由 Tool Activity summary/detail 承擔，且仍保持**collapsed**。
+- 使用者展開某輪工具細節改變行高時，**scroll anchor／可見多個 marker 同步更新而不跳錯**；群組折疊時同理。
 - 收到 live tool event：更新的是既有 turn 的 marker 狀態與 preview cache，不重建整條 rail（也不使 hover 消失），不以每 token 觸發布局運算。
 - 過程與結論分離：Rail **不顯示回答摘要或 assistant headings**。辨認此輪靠 user/custom prompt，內容與結果靠 click-to-jump 後的主對話；不得拿中間工具 stdout 冒充預覽文字。
 
@@ -251,7 +253,9 @@ interface ToolActivityGroup {
   disclosure: "auto"|"user-open"|"user-closed";
 }
 interface RailViewState {
-  activeTurnKey?: TurnKey;           // from conversation viewport owner; one active turn
+  visibleTurnKeys: TurnKey[];        // all turns intersecting the viewport
+  scrollY: number;                  // canonical conversation scroll position
+  viewportHeight: number;
   keyboardFocusedTurnKey?: TurnKey;  // focus distinct from scroll position
   hoveredTurnKey?: TurnKey;
   hoverKind?: "marker"|"cluster";
@@ -260,7 +264,7 @@ interface RailViewState {
 }
 ```
 
-- **Index 與 Renderer 分離**：`RailIndex` 由 event store 的 TurnKey／status／short preview 建立，不能每次 hover 都去量測所有 history rows。**唯一的 activeTurnKey 應由 conversation viewport／turn geometry owner 供給，而非 Rail 自己建立第二套 scroll observer。** 長會話只對可見節點做有限工作。可參考 `pi-harness` 的 `history-rail.ts`：paged outline 提供**身分／順序／短預覽**，measured transcript 才能提供**已掛載的像素位置**；未掛載的 turn 絕不能假設自己有幾何。
+- **Index 與 Renderer 分離**：`RailIndex` 由 event store 的 TurnKey／status／short preview 建立，不能每次 hover 都去量測所有 history rows。**Conversation viewport／turn geometry owner 提供 `visibleTurnKeys` 的整個集合，而非單一 active，Rail 不建立第二套 scroll observer。** 長會話只對可見節點做有限工作。可參考 `pi-harness` 的 `history-rail.ts`：paged outline 提供**身分／順序／短預覽**，measured transcript 才能提供**已掛載的像素位置**；未掛載的 turn 絕不能假設自己有幾何。
 - **分層 state**：Pi event store 是 canonical content；ToolGroup 與 RailIndex 是**derived projection**；hover/focus/disclosure/scrollAnchor 是 per-pane **local UI state**。都不是第二個 transcript authority。
 - **先確認真 API**：[官方 Herdr `AGENTS.md`](https://github.com/herdrdev/herdr-app/blob/master/defaults/AGENTS.md) 記載 `.on_hover((hovered,cx)=>...)`、`openOverlay(...)`，但**native anchored preview、延遲 hover、虛擬 list 與 scroll-to-key 需要實驗**。同份文件明確禁止 `setTimeout`、DOM 和 CSS；沒有證據時不能把 `scrollIntoView`／`:hover` 或 JS 計時器當 GPUI 命令。
 - **策略降級**：不能實作安全定位 overlay 就先用 marker focused 狀態＋靠近 rail 的簡潔固定預覽容器；無法可靠 `jumpToTurn` 之前不能宣稱 rail 可用。窄 pane 不顯示 rail，但可有獨立的 turn list 選單；此選單也需共用同樣 TurnKey。
@@ -289,16 +293,18 @@ interface RailViewState {
 | **RL-01** | 1、3、30、1000 turns | 短會話不擠畫面；長會話 cluster 可追溯；首／尾／當前／異常不消失 |
 | **RL-02** | Hover／鍵盤 focus 第 7 輪 | **正常只顯示一行簡短使用者問題**；未解決需處理時最多再一行警示；**不顯示 Pi 摘要、工具統計、時間或 heading**；hover 不 jump |
 | **RL-03** | Click 第 7 輪 | 同一 Session 的精確 TurnKey 對齊；不偷改 Pi branch 或 UI tool 折疊 |
-| **RL-04** | 閱讀第 7 輪時收到 100 個 tool event | 不強制跟隨最新、**只有一個 active marker**／預覽穩定，沒有每事件全量重算 |
+| **RL-04** | 閱讀第 7 輪時收到 100 個 tool event | 不強制跟隨最新、**所有可視 markers 同時高亮**／預覽穩定，沒有每事件全量重算 |
 | **RL-05** | Hover 第 A Pane marker，然後切換到 Pane B / Pi 重啟 | A 的 preview／定位結果立即失效，不在 B 顯示 A 的內容 |
 | **RL-06** | 長文展開、上方補內容、窄 360px、Reduced Motion | 不遮擋 Composer／Status Bar，不丟 viewport anchor；窄 pane 使用替代導航 |
-| **RL-07** | 16+ marker cluster／含 failed turn | Cluster 展開能精確選中被合併的輪；失敗／最新輪不被採樣吞掉 |
+| **RL-07** | 16+ marker cluster／含 failed turn | Cluster 展開能精確選中被合併的輪；可視輪次不被採樣吞掉，工具失敗不影響 Pin 色 |
 | **RL-08** | 無滑鼠、鍵盤導航、螢幕閱讀器 | preview 可經 focus 取得，同樣內容有 accessible name；不是 hover-only 功能 |
 | **RL-09** | 一般輪次／未解決異常的 Hover 簡潔度 | **正常單行短 prompt**；異常最多加一行 `需要處理`；沒有回答摘要、tool badges、時間、模型、token、heading outline 或大卡片 |
+| **RL-10** | 視窗同時包含 3 個 user turns | **3 個 Pin 同時高亮**；滑鼠捲動即時更新，Click 保留連續 transcript 的 earlier turns |
+| **RL-11** | Hover 頂部／底部 Pin、折疊展開、Resize | Hover 與所有 Pin 不超出 viewport；量測高度更新後閱讀位置穩定，外框圓角與 Herdr Pane 對齊 |
 
 ### 交付 Gate
 
-只有通過 P1 Native GPUI 互動測試與目標 Herdr App 的實機 hover/click/resize/scrollback 截圖或短錄影，才能稱為完成。**在那之前所有尺寸、時間、API 與呈現均是方案，不是已完成實作。**
+目前 Demo 已透過 headless tests 驗證多 Pin + clamp + measured scroll，但仍須實機確認。只有通過 P1 Native GPUI 互動測試與目標 Herdr App 的實機 hover/click/resize/scrollback 截圖或短錄影，才能稱為完成。**在那之前所有尺寸、時間、API 與呈現均是方案，不是已完成實作。**
 
 ## 8. 來源追溯與避免照抄
 

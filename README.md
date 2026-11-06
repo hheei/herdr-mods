@@ -17,7 +17,7 @@ Run on the computer hosting the Herdr App GUI:
 sh scripts/install.sh agent-ui project-open
 ```
 
-Select **`agent-ui-demo`** in the Layout picker. The **single SVG icon** in the existing Status Bar switches between your Terminal Tab display and the synthetic Agent UI. The conversation includes seven test turns, grouped tool details, native Markdown and a lightweight navigation rail. Hover only shows a short question; click changes the transcript window to begin at that turn (not yet precise pixel scrolling).
+Select **`agent-ui-demo`** in the Layout picker. The **single SVG icon** in the existing Status Bar switches between your Terminal Tab display and the synthetic Agent UI. The conversation includes seven test turns, grouped tool details, native Markdown and a lightweight navigation rail. Hover only shows a short question; clicking a pin scrolls the **continuous transcript** to the corresponding measured turn. **All pins overlapping the visible viewport are highlighted**, and both pins and hover previews are kept inside the available area.
 
 This is an **opt-in Tab-display chrome-stack preview**, not a live Pi client or per-model split-Pane switch. It does not start, stop or send commands to Pi. [Installation and limitations](mods/agent-ui/README.md) · [implementation status](docs/agent-ui/11-agent-ui-demo-implementation.md).
 

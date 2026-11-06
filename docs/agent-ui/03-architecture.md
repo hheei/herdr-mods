@@ -130,7 +130,7 @@ host/agent-ui-relay/       # only if needed for desktop/native/SSH transport
 - `ProjectionStore` 使用 immutable event records，將同一使用者意圖整理成 turn；最新 live tail 與已完成 turns 分開更新，避免每 token 重建全部行。
 - `ToolActivityProjection` 在 turn 內先合成**單一預設折疊群組**；只有使用者展開才生成緊湊清單（不為每項畫獨立 box）。`ToolRendererRegistry` 只在單項被選取時投影 `details`，未知工具用安全純文字 fallback；群組摘要不得隱藏失敗／待處理的數量。
 - `ToolDetailRegistry` 把 Read／Search／Bash／Edit／Images／Unknown 的資料統一成可選擇的 presentation slots，再用對應的**輕量、無多層卡片**的 UI 呈現；長輸出只在開啟時分頁，不能靠現在的檔案內容偽造歷史 diff。
-- `RailIndex` 從同一 `ProjectionStore` 產生以 **TurnKey** 為基準的有界導航 markers（首尾／閱讀中／異常優先），**只有一個 activeTurnKey，由既有 Conversation viewport owner 提供**；`HoverPreviewModel` 預設只顯示**一行來源使用者提問**，未解決高優先異常才添第二行，不重複 assistant 回答或工具 metadata。已載入 turn 的位置使用已測量 geometry，未載入只有穩定身分，不捏造 pixel coordinates。`jumpToTurn` 只改本地 Conversation viewport scroll anchor；**不更動 Pi runtime／branch、也不建立全文索引**。此組件為 P1 原生 GPUI spike 候選，詳細行為見 [10](10-tool-activity-live-rail.md)。
+- `RailIndex` 從同一 `ProjectionStore` 產生以 **TurnKey** 為基準的有界 markers；**visibleTurnKeys 是所有和 viewport 區間相交的輪次集合，不再是一個 activeTurnKey**。既有 Conversation viewport 是唯一 scroll/geometry owner：利用每輪 `on_size_change` 的實際高度及現有 scroll offset 計算可見區間，click 只改同一份完整 transcript 的本地 scroll（不替換 rows）。`HoverPreviewModel` 預設只顯示邊界內一行來源提問，僅明確 `requiresUserAction` 才有第二行；**failed／pending 工具不等於需要使用者介入，也不改 Pin 顏色**。未載入 turn 只有身分／來源，不能捏造 pixels；**不更動 Pi runtime／branch、也不建立全文索引**。詳見 [10](10-tool-activity-live-rail.md) 與 [11](11-agent-ui-demo-implementation.md)。
 - `ViewState` 以 `ViewKey` 綁定草稿、disclosure、scroll anchor、搜尋、模式；不同 Pane 不共用焦點。
 - `ThemeTokens` 從 `theme()` 取得背景／文字／border，文字階層、間距、hover/focus/a11y 都一致。
 - `State` 是資料，不是動畫：更新 coalesce；原生動畫不用高頻 JS `notify()` 驅動。
@@ -190,7 +190,7 @@ Control: unavailable | validated | dispatching | uncertain
 2. Message timeline：使用者段落、助手答案、當前活動，按使用者 intent 分組。
 3. Tool summaries：每組工具**預設只顯示一行**類型／數量摘要，點擊後是無 box 的緊湊工具列，再點開單項詳細；失敗、未確定與等待輸入始終可辨認。
 4. Composer：自動成長、草稿、Shift+Enter 與 IME；未連通時禁用 Send。
-5. 回底、scroll anchor、Copy、鍵盤 focus、窄版；**不常駐 preview search**。先試驗對話區右側的 Live Conversation Rail：turn markers、**單一 active turn**、hover/focus **一行短使用者問題**（未解決異常才兩行）、click 跳轉；完整契約見 [10](10-tool-activity-live-rail.md)，不宣稱上游已提供 scroll-to-key。
+5. 回底、scroll anchor、Copy、鍵盤 focus、窄版；**不常駐 preview search**。Rail 預設 Highlight **全部與 viewport 相交的輪次**，Hover 一行問題、Pin 不反映 tool 狀態，click 在**連續 transcript** 按實測幾何捲動。Demo 用 Herdr `on_scroll_wheel`／`on_size_change` + clipped positioned content 實作，不宣稱上游已提供 scroll-to-key；詳見 [11](11-agent-ui-demo-implementation.md)。
 6. 真正的原生 Markdown（官方文件所列 `TextView.markdown`）、CJK／code／diff／科學公式的來源保真與降級，具體支援要在目標版驗證。
 
 ## 8. 安裝／相容與不干擾現有 mods

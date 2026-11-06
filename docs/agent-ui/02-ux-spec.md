@@ -6,7 +6,7 @@
 
 **P0 實際使用者回饋已確定 P1 的簡化方向**：移出 Working／Completed／Needs attention 開發場景按鈕、移除常駐 preview search、Status Bar 改單一 SVG、工具先群組折疊、使用真正的原生 Markdown renderer。原因和驗收詳見 [09 · 第一輪原型回饋](09-p0-feedback-round1.md)。
 
-**第二輪設計（HW1、pi-harness、四倉研究）**：工具活動不僅要縮減數量，更要有依類型的高品質細節呈現；不新增 Search，而是評估一條**對話區右邊緣的 Live Conversation Rail**：點擊按輪次跳轉、hover／鍵盤 focus **只看一行短使用者提問**（真正需要處理的異常才加第二行）。**單一 active turn，不加回答摘要／工具計數／時間戳／大 hover 卡片**。完整規格、事件模型、效能與驗收見 [10 · Tool Activity + Live Rail](10-tool-activity-live-rail.md)。Rail 是 P1 試驗候選，實測不佳可延後。
+**最新實測回饋優先於早期「單一 active turn」提案**：工具活動保留 group-first 折疊，但右側不獨立顯示狀態；工具失敗不等於需要使用者處理。對話區右側的 Live Conversation Rail **Highlight 所有與目前 viewport 相交的輪次 marker**，而非只有一個 selected turn。Click 在**同一份完整 transcript**捲至該輪（不是換一段 window），Hover 是邊界內的一行短問題；Pin 著色只代表視野，不由工具失敗／狀態決定。外框按 Herdr pane 風格使用圓角。實作現況見 [11](11-agent-ui-demo-implementation.md)，設計理由見 [10](10-tool-activity-live-rail.md)。
 
 ## 1. 使用情境與成功定義
 

@@ -39,7 +39,7 @@ sh scripts/install.sh agent-ui project-open
 
 ### Tool Activity
 
-1. 每個有工具的 turn **預設只顯示一行摘要**，含種類與可信計數；failed／pending 不可藏起來。
+1. 每個有工具的 turn **預設只顯示一行摘要**，含種類與可信計數；**右側不再有獨立狀態**。若失敗，僅在摘要的同一行文字內附帶 `N failed`，不以彩色狀態獨立佔據右側。失敗與待處理不是同一件事。
 2. 點擊整組 summary 才生成**無獨立卡片背景**的 compact tool rows。
 3. 點擊單項才掛載 Detail；Read／Search／Exec／Edit／Custom 有不同的 detail 標題；Edit patch 的增減行以簡單顏色區分。未知工具保留原文，輸出限制 8 KiB／32 行（Demo 文字預覽，不是全量結果 viewer）。
 4. 切換其他 turn 後 group/detail disclosure 存在 View 的本地 `Set` 中，不被重新渲染自動關閉。
@@ -54,12 +54,13 @@ sh scripts/install.sh agent-ui project-open
 
 ### Message Rail
 
-- 七輪各一個 marker，右側窄軌，**單一目前選擇輪次**。
-- `.on_hover` 顯示**一行截短 user prompt**；只有 `needs-input` 真正需處理輪次才加第二行 `需要處理`；無工具數量、時間戳、Pi 回覆或大幅預覽。
-- 點擊依**穩定 turn ID** 選取本地 transcript **window**，由被點輪次開始顯示之後的內容；用 `Earlier turns` 或 Rail 返回更早內容。這不是依螢幕像素位置的原生 `scroll-to-key`。因此 **free scroll 時的 active node 跟隨**仍未完成、也不該在 UI 驗收中假裝已做到。
-- 寬度低於約 520 logical px 時隱藏 rail，優先保留對話與 Composer。Hover popover 的真正 hit target／位置／裁切和鍵盤可及性需在原生 App 另行檢查。
+- 七輪各一個 marker；**視野內跨越多個使用者輪次時，對應所有 marker 同時 highlight**。Rail 還有代表 viewport 區間的淡色垂直區段，不是只有一個 selected turn。
+- `.on_hover` 只顯示**一行截短 user prompt**。只有 `requiresUserAction === true` 這種明確的使用者介入事件才加第二行 `需要處理`；**工具 failed／pending 不等於使用者需要介入**，也**不影響 Pin 顏色**。
+- 點擊固定 turn ID 時，在**同一份完整對話**內更新 `scrollY` 到該輪的**實際量測高度位置**；**不再將 earlier turns 切掉／換一份 window**。目前使用 Herdr 已有的 `on_scroll_wheel`、`on_size_change`、`overflow_hidden` 和絕對位置來建立手動可捲動 viewport；不是宣稱 Herdr 已有 public `scroll-to-id`。
+- `turnGeometry` 由每輪 `.on_size_change` 實測高度構成；群組展開導致高度變化時保留原閱讀錨點，滑鼠滾動更新 `scrollY`，所有與 viewport 區間相交的 turn 同時高亮。Hover 預覽及 rail pin 的 top 都以 viewport 高度 clamp，容器本身裁切。
+- 寬度低於約 520 logical px 時隱藏 Rail；**工作區根容器使用與 Herdr pane 相同的 `rounded(6).overflow_hidden()`**，避免 Header／Composer 在四角露出直角。原生 App 的 hover hit target、拖動滾動條、觸控捲動、鍵盤可及性仍需真機驗證。
 
-**真正連續 transcript 的精確 Jump／viewport-derived activeTurnKey、長歷史 cluster、鍵盤 Focus／Screen Reader 是下一輪 UI spike 的未完成項**，而不是已完成的功能。
+**已完成：連續 transcript 的量測式 Jump 和「可視範圍涵蓋多輪就全部 highlight」。** 尚未完成／實機未驗證：長歷史 cluster、原生 Scrollbar thumb、鍵盤 Focus／Screen Reader 和 GPUI 真實文字幾何。這些不是已完成產品功能。
 
 ## 安裝與不干擾要求
 
@@ -76,6 +77,6 @@ node tests/project-open.test.cjs
 sh tests/agent-ui-demo-install.test.sh
 ```
 
-已覆蓋的行為：七輪 fixtures、group 和 tool detail 的折疊、失敗摘要、Markdown 的原生 API 參數、極簡 hover、按 ID window jump、本地 Composer、窄畫面、單 SVG status control、獨立 derive layout、不覆蓋一般個人 Layout／main、備份。
+已覆蓋的行為：七輪 fixtures、group 和 tool detail 的折疊、失敗摘要（**右側不顯示狀態**）、工具失敗不觸發 `requiresUserAction`、Markdown 的原生 API 參數、**所有可見輪次的 Rail multi-highlight**、按 ID 捲動完整 transcript、Hover／Pin 可視範圍 clamp、**圓角 root**、本地 Composer、窄畫面、單 SVG status control、獨立 derive layout、不覆蓋一般個人 Layout／main、備份。
 
 實機進行以下 QA 才算完成下一個 Gate：`herdr-app check`、真實視窗截圖、Markdown code blocks、Hover 是否裁切、click 過程是否跳動、窄 Pane／IME／鍵盤 focus、當實際 UI 初始化失敗時是否仍能從 Status Bar 回 Terminal。**這台 Linux 執行環境沒有 `herdr-app` desktop binary，故無法代替目標 Mac 上的實機結果。**
