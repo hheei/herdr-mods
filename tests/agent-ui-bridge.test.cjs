@@ -1,4 +1,4 @@
-// The writer side of the bridge: Pi entries in, mailbox files out.
+// The writer side of the bridge: Pi entries in, two state files out.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -64,53 +64,47 @@ function messageEntry(id, message) {
       content: [{ type: "text", text: "x".repeat(50000) }], timestamp: 0 }),
   ]);
   assert.ok(long[0].tools[0].detail.length < project.LIMIT.detail + 60,
-    "a snapshot stays readable inside the reader's 1 MiB read");
+    "a state file stays readable inside the reader's 1 MiB read");
   assert.match(long[0].tools[0].detail, /\[truncated 48000 chars\]$/);
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-ui-bridge-"));
-  let built = [];
-  const box = mailbox.createMailbox(dir, { sessionId: "s-1", cwd: "/tmp/project",
-    snapshot: () => built });
-  assert.equal(fs.existsSync(path.join(dir, "meta.json")), false, "nothing is written until asked");
+  const read = (name) => JSON.parse(fs.readFileSync(path.join(dir, name), "utf8"));
+  const box = mailbox.createWriter(dir, { sessionId: "s-1", cwd: "/tmp/project" });
+  assert.equal(read("meta.json").sessionId, "s-1");
+  assert.equal(read("meta.json").cwd, "/tmp/project");
+  assert.equal(read("meta.json").version, 2);
 
-  built = turns;
-  box.snapshot(turns);
-  const snapshot = JSON.parse(fs.readFileSync(path.join(dir, "snapshot.json"), "utf8"));
-  assert.equal(snapshot.turns.length, 2);
-  assert.equal(snapshot.epoch, box.epoch);
-  assert.equal(box.epoch, JSON.parse(fs.readFileSync(path.join(dir, "meta.json"), "utf8")).epoch);
-  const meta = () => JSON.parse(fs.readFileSync(path.join(dir, "meta.json"), "utf8"));
-  assert.equal(meta().sessionId, "s-1");
-  assert.equal(meta().cwd, "/tmp/project");
+  box.done(turns);
+  assert.equal(read("done.json").turns.length, 2);
+  assert.equal(read("done.json").epoch, box.epoch);
 
-  box.emit({ type: "turn.start", turn: { id: "t-1", prompt: "hi" } });
-  box.emit({ type: "turn.end", turnId: "t-1" });
-  const first = JSON.parse(fs.readFileSync(path.join(dir, "ev-000001.json"), "utf8"));
-  assert.equal(first.seq, 1);
-  assert.equal(first.epoch, box.epoch);
-  assert.equal(first.type, "turn.start");
-  assert.equal(meta().seq, 2, "meta tells a reader which sequence number to read next");
+  const liveTurn = { id: "t-1", prompt: "hi", status: "working", messages: [], tools: [] };
+  box.live(liveTurn, true);
+  assert.equal(read("live.json").turn.id, "t-1");
+  const firstWrite = read("live.json").revision;
+  liveTurn.messages.push({ id: "a-1", role: "assistant", text: "partial", open: true });
+  box.live(liveTurn);
+  box.live(liveTurn);
+  assert.equal(box.live(liveTurn), null, "streaming rewrites are throttled");
+  assert.equal(read("live.json").revision, firstWrite, "a throttled flush writes nothing");
+  box.live(liveTurn, true);
+  assert.equal(read("live.json").turn.messages[0].text, "partial", "a forced flush carries the newest text");
+  assert.ok(read("live.json").revision > firstWrite);
+
+  box.live(null, true);
+  assert.equal(read("live.json").turn, null, "a settled session has no turn in flight");
+  assert.equal(fs.readdirSync(dir).filter((name) => name.startsWith("ev-")).length, 0,
+    "nothing is appended: there is no event log to prune");
   assert.equal(fs.readdirSync(dir).some((name) => name.endsWith(".tmp")), false,
     "a reader never sees half a file");
 
-  box.snapshot(turns);
-  assert.equal(fs.existsSync(path.join(dir, "ev-000001.json")), false,
-    "the snapshot folds earlier events away");
-  assert.equal(fs.existsSync(path.join(dir, "ev-000002.json")), false);
-
-  const many = mailbox.createMailbox(fs.mkdtempSync(path.join(os.tmpdir(), "agent-ui-ring-")),
-    { snapshot: () => turns });
-  for (let i = 0; i < mailbox.SNAPSHOT_EVERY + 1; i++) many.emit({ type: "turn.end", turnId: `t-${i}` });
-  assert.ok(fs.existsSync(path.join(many.dir, "snapshot.json")),
-    "a long run folds itself into a snapshot instead of growing forever");
-  assert.equal(fs.readdirSync(many.dir).filter((name) => name.startsWith("ev-")).length, 1,
-    "only the event after the folding snapshot survives");
-
   box.close();
-  assert.equal(meta().closed, true, "a closed bridge is not a stale one");
+  assert.equal(read("meta.json").closed, true, "a closed bridge is not a stale one");
+  assert.deepEqual(Array.from(fs.readdirSync(dir).sort()),
+    ["done.json", "live.json", "meta.json"], "the whole bridge is three small files");
 
   fs.rmSync(dir, { recursive: true, force: true });
-  console.log("PASS: bridge writer — entries projected, atomic files, seq/epoch, folding, close.");
+  console.log("PASS: bridge writer — entries projected, three state files, throttled live flush, close.");
 })().catch((error) => {
   console.error(error);
   process.exit(1);

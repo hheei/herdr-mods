@@ -1,17 +1,19 @@
-// Writes what this Pi session is doing into the Agent UI mailbox.
-// Read-only: nothing here sends anything to Pi, and a failure at any point must
-// leave the Terminal working, so every write is guarded.
+// Publishes what this Pi session is doing where the Agent UI can read it.
+// Read-only and guarded: nothing here sends anything to Pi, and a failed write
+// must leave the Terminal working.
 import { homedir } from "node:os";
 import path from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { createMailbox } from "./mailbox.js";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { createWriter } from "./mailbox.js";
 import { clip, entriesToTurns, kindOf, LIMIT, targetOf, textOf } from "./project.js";
 
+// Same ceiling the view keeps, so a long session never grows the files.
+const DONE_LIMIT = 200;
+
 export default function (pi: ExtensionAPI) {
-  let box: ReturnType<typeof createMailbox> | null = null;
-  let here: ExtensionContext | null = null;
-  let turn = "";
-  let message = "";
+  let box: ReturnType<typeof createWriter> | null = null;
+  let done: any[] = [];
+  let turn: any = null;
   let count = 0;
 
   const guard = (fn: () => void) => {
@@ -22,77 +24,83 @@ export default function (pi: ExtensionAPI) {
     }
   };
 
-  const emit = (event: object) => guard(() => box?.emit(event));
+  const flush = (force: boolean) => guard(() => box?.live(turn, force));
 
-  const startTurn = (prompt: string) => {
-    turn = `t-${++count}`;
-    message = "";
-    emit({ type: "turn.start", turn: { id: turn, prompt } });
+  const openTurn = (prompt: string) => {
+    turn = { id: `t-${++count}`, prompt, status: "working", messages: [], tools: [] };
+    flush(true);
     return turn;
   };
 
-  const ensureTurn = () => (turn === "" ? startTurn("") : turn);
+  const ensureTurn = () => turn ?? openTurn("");
 
-  pi.on("session_start", async (_event, ctx) => {
+  const settle = () => {
+    if (!turn) return;
+    const finished = { ...turn, status: "done" };
+    done = [...done, finished].slice(-DONE_LIMIT);
+    turn = null;
     guard(() => {
-      here = ctx;
+      box?.live(null, true);
+      box?.done(done);
+    });
+  };
+
+  pi.on("session_start", async (_event, ctx) =>
+    guard(() => {
       count = 0;
-      turn = "";
-      message = "";
+      turn = null;
       const appHome = process.env.HERDR_APP_HOME ?? path.join(homedir(), ".config", "herdr-app");
-      const dir = path.join(appHome, "agent-ui", "bridge", String(process.pid));
-      box = createMailbox(dir, {
+      box = createWriter(path.join(appHome, "agent-ui", "bridge", String(process.pid)), {
         sessionId: ctx.sessionManager.getSessionId(),
         cwd: ctx.sessionManager.getCwd(),
-        snapshot: () => entriesToTurns(here?.sessionManager.getBranch() ?? []),
       });
-      box.snapshot(entriesToTurns(ctx.sessionManager.getBranch()));
-    });
-  });
+      done = entriesToTurns(ctx.sessionManager.getBranch()).slice(-DONE_LIMIT);
+      box.done(done);
+      box.live(null, true);
+    }));
 
   pi.on("session_shutdown", async () => guard(() => box?.close()));
 
   pi.on("message_start", async (event) => {
     const role = event.message?.role;
     if (role === "user") {
-      startTurn(textOf(event.message));
+      openTurn(textOf(event.message));
       return;
     }
     if (role !== "assistant") return;
-    const turnId = ensureTurn();
-    message = `a-${++count}`;
-    emit({ type: "message.start", turnId, message: { id: message } });
+    ensureTurn().messages.push({ id: `a-${++count}`, role: "assistant", text: "", open: true });
+    flush(true);
   });
 
   pi.on("message_update", async (event) => {
     const delta = event.assistantMessageEvent;
-    if (delta?.type !== "text_delta" || message === "") return;
-    emit({ type: "message.delta", turnId: turn, messageId: message, text: delta.delta });
+    const message = turn?.messages.at(-1);
+    if (delta?.type !== "text_delta" || !message?.open) return;
+    message.text += delta.delta;
+    flush(false);
   });
 
   pi.on("message_end", async (event) => {
-    if (event.message?.role !== "assistant" || message === "") return;
-    emit({ type: "message.end", turnId: turn, messageId: message, text: textOf(event.message) });
-    message = "";
+    const message = turn?.messages.at(-1);
+    if (!message?.open) return;
+    message.text = clip(textOf(event.message), LIMIT.text);
+    message.open = false;
+    flush(true);
   });
 
   pi.on("tool_execution_start", async (event) => {
-    const turnId = ensureTurn();
-    emit({ type: "tool.start", turnId, tool: { id: event.toolCallId,
-      kind: kindOf(event.toolName), title: event.toolName, target: targetOf(event.args) } });
+    ensureTurn().tools.push({ id: event.toolCallId, kind: kindOf(event.toolName),
+      title: event.toolName, target: targetOf(event.args), status: "running", detail: "" });
+    flush(true);
   });
 
   pi.on("tool_execution_end", async (event) => {
-    if (turn === "") return;
-    emit({ type: "tool.update", turnId: turn, toolId: event.toolCallId,
-      patch: { status: event.isError ? "failed" : "done",
-        detail: clip(textOf(event.result), LIMIT.detail) } });
+    const tool = turn?.tools.find((item: any) => item.id === event.toolCallId);
+    if (!tool) return;
+    tool.status = event.isError ? "failed" : "done";
+    tool.detail = clip(textOf(event.result), LIMIT.detail);
+    flush(true);
   });
 
-  pi.on("agent_settled", async () => {
-    if (turn === "") return;
-    emit({ type: "turn.end", turnId: turn });
-    turn = "";
-    message = "";
-  });
+  pi.on("agent_settled", async () => settle());
 }

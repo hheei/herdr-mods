@@ -1,19 +1,17 @@
-// The bridge's mailbox: one writer, readers that only ever read.
-// A reader watches the folder, reads ev-<seq>.json in order, and falls back to
-// snapshot.json when a sequence number is missing.
+// The bridge's only job: publish the current state of this Pi session where the
+// view can read it. Two small files, rewritten in place, and nothing appended.
+// A reader's "latest read wins" is correct because these are states, not deltas.
 import fs from "node:fs";
 import path from "node:path";
 
-// Every snapshot bounds the folder: older event files are deleted by it.
-export const SNAPSHOT_EVERY = 64;
+// Streaming rewrites live.json at most this often; a settled turn is immediate.
+export const LIVE_MS = 200;
 
-const pad = (seq) => String(seq).padStart(6, "0");
-
-export function createMailbox(dir, info = {}) {
+export function createWriter(dir, info = {}) {
   const epoch = `${Date.now().toString(36)}-${process.pid.toString(36)}`;
   const startedAt = new Date().toISOString();
-  let seq = 0;
-  let since = 0;
+  let revision = 0;
+  let lastLive = 0;
   fs.mkdirSync(dir, { recursive: true });
 
   function write(name, value) {
@@ -25,42 +23,34 @@ export function createMailbox(dir, info = {}) {
 
   function meta(extra = {}) {
     write("meta.json", {
-      version: 1, epoch, seq, pid: process.pid, startedAt,
+      version: 2, epoch, revision, pid: process.pid, startedAt,
       sessionId: info.sessionId ?? null, cwd: info.cwd ?? null,
       updatedAt: new Date().toISOString(), ...extra,
     });
   }
 
-  function prune(upto) {
-    for (const name of fs.readdirSync(dir)) {
-      const match = /^ev-(\d+)\.json$/.exec(name);
-      if (match && Number(match[1]) <= upto) fs.rmSync(path.join(dir, name), { force: true });
-    }
-  }
+  meta();
 
   return {
     dir,
     epoch,
-    get seq() {
-      return seq;
+    get revision() {
+      return revision;
     },
-    snapshot(turns) {
-      write("snapshot.json", { version: 1, epoch, seq, turns });
-      prune(seq); // this snapshot is the state after seq, so those files are dead
-      since = 0;
-      meta();
+    // Everything settled. Rewritten once per finished turn, not per event.
+    done(turns) {
+      revision += 1;
+      write("done.json", { version: 2, epoch, revision, turns });
+      return revision;
     },
-    emit(event) {
-      seq += 1;
-      const stamped = { ...event, seq, epoch };
-      write(`ev-${pad(seq)}.json`, stamped);
-      since += 1;
-      if (since >= SNAPSHOT_EVERY) {
-        const turns = typeof info.snapshot === "function" ? info.snapshot() : null;
-        if (Array.isArray(turns)) this.snapshot(turns);
-      }
-      meta();
-      return stamped;
+    // The turn in flight. Throttled unless told to flush now.
+    live(turn, force = false) {
+      const now = Date.now();
+      if (turn !== null && !force && now - lastLive < LIVE_MS) return null;
+      lastLive = now;
+      revision += 1;
+      write("live.json", { version: 2, epoch, revision, turn });
+      return revision;
     },
     close() {
       meta({ closed: true });

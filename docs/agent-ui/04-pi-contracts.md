@@ -150,7 +150,7 @@ interface LocalViewState {
 
 Herdr Mod 端的 `exec` **不能被假設**可帶任意私有 stdin stream。需要經目標版驗證的 request-body／stdio／owner-only IPC 通道；無法建置時可以先發佈 UI reading / live 展示但停用 Send，不改用 `hc send`／`hc keys` 盲打現有 Terminal。
 
-### P2 實際採用：file mailbox（讀取方向）
+### P2 實際採用：三檔案狀態信箱（讀取方向）
 
 以 `defaults/herdr.d.ts`（目標版）核對過的 Mod 能力：
 
@@ -162,21 +162,25 @@ Herdr Mod 端的 `exec` **不能被假設**可帶任意私有 stdin stream。需
 | `watchFolder(dir)` | 資料夾變更會**推送**路徑批次 |
 | `cx.timer.every` | 可行，但每次 `notify` 重繪整個視窗 |
 
-因此讀取方向不是 relaying socket，而是一個**信箱目錄**，單一寫者、多讀者：
+第一版寫過「一事件一檔＋序號＋剪枝」，但那是在硬碟上追加一串 delta：每次 token 都寫檔，還要維護序號、缺號偵測與剪枝。**改成狀態而不是事件**之後那些全部消失：
 
 ```
 <HERDR_APP_HOME>/agent-ui/bridge/<pid>/
-  meta.json      {version, epoch, seq, pid, sessionId, cwd, updatedAt, closed?}
-  snapshot.json  {version, epoch, seq, turns}      // 這個 seq 之後的狀態
-  ev-000123.json 一個事件一個檔（6 位零填充，字典序＝數序）
+  meta.json   {version, epoch, revision, pid, sessionId, cwd, updatedAt, closed?}
+  done.json   {version, epoch, revision, turns}   // 已結束的輪（上限 200）
+  live.json   {version, epoch, revision, turn}    // 進行中的那一輪，或 null
 ```
 
-- 寫：先寫 `<name>.tmp` 再 `rename`，讀者不會看到半個檔。
-- 讀：`watchFolder` 收到批次 → 讀 `seq+1..n`；檔案缺失或 `snapshot.seq >= next` 就是 gap → 讀 `snapshot.json` resync。
-- 界：每 64 個事件由寫者折一次 snapshot，並刪掉 `seq <= snapshot.seq` 的事件檔。目錄因此有界。
-- 身分：`meta.json` 帶 `sessionId`／`cwd`／`pid`。P2 只讀，挑錯也只是看到別的 session 的內容，UI header 顯示 sessionId 與 cwd，不靜默猜。
+- **兩個檔原地覆寫**，不新增、不追加、不需剪枝；整個 bridge 就是三個小檔。
+- 寫：`<name>.tmp` + `rename`，讀者不會看到半個檔。
+- 讀：`watchFolder` 收到批次 → 讀 `live.json`（一律）與變更過的 `done.json` → 交給 reducer 當一次 `snapshot`。**因為是完整狀態，「最後讀到的就是真的」**，沒有順序、缺號或重播問題。
+- 節流：`live.json` 串流時最多每 200 ms 寫一次（`LIVE_MS`），輪結束、工具開始／結束則立刻 flush。一次 60 秒的回答約 300 次小檔覆寫，而不是數千個 delta 檔。
+- 界：`done` 上限 200 輪＝view 的上限；單欄位截斷（文字 20k、工具輸出 2k），確保 `readTextFile` 的 1 MiB 不會把 JSON 截斷成非法內容。
+- 身分：`meta.json` 帶 `sessionId`／`cwd`／`pid`。P2 只讀，挑錯也只看到別的 session，UI header 顯示 sessionId 與 cwd。
 
-**為什麼不是別的**：unix socket 與 named pipe 需要 Mod 端串流 API（沒有）；用 `exec` 長輪詢可以在每個事件批次換一次程序啟動（約數十 ms）與逾時／孤兒程序管理，比一個資料夾更貴；直接讀 Pi 的 session JSONL 被本文件前面禁止（別的作者、沒有 epoch、無去重依據）。
+**為什麼不是讀 Pi 的 session JSONL**：它是公開、有版本的文件格式（`docs/session-format.md`，v3，含遷移），但那是**耐久紀錄**，不是即時流——`message_update` 不落盤、`message_end` 才 append，工具在執行中也沒有條目；而且路徑由 cwd 推導，同一個 cwd 的兩個 Pi 只能猜。檔案格式公開不代表它適合當 live 通道。
+
+**為什麼不是 unix socket**：Mod 端沒有 socket／串流 API。用 `exec` 長輪詢等於每批事件換一次程序啟動與逾時／孤兒管理，比三個小檔貴。
 
 **尚未解決**：寫入方向（P3 `prompt`／`steer`／`abort`）需要回執與不確定語義，`writeTextFile` 的 CAS 只能當 command 檔的載體，不能證明 Pi 收到；那仍待安全通道，或先停用 Send。
 
