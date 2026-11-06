@@ -54,13 +54,15 @@ sh scripts/install.sh agent-ui project-open
 
 ### Message Rail
 
-- 七輪各一個 marker；**視野內跨越多個使用者輪次時，對應所有 marker 同時 highlight**。Rail 還有代表 viewport 區間的淡色垂直區段，不是只有一個 selected turn。
+- 七輪各一個**小圓點**，預設直徑 4px；**所有與視野相交的輪次同時放大成 8px 圓點**。中心線固定在相同 23px hit target，避免放大造成排列偏移；只用 Theme 的 `dim`／`muted` 中性色，已移除額外垂直高亮條。
 - `.on_hover` 只顯示**一行截短 user prompt**。只有 `requiresUserAction === true` 這種明確的使用者介入事件才加第二行 `需要處理`；**工具 failed／pending 不等於使用者需要介入**，也**不影響 Pin 顏色**。
 - 點擊固定 turn ID 時，在**同一份完整對話**內更新 `scrollY` 到該輪的**實際量測高度位置**；**不再將 earlier turns 切掉／換一份 window**。目前使用 Herdr 已有的 `on_scroll_wheel`、`on_size_change`、`overflow_hidden` 和絕對位置來建立手動可捲動 viewport；不是宣稱 Herdr 已有 public `scroll-to-id`。
 - `turnGeometry` 由每輪 `.on_size_change` 實測高度構成；群組展開導致高度變化時保留原閱讀錨點，滑鼠滾動更新 `scrollY`，所有與 viewport 區間相交的 turn 同時高亮。Hover 預覽及 rail pin 的 top 都以 viewport 高度 clamp，容器本身裁切。
-- 寬度低於約 520 logical px 時隱藏 Rail；**工作區根容器使用與 Herdr pane 相同的 `rounded(6).overflow_hidden()`**，避免 Header／Composer 在四角露出直角。原生 App 的 hover hit target、拖動滾動條、觸控捲動、鍵盤可及性仍需真機驗證。
+- 寬度低於約 520 logical px 時隱藏 Rail。**這是既有 Chrome Layout Stack 的 UI child，不是獨立 model Pane**。此 child 使用 `rounded(10)`、1px `theme.border` 和 `overflow_hidden()` 輕量模擬 Herdr Main Layout 框架，Topbar 高 38px、底部有淡色分隔線。真正 Terminal Pane Frame 由宿主負責；若將來宿主替 UI 也繪製 Frame，就應移除本地邊框避免雙重輪廓。
 
-**已完成：連續 transcript 的量測式 Jump 和「可視範圍涵蓋多輪就全部 highlight」。** 尚未完成／實機未驗證：長歷史 cluster、原生 Scrollbar thumb、鍵盤 Focus／Screen Reader 和 GPUI 真實文字幾何。這些不是已完成產品功能。
+**已完成：連續 transcript 的量測式 Jump 和「可視範圍涵蓋多輪就全部放大圓點」。** 尚未完成／實機未驗證：長歷史 cluster、原生 Scrollbar thumb、鍵盤 Focus／Screen Reader 和 GPUI 真實文字幾何。這些不是已完成產品功能。
+
+**Scrollbar 下一步**：Herdr Terminal 使用細圓角 Thumb，其他 Mod 亦可使用 `gpui-base.Scrollbar.vertical`。但本 Demo 目前由單一手動 `scrollY` 與 measured turns 管理 viewport；未有同步 Scrollbar 拖曳與 Rail 可視集合的可靠橋接前，**不直接疊加另一個獨立 Scrollbar**。保留 Herdr 原生外觀作為整合目標。
 
 ## 安裝與不干擾要求
 

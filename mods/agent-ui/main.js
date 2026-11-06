@@ -262,15 +262,8 @@ export default class AgentUi extends View {
     const nodes = toRailNodes(this.turns);
     const marks = railMarkers(geometry.ranges, geometry.total, this.viewportHeight);
     const byId = new Map(marks.map((mark) => [mark.id, mark]));
-    const rangeStart = 7 + Math.max(0, this.viewportHeight - 30) *
-      (this.scrollY / Math.max(1, geometry.total));
-    const rangeEnd = 7 + Math.max(0, this.viewportHeight - 30) *
-      (Math.min(geometry.total, this.scrollY + this.viewportHeight) / Math.max(1, geometry.total));
     return div().id("agent-ui-rail").w(29).flex_none().h_full()
       .relative().overflow_hidden()
-      .child(div().id("agent-ui-rail-window").absolute().left(1).top(rangeStart)
-        .w(2).h(Math.max(3, rangeEnd - rangeStart)).rounded(2)
-        .bg(t.accent).opacity(0.30))
       .children(nodes.map((node) =>
         h_flex().id(`agent-ui-rail-marker-${node.id}`).w(23).h(16).absolute()
           .left(4).top(byId.get(node.id)?.top ?? 7)
@@ -278,10 +271,10 @@ export default class AgentUi extends View {
           .cursor_pointer()
           .on_hover((on, cx) => this.showHover(node.id, on, cx))
           .on_click((_event, cx) => this.selectTurn(node.id, cx))
-          // The highlight represents ALL turns intersecting the viewport,
-          // never a tool result (including tool failures).
-          .child(div().w(visible.has(node.id) ? 13 : 9).h(3).rounded(2)
-            .bg(visible.has(node.id) ? t.accent : t.dim))));
+          // Every turn intersecting the viewport gets a larger CIRCLE,
+          // aligned on the same centerline. Tool state never changes pins.
+          .child(div().size(visible.has(node.id) ? 8 : 4).rounded(999)
+            .bg(visible.has(node.id) ? t.muted : t.dim))));
   }
 
   hoverPreview(t, geometry) {
@@ -314,12 +307,14 @@ export default class AgentUi extends View {
     this.scrollY = clampScroll(this.scrollY, geometry.total, this.viewportHeight);
     const visible = new Set(visibleTurnIds(geometry.ranges, this.scrollY, this.viewportHeight));
     return v_flex().id("agent-ui-root").size_full().min_h(0)
-      .rounded(6).overflow_hidden().bg(t.background)
+      // A Layout Stack child, not an independent Pane. Mimic the native
+      // card frame here, without introducing a second host Pane Frame.
+      .rounded(10).overflow_hidden().border_1().border_color(t.border).bg(t.background)
       .text_color(t.foreground)
       .on_size_change((size, context) => this.changeSize(size, context))
-      .child(h_flex().id("agent-ui-header").h(45).flex_none().px(17).gap(9)
+      .child(h_flex().id("agent-ui-header").h(38).flex_none().px(12).gap(9)
         .items_center().border_b(1).border_color(t.border)
-        .child(div().flex_1().text_size(13.5).font_semibold().child("Pi · Conversation"))
+        .child(div().flex_1().text_size(12.5).font_semibold().child("Pi · Conversation"))
         .child(this.statusLine(t, this.turns.at(-1).status))
         .child(div().text_color(t.dim).text_size(10).child("DEMO")))
       .child(h_flex().id("agent-ui-main").flex_1().min_h(0)

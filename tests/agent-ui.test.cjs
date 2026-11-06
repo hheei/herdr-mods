@@ -115,11 +115,21 @@ assert.ok(find(tree, "agent-ui-root"));
 assert.ok(find(tree, "agent-ui-composer"));
 assert.ok(find(tree, "agent-ui-rail"));
 assert.ok(find(tree, "agent-ui-rail-marker-t-inspect"));
-assert.ok(find(tree, "agent-ui-rail-window"));
-assert.equal(find(tree, "agent-ui-root").style.rounded[0], 6,
-  "workspace frame has native Herdr rounded corners");
+assert.equal(find(tree, "agent-ui-rail-window"), null,
+  "rail is made of circles, not a separate vertical range bar");
+assert.equal(find(tree, "agent-ui-root").style.rounded[0], 10,
+  "Stack view follows Herdr main-layout corner radius");
+assert.deepEqual(Array.from(find(tree, "agent-ui-root").style.border_1), [],
+  "Stack view has a subtle native-style one-pixel border");
+assert.equal(find(tree, "agent-ui-root").style.border_color[0], "#444",
+  "Stack view uses theme border rather than a hard-coded color");
 assert.ok(find(tree, "agent-ui-root").style.overflow_hidden,
   "rounded workspace clips child content");
+assert.equal(find(tree, "agent-ui-header").style.h[0], 38,
+  "header is aligned with Herdr's 38px Terminal-style chrome");
+const inactiveDot = find(tree, "agent-ui-rail-marker-t-live").kids[0];
+assert.equal(inactiveDot.style.size[0], 4, "offscreen pin is a small circle");
+assert.equal(inactiveDot.style.rounded[0], 999, "pin is circular, not a line");
 assert.equal(find(tree, "agent-ui-rail-preview"), null);
 assert.equal(find(tree, "agent-ui-scenes"), null);
 assert.equal(find(tree, "agent-ui-search"), null);
@@ -165,9 +175,17 @@ const visible = box.visibleTurnIds(
   box.turnGeometry(ui.turns, ui.turnHeights).ranges, ui.scrollY, ui.viewportHeight);
 assert.ok(visible.length >= 2, "viewport contains multiple visible turns");
 for (const turnId of visible) {
-  assert.equal(find(scrolled, `agent-ui-rail-marker-${turnId}`).kids[0].style.w[0], 13,
-    "every visible turn pin must be highlighted");
+  const pin = find(scrolled, `agent-ui-rail-marker-${turnId}`).kids[0];
+  assert.equal(pin.style.size[0], 8,
+    "every visible turn pin enlarges as a circle");
+  assert.equal(pin.style.rounded[0], 999);
 }
+const outside = ui.turns.find(turn => !visible.includes(turn.id));
+assert.ok(outside, "fixture contains turns outside viewport");
+const outsidePin = find(scrolled, `agent-ui-rail-marker-${outside.id}`).kids[0];
+assert.equal(outsidePin.style.size[0], 4, "outside turns stay smaller");
+assert.equal(outsidePin.style.bg[0], "#777",
+  "outside turns use neutral theme dim, never tool status");
 assert.ok(ui.scrollY > 0);
 
 ui.selectTurn("t-failure", context);
@@ -244,9 +262,12 @@ const json = JSON.parse(layout.stdout);
 const work = json.children.find((x) => x.id === "work");
 const stack = work.children.find((x) => x.id === "work-body").children[0];
 assert.equal(stack.id, "agent-ui-demo-surface");
+assert.equal(stack.type, "stack", "the UI stays in the existing chrome Layout Stack");
 assert.equal(stack.active, "agent-ui-demo-terminal");
 assert.equal(stack.children[0].content.mod, "agent-ui");
 assert.equal(stack.children[1].content.tab, "active");
+assert.ok(stack.children.every(child => child.type === "block"),
+  "no extra model Pane is added by the preview layout");
 assert.equal(work.children.find((x) => x.id === "status").content.mod, "workspace-status",
   "status is patched only when project-open is installed");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "mods/agent-ui/mod.json"), "utf8"));

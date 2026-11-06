@@ -3,6 +3,8 @@
 **日期：2026-11-06｜狀態：設計參考；已有部分原生 GPUI Demo 實作，其餘仍待實機驗證。** Tool Activity 已有第一版；Live Rail 的高密度歷史／可及性仍待完整驗證，測試不佳可延後，不能因加入側邊控件犧牲閱讀空間。
 **最新修改**：[11](11-agent-ui-demo-implementation.md) 已把連續 transcript 的多輪可視高亮、量測式 click 捲動、限界 hover 和圓角實作成 Demo；以下早期「單一 active turn／工具狀態 Pin」描述以最新規格為準。
 
+**Stack 與圓點設計**：Agent UI 是 **Chrome Layout Stack 內的 UI child**，不建立獨立的 model Pane。Message Rail 預設每輪一個 **4px 圓點**，所有與 viewport 相交的輪次圓點均放大到 **8px**，共用同一條中心線；Theme `dim`／`muted` 中性色，不依工具狀態染色。移除額外的縱向區間高亮條，避免與 Scrollbar 混淆。Stack 子視圖輕量使用 Herdr 同款圓角／邊線／Topbar，沒有重複建立 Pane Frame。手動 transcript `scrollY` 暫為唯一 scroll owner，不能疊加未同步的 native Scrollbar。
+
 本文件回應 P0 試用後兩項新增要求：**工具卡參考其他 Agent UI 重新設計**，以及**不加 Search，改評估即時對話導航側欄：點擊跳轉、hover 預覽**。沿用 [02 UI／UX](02-ux-spec.md) 和 [07 P1 polish](07-post-prototype-polish.md)；不修改現有 Pi 程序／Session、不建立 JSONL Reader。
 
 ## 1. 設計定位：兩個不同、相輔相成的層次
@@ -300,7 +302,8 @@ interface RailViewState {
 | **RL-08** | 無滑鼠、鍵盤導航、螢幕閱讀器 | preview 可經 focus 取得，同樣內容有 accessible name；不是 hover-only 功能 |
 | **RL-09** | 一般輪次／未解決異常的 Hover 簡潔度 | **正常單行短 prompt**；異常最多加一行 `需要處理`；沒有回答摘要、tool badges、時間、模型、token、heading outline 或大卡片 |
 | **RL-10** | 視窗同時包含 3 個 user turns | **3 個 Pin 同時高亮**；滑鼠捲動即時更新，Click 保留連續 transcript 的 earlier turns |
-| **RL-11** | Hover 頂部／底部 Pin、折疊展開、Resize | Hover 與所有 Pin 不超出 viewport；量測高度更新後閱讀位置穩定，外框圓角與 Herdr Pane 對齊 |
+| **RL-11** | Hover 頂部／底部 Pin、折疊展開、Resize | Hover 與所有 Pin 不超出 viewport；量測高度更新後閱讀位置穩定，Stack 子視圖的外框對齊 Herdr Theme |
+| **RL-12** | 可視多輪與不可視輪次交替 | 所有可視輪次皆為 **8px 圓點**，不可視為 **4px 圓點**；點中心對齊、點擊區不變；Pin 不使用工具狀態色，也沒有縱向高亮條 |
 
 ### 交付 Gate
 
