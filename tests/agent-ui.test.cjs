@@ -67,10 +67,12 @@ const box = {
   Textarea: { new: () => node() },
 };
 const modelSrc = fs.readFileSync(path.join(root, "mods/agent-ui/model.js"), "utf8").replace(/^export /gm, "");
+const stateSrc = fs.readFileSync(path.join(root, "mods/agent-ui/state.js"), "utf8")
+  .replace(/^export /gm, "");
 const fixtureSrc = fs.readFileSync(path.join(root, "mods/agent-ui/fixtures.js"), "utf8")
-  .replace(/^export const /gm, "const ");
-vm.runInNewContext(modelSrc + "\n" + fixtureSrc
-  + "\nthis.summarizeActivity=summarizeActivity;this.toRailNodes=toRailNodes;this.shortPrompt=shortPrompt;this.turnGeometry=turnGeometry;this.clampScroll=clampScroll;this.visibleTurnIds=visibleTurnIds;this.railLayout=railLayout;this.dotSize=dotSize;this.railHit=railHit;this.previewTop=previewTop;this.railScrubOffset=railScrubOffset;this.FIXTURE_TURNS=FIXTURE_TURNS;this.DEMO_TURNS=DEMO_TURNS;", box);
+  .replace(/^export (const|function) /gm, "$1 ");
+vm.runInNewContext(modelSrc + "\n" + stateSrc + "\n" + fixtureSrc
+  + "\nthis.summarizeActivity=summarizeActivity;this.toRailNodes=toRailNodes;this.shortPrompt=shortPrompt;this.turnGeometry=turnGeometry;this.clampScroll=clampScroll;this.visibleTurnIds=visibleTurnIds;this.railLayout=railLayout;this.dotSize=dotSize;this.railHit=railHit;this.previewTop=previewTop;this.railScrubOffset=railScrubOffset;this.FIXTURE_TURNS=FIXTURE_TURNS;this.DEMO_TURNS=DEMO_TURNS;this.fixtureSource=fixtureSource;this.applyEvent=applyEvent;this.createTranscript=createTranscript;", box);
 
 assert.equal(box.FIXTURE_TURNS.length, 7);
 assert.equal(box.DEMO_TURNS.length, 60, "the shipped demo ships a long history");
@@ -584,12 +586,13 @@ assert.equal(typeof context.tick, "function", "init registers the only tick Mods
 const streamCount = ui.turns.length;
 find(ui.render(context), "agent-ui-stream").handlers.on_click({}, context);
 assert.equal(ui.turns.length, streamCount + 1, "replay appends a working turn");
-const streamId = ui.stream.id;
-const streamed = ui.turns.find((turn) => turn.id === streamId);
-assert.equal(streamed.status, "working");
+assert.equal(ui.source.streaming(), true, "the source reports a live stream");
+const streamId = ui.turns.at(-1).id;
+const streamed = () => ui.turns.find((turn) => turn.id === streamId);
+assert.equal(streamed().status, "working");
 assert.equal(textOf(find(ui.render(context), "agent-ui-stream")), "⏭ finish");
 for (let i = 0; i < 4; i += 1) context.tick(context);
-assert.ok(streamed.messages[0].text.length > 0, "chunks land in the message");
+assert.ok(streamed().messages[0].text.length > 0, "chunks land in the message");
 assert.equal(ui.scrollY, 0, "a stream never yanks a reader who is above");
 assert.equal(ui.live, 4, "arrivals are counted while reading above");
 assert.match(textOf(find(ui.render(context), "agent-ui-new-turns-pill")), /live/);
@@ -598,13 +601,14 @@ assert.equal(streamGeometry.ranges.at(-1).id, streamId,
   "the rail geometry includes the streaming turn");
 assert.ok(find(ui.render(context), `agent-ui-turn-${streamId}`), "the turn renders while streaming");
 find(ui.render(context), "agent-ui-stream").handlers.on_click({}, context);
-assert.equal(ui.stream, null, "finish closes the stream");
-assert.equal(streamed.status, "done");
-const finalText = streamed.messages[0].text;
+assert.equal(ui.source.streaming(), false, "finish closes the stream");
+assert.equal(streamed().status, "done");
+const finalText = streamed().messages[0].text;
+const liveAfterFinish = ui.live;
 assert.ok(finalText.length > 0);
 context.tick(context);
-assert.equal(streamed.messages[0].text, finalText, "a finished stream ignores later ticks");
-assert.equal(ui.live, 4, "no tick after the end changes the counter");
+assert.equal(streamed().messages[0].text, finalText, "a finished stream ignores later ticks");
+assert.equal(ui.live, liveAfterFinish, "no tick after the end changes the counter");
 
 // At the bottom, the same stream follows instead of counting.
 ui.jumpToBottom(context);
@@ -615,8 +619,9 @@ context.tick(context);
 assert.equal(ui.live, 0, "a following reader is not told about arrivals");
 assert.equal(ui.stick, true, "the reader stays stuck to the bottom");
 assert.equal(find(ui.render(context), "agent-ui-new-turns-pill"), null);
-ui.stopStream(context);
-assert.equal(ui.stream, null);
+ui.source.finish();
+ui.pump(context);
+assert.equal(ui.source.streaming(), false);
 assert.equal(ui.turns.at(-1).status, "done");
 
 console.log("PASS: dots-only scroll rail, scrubbing, dot jump, keyboard focus, narrow turn list, empty and offline states, sticky bottom, streaming replay, bounded hover, tool detail edges, Markdown and Stack view.");

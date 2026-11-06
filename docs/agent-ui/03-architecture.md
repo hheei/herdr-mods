@@ -193,6 +193,32 @@ Control: unavailable | validated | dispatching | uncertain
 5. 回底、scroll anchor、Copy、鍵盤 focus、窄版；**不常駐 preview search**。Rail 預設 Highlight **全部與 viewport 相交的輪次**，Hover 一行問題、Pin 不反映 tool 狀態，click 在**連續 transcript** 按實測幾何捲動。Demo 用 Herdr `on_scroll_wheel`／`on_size_change` + clipped positioned content 實作，不宣稱上游已提供 scroll-to-key；詳見 [11](11-agent-ui-demo-implementation.md)。
 6. 真正的原生 Markdown（官方文件所列 `TextView.markdown`）、CJK／code／diff／科學公式的來源保真與降級，具體支援要在目標版驗證。
 
+## 7.5 已實作的接縫（2026-11-06）
+
+Bridge 之前先切好的三層，目的是讓 P2 只增加一個 source，不改 view：
+
+| 檔案 | 責任 | 不碰 |
+| --- | --- | --- |
+| `model.js` | 幾何：`turnGeometry`、桶、命中、scrub 映射（純函式） | host、事件、時間 |
+| `state.js` | `applyEvent(transcript, event)` → `{state, changed, grew}`、`deriveStatus`（純函式） | view、timer、protocol |
+| `fixtures.js` | fixture source：`snapshot() / take() / step() / replay() / finish() / arrive()` | 不知道 reducer 的存在 |
+| `main.js` | view：`pump()` 抽乾 source、套 reducer、處理錨點與貼底 | 不認識事件種類以外的語義 |
+
+**Source 契約**（bridge 要滿足的最小面）：
+
+```js
+source.snapshot()   // 目前已知的完整 turns（reconnect 後由它重建）
+source.take()       // 下一個事件，或 null
+source.step()       // 「時間前進」；fixture 用它放行一段 chunk，bridge 直接 return false
+```
+
+事件：`snapshot`、`turn.start`、`message.start|delta|end`、`tool.start|update`、`turn.action`、`turn.end`。帶 `id` 的事件在同一 transcript 內只套用一次（去重上限 512）；指向已不存在 turn／message 的事件**丟棄**，不猜測。
+
+**兩個已知限制**（不在 P2 偷偷解掉）：
+
+1. **O(n) 佈局**：rail 依賴每一輪的實測高度，因此無法只渲染可見輪（未渲染 = 高度未知）。真會話需要歷史上限或早期輪折疊，數字要先量，不能憑感覺。
+2. **`step()` 是 fixture 的時間**：bridge 不需要它，但也因此 fixture 的節奏不代表真實到達速率。
+
 ## 8. 安裝／相容與不干擾現有 mods
 
 獨立 `mods/agent-ui`，不修改 `project-open`。安裝器繼承專案「個人 Layout／有確認／單一 .bak」原則，但**不在功能未驗證前實作自動改寫 split Pane 樹**。

@@ -172,3 +172,88 @@ const LONG_TURNS = Array.from({ length: 53 }, (_, i) => {
 LONG_TURNS[LONG_TURNS.length - 1].status = "working";
 
 export const DEMO_TURNS = [...FIXTURE_TURNS, ...LONG_TURNS];
+
+// The scripted stream: chunks arrive one per source.step(), which is what the
+// view's timer calls. A bridge source will step from socket events instead.
+const STREAM_CHUNKS = [
+  "Retries are **exponential with jitter**: ", "1s, then 2s, then 4s, ",
+  "capped at 30s. ", "\n\n", "The cap matters more than the curve — ",
+  "a long outage should look slow, not hung. ", "\n\n", "- 429 and 5xx retry; ",
+  "- 4xx except 429 fail at once; ", "- timeouts retry only while the budget lasts.\n\n",
+  "Give up after **5 attempts**, then surface the last error instead of ",
+  "another spinner. ", "The user can always retry by hand; ", "the ceiling is a promise, not a guess.",
+];
+
+export function fixtureSource(turns = DEMO_TURNS) {
+  const queue = [];
+  let script = null;
+  let counter = 0;
+
+  const endScript = () => {
+    queue.push({ type: "tool.update", turnId: script.turnId, toolId: script.toolId,
+      patch: { status: "done" } });
+    queue.push({ type: "turn.end", turnId: script.turnId });
+    script = null;
+  };
+
+  return {
+    kind: "fixture",
+    // A bridge returns the last snapshot it rebuilt from its socket.
+    snapshot() {
+      return turns;
+    },
+    take() {
+      return queue.shift() ?? null;
+    },
+    streaming() {
+      return script !== null;
+    },
+    // A bridge has no clock: its step() is a no-op and events are pushed.
+    step() {
+      if (!script) return false;
+      const chunk = script.chunks.shift();
+      if (chunk === undefined) {
+        endScript();
+        return true;
+      }
+      queue.push({ type: "message.delta", turnId: script.turnId,
+        messageId: script.messageId, text: chunk });
+      return true;
+    },
+    replay() {
+      if (script) return null;
+      counter += 1;
+      const turnId = `t-stream-${counter}`;
+      script = { turnId, messageId: `a-${turnId}`, toolId: `tool-${turnId}`,
+        chunks: [...STREAM_CHUNKS] };
+      queue.push({ type: "turn.start", turn: { id: turnId,
+        prompt: "How should the client retry a failed request?" } });
+      queue.push({ type: "message.start", turnId, message: { id: script.messageId } });
+      queue.push({ type: "tool.start", turnId, tool: { id: script.toolId, kind: "read",
+        title: "Read", target: "src/retry.ts",
+        detail: "Reading the retry policy so the answer can cite it." } });
+      return turnId;
+    },
+    finish() {
+      if (!script) return false;
+      while (script.chunks.length > 0) {
+        queue.push({ type: "message.delta", turnId: script.turnId,
+          messageId: script.messageId, text: script.chunks.shift() });
+      }
+      endScript();
+      return true;
+    },
+    arrive() {
+      counter += 1;
+      const turnId = `t-more-${counter}`;
+      const messageId = `a-more-${counter}`;
+      queue.push({ type: "turn.start", turn: { id: turnId,
+        prompt: `Arrives while you are reading (${counter})` } });
+      queue.push({ type: "message.start", turnId, message: { id: messageId } });
+      queue.push({ type: "message.end", turnId, messageId,
+        text: "A new turn landed. If you were reading above, the transcript did not move: only the counter at the bottom changed." });
+      queue.push({ type: "turn.end", turnId });
+      return turnId;
+    },
+  };
+}

@@ -2,7 +2,8 @@
 import { View, div } from "gpui-kit";
 import { h_flex, v_flex, TextView, TextareaState, Textarea } from "gpui-base";
 import { theme } from "herdr";
-import { DEMO_TURNS } from "./fixtures.js";
+import { DEMO_TURNS, fixtureSource } from "./fixtures.js";
+import { applyEvent, createTranscript } from "./state.js";
 import {
   summarizeActivity, toRailNodes, shortPrompt, turnGeometry, clampScroll,
   visibleTurnIds, railLayout, railHit, railScrubOffset, previewTop,
@@ -36,22 +37,14 @@ function toolLabel(tool) {
   return names[kind] ?? (kind ? kind.toUpperCase() : "Tool");
 }
 
-// A stream is delivered in these pieces; the real bridge sends its own.
-const STREAM_CHUNKS = [
-  "Retries are **exponential with jitter**: ", "1s, then 2s, then 4s, ",
-  "capped at 30s. ", "\n\n", "The cap matters more than the curve — ",
-  "a long outage should look slow, not hung. ", "\n\n", "- 429 and 5xx retry; ",
-  "- 4xx except 429 fail at once; ", "- timeouts retry only while the budget lasts.\n\n",
-  "Give up after **5 attempts**, then surface the last error instead of ",
-  "another spinner. ", "The user can always retry by hand; ", "the ceiling is a promise, not a guess.",
-];
-
 const DETAIL_LINES = 18;
 const DETAIL_CHARS = 4000;
 
 export default class AgentUi extends View {
   init(_props, cx) {
-    this.turns = DEMO_TURNS.map((turn) => ({ ...turn, messages: [...turn.messages], tools: [...turn.tools] }));
+    // One source, one reducer: a bridge later supplies the same shape of events.
+    this.source = fixtureSource(DEMO_TURNS);
+    this.transcript = createTranscript(this.source.snapshot());
     // Herdr Mod guide: cx.focus_handle() in init, .track_focus(h), h.focus().
     this.h = cx.focus_handle();
     this.hoveredTurn = null;
@@ -74,7 +67,6 @@ export default class AgentUi extends View {
     this.stick = false;
     this.newTurns = 0;
     this.live = 0;
-    this.stream = null;
     // Pacing needs a clock, and Mods have no setTimeout: cx.timer is the only
     // documented tick. It returns at once when nothing is streaming, so the
     // cost is one no-op callback per 140ms, not a redraw.
@@ -85,6 +77,46 @@ export default class AgentUi extends View {
       placeholder: "Message (demo only — nothing is sent)",
     });
     this.composer.on("change", (_event, cx) => cx.notify());
+  }
+
+  get turns() {
+    return this.transcript.turns;
+  }
+
+  set turns(next) {
+    this.transcript.turns = next;
+  }
+
+  anchor(kind) {
+    if (this.stick) {
+      const geometry = turnGeometry(this.turns, this.turnHeights);
+      this.scrollY = clampScroll(geometry.total, geometry.total, this.viewportHeight);
+      this.live = 0;
+      this.newTurns = 0;
+      return;
+    }
+    if (kind === "turn") this.newTurns += 1;
+    else this.live += 1;
+  }
+
+  apply(event) {
+    const result = applyEvent(this.transcript, event);
+    if (!result.changed) return false;
+    this.transcript = result.state;
+    // A new turn is counted once; only deltas inside it count as live content.
+    const kind = event.type === "turn.start" || event.type === "snapshot" ? "turn"
+      : event.type === "message.delta" ? "content" : null;
+    if (result.grew && kind) this.anchor(kind);
+    return true;
+  }
+
+  pump(cx) {
+    let changed = false;
+    for (let event = this.source.take(); event; event = this.source.take()) {
+      if (this.apply(event)) changed = true;
+    }
+    if (changed) cx.notify();
+    return changed;
   }
 
   changeSize(size, cx) {
@@ -132,17 +164,14 @@ export default class AgentUi extends View {
       : this.demo === "offline" ? "empty" : "demo", cx);
   }
 
-  appendTurn(turn, cx) {
-    this.turns.push(turn);
-    const geometry = turnGeometry(this.turns, this.turnHeights);
-    // Following the bottom is a promise the reader revokes by scrolling up.
-    if (this.stick) {
-      this.scrollY = clampScroll(geometry.total, geometry.total, this.viewportHeight);
-      this.newTurns = 0;
-    } else {
-      this.newTurns += 1;
-    }
-    cx.notify();
+  tick(cx) {
+    // Time is a fixture concern; a bridge pushes its own events.
+    if (this.source.step()) this.pump(cx);
+  }
+
+  demoAppend(cx) {
+    this.source.arrive();
+    this.pump(cx);
   }
 
   jumpToBottom(cx) {
@@ -153,79 +182,6 @@ export default class AgentUi extends View {
     this.newTurns = 0;
     this.live = 0;
     cx.notify();
-  }
-
-  // The replay pushes chunks through the same appendTurn() path a bridge event
-  // will use: geometry, rail buckets and the reading anchor are not special-cased.
-  startStream(cx) {
-    if (this.demo !== "demo" || this.stream) return;
-    const n = ++this.localCount;
-    this.stream = { id: `t-stream-${n}`, step: 0 };
-    this.live = 0;
-    this.appendTurn({
-      id: this.stream.id,
-      prompt: "How should the client retry a failed request?",
-      status: "working",
-      messages: [{ id: `a-stream-${n}`, role: "assistant", text: "" }],
-      tools: [{ id: `tool-stream-${n}`, kind: "read", title: "Read", status: "running",
-        target: "src/retry.ts", detail: "Reading the retry policy so the answer can cite it." }],
-    }, cx);
-  }
-
-  stopStream(cx) {
-    if (!this.stream) return;
-    this.stream.step = STREAM_CHUNKS.length;
-    this.tick(cx);
-  }
-
-  streamTurn() {
-    if (!this.stream) return null;
-    return this.turns.find((turn) => turn.id === this.stream.id) ?? null;
-  }
-
-  tick(cx) {
-    const turn = this.streamTurn();
-    if (!turn) {
-      this.stream = null;
-      return;
-    }
-    const step = this.stream.step;
-    if (step >= STREAM_CHUNKS.length) {
-      turn.status = "done";
-      turn.messages[0].text = STREAM_CHUNKS.join("");
-      for (const tool of turn.tools) tool.status = "done";
-      this.stream = null;
-      cx.notify();
-      return;
-    }
-    turn.messages[0].text += STREAM_CHUNKS[step];
-    this.stream.step = step + 1;
-    if (this.stream.step >= STREAM_CHUNKS.length) {
-      turn.status = "done";
-      for (const tool of turn.tools) tool.status = "done";
-      this.stream = null;
-    }
-    // Following the bottom is the reader's choice; otherwise count what arrived.
-    if (this.stick) {
-      const geometry = turnGeometry(this.turns, this.turnHeights);
-      this.scrollY = clampScroll(geometry.total, geometry.total, this.viewportHeight);
-      this.live = 0;
-    } else {
-      this.live += 1;
-    }
-    cx.notify();
-  }
-
-  demoAppend(cx) {
-    const n = ++this.localCount;
-    this.appendTurn({
-      id: `t-more-${n}`,
-      prompt: `Arrives while you are reading (${n})`,
-      status: "done",
-      messages: [{ id: `a-more-${n}`, role: "assistant",
-        text: "A new turn landed. If you were reading above, the transcript did not move: only the counter at the bottom changed." }],
-      tools: [],
-    }, cx);
   }
 
   measureTurn(id, size, cx) {
@@ -449,14 +405,12 @@ export default class AgentUi extends View {
       return;
     }
     const id = `t-local-${++this.localCount}`;
-    this.turns.push({
-      id,
-      prompt: draft,
-      status: "done",
-      tools: [],
-      messages: [{ id: `a-local-${this.localCount}`, role: "assistant",
-        text: "**Local preview only.** This message was not sent to Pi. Your running Agent was not touched." }],
-    });
+    const messageId = `a-local-${this.localCount}`;
+    this.apply({ type: "turn.start", turn: { id, prompt: draft } });
+    this.apply({ type: "message.start", turnId: id, message: { id: messageId } });
+    this.apply({ type: "message.end", turnId: id, messageId,
+      text: "**Local preview only.** This message was not sent to Pi. Your running Agent was not touched." });
+    this.apply({ type: "turn.end", turnId: id });
     this.composer.set_value("");
     this.notice = "Local preview · no Pi command was sent";
     this.selectTurn(id, cx);
@@ -725,9 +679,12 @@ export default class AgentUi extends View {
               ? "Synthetic data · no live Pi connection"
               : "Read-only in this state · the draft is kept")))
           .when(this.width >= 520 && this.demo === "demo", (el) => el.child(control(t,
-            "agent-ui-stream", this.stream ? "⏭ finish" : "▶ stream",
-            (context) => (this.stream ? this.stopStream(context) : this.startStream(context)),
-            true)))
+            "agent-ui-stream", this.source.streaming() ? "⏭ finish" : "▶ stream",
+            (context) => {
+              if (this.source.streaming()) this.source.finish();
+              else this.source.replay();
+              this.pump(context);
+            }, true)))
           .child(control(t, "agent-ui-send", "Try send · demo",
             (context) => this.send(context), Boolean(draft) && this.demo === "demo"))));
   }
