@@ -3,6 +3,7 @@
 | 主題 | 狀態 | 入口 |
 | --- | --- | --- |
 | Pi-first Agent UI：同 Pane 的 Terminal／UI 無中斷切換與原生 GUI | 已更新為**單一 Agent UI Native GPUI fixture**；有工具分組、Markdown、單 SVG、極簡 Rail；**真正逐 Pane 切換與實機視覺仍待驗證** | [Agent UI 設計包](agent-ui/README.md) |
+| CC Switch × Herdr：Workspace／Host／Scope 整合 | v4.0.26 靜態可行性調查；同步與配置部署隔離仍有阻斷項，尚未實作 | [可行性與邊界契約](cc-switch-integration-feasibility.md) |
 
 這裡以設計和驗收規格為主。唯一的 Agent UI 模擬 Mod 可以**選擇安裝**，但不等於完成正式 Pi 整合；`project-open` 的正式安裝與使用以專案根目錄 README 為準。
 

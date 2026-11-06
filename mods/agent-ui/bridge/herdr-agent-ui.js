@@ -98,17 +98,39 @@ export function createWriter(dir, info = {}) {
     fs.renameSync(tmp, target); // a reader never sees half a file
   }
 
+  // A Pi that exited leaves its folder behind. Removing dead ones keeps the
+  // bridge root readable; a live pid (or another user's, EPERM) is left alone.
+  function prune() {
+    try {
+      for (const name of fs.readdirSync(path.dirname(dir))) {
+        if (name === path.basename(dir) || !/^\d+$/.test(name)) continue;
+        let alive = true;
+        try {
+          process.kill(Number(name), 0);
+        } catch (error) {
+          alive = error?.code === "EPERM";
+        }
+        if (!alive) fs.rmSync(path.join(path.dirname(dir), name), { recursive: true, force: true });
+      }
+    } catch {
+      // Nothing to prune is not a problem.
+    }
+  }
+
   function meta(extra = {}) {
     write("meta.json", { version: 2, epoch, revision, pid: process.pid,
       startedAt: new Date().toISOString(), sessionId: info.sessionId ?? null,
+      name: info.name ?? null,
       cwd: info.cwd ?? null, updatedAt: new Date().toISOString(), ...extra });
   }
 
+  prune();
   meta();
 
   return {
     dir,
     epoch,
+    prune,
     get revision() {
       return revision;
     },
@@ -172,6 +194,7 @@ export default function (pi) {
     const appHome = process.env.HERDR_APP_HOME ?? path.join(homedir(), ".config", "herdr-app");
     box = createWriter(path.join(appHome, "agent-ui", "bridge", String(process.pid)), {
       sessionId: ctx.sessionManager.getSessionId(),
+      name: ctx.sessionManager.getSessionName?.() ?? null,
       cwd: ctx.sessionManager.getCwd(),
     });
     done = entriesToTurns(ctx.sessionManager.getBranch()).slice(-DONE_LIMIT);

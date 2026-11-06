@@ -178,7 +178,9 @@ Herdr Mod 端的 `exec` **不能被假設**可帶任意私有 stdin stream。需
 - 讀：`watchFolder` 收到批次 → 讀 `live.json`（一律）與變更過的 `done.json` → 交給 reducer 當一次 `snapshot`。**因為是完整狀態，「最後讀到的就是真的」**，沒有順序、缺號或重播問題。
 - 節流：`live.json` 串流時最多每 200 ms 寫一次（`LIVE_MS`），輪結束、工具開始／結束則立刻 flush。一次 60 秒的回答約 300 次小檔覆寫，而不是數千個 delta 檔。
 - 界：`done` 上限 200 輪＝view 的上限；單欄位截斷（文字 20k、工具輸出 2k），確保 `readTextFile` 的 1 MiB 不會把 JSON 截斷成非法內容。
-- 身分：`meta.json` 帶 `sessionId`／`cwd`／`pid`。P2 只讀，挑錯也只看到別的 session，UI header 顯示 sessionId 與 cwd。
+- 歷史：`session_start`（startup／reload／new／resume／fork）都用 `getBranch()` 重建全部已結束的輪。`getBranch()` 是文件指定的重建來源：它保留 compaction 之前的訊息（`buildContextEntries()` 才是給模型的裁剪版），並刻意排除被放棄的分支——那些是替代歷史，不是這段對話。
+- 殭屍：Pi 退出後資料夾會留著；新啟動的 Pi 會掃 `bridge/` 並刪掉 pid 已死（`kill -0` 失敗）的目錄，活著的（含 EPERM 的別使用者）不動。
+- 身分：`meta.json` 帶 `sessionId`／`name`／`cwd`／`pid`。P2 只讀，挑錯也只看到別的 session，UI header 顯示 sessionId 與 cwd。
 
 **為什麼不是讀 Pi 的 session JSONL**：它是公開、有版本的文件格式（`docs/session-format.md`，v3，含遷移），但那是**耐久紀錄**，不是即時流——`message_update` 不落盤、`message_end` 才 append，工具在執行中也沒有條目；而且路徑由 cwd 推導，同一個 cwd 的兩個 Pi 只能猜。檔案格式公開不代表它適合當 live 通道。
 

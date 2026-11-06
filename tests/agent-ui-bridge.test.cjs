@@ -109,6 +109,23 @@ function messageEntry(id, message) {
     .from(fs.readFileSync(path.join(root, "mods/agent-ui/bridge/herdr-agent-ui.js"))).toString("base64"))).default,
   "function", "the file is one extension: a default export takes pi");
 
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-ui-root-"));
+  const dead = path.join(rootDir, "999999999");
+  const live = path.join(rootDir, String(process.pid));
+  const noise = path.join(rootDir, "not-a-pid");
+  for (const dir of [dead, live, noise]) {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "meta.json"), "{}");
+  }
+  const mine = bridge.createWriter(path.join(rootDir, String(process.pid)), {});
+  assert.equal(fs.existsSync(dead), false, "a folder whose Pi exited is removed");
+  assert.equal(fs.existsSync(live), true, "a running Pi keeps its folder");
+  assert.equal(fs.existsSync(noise), true, "anything that is not a pid is not touched");
+  mine.close();
+  assert.equal(JSON.parse(fs.readFileSync(path.join(live, "meta.json"), "utf8")).closed, true,
+    "closing marks the folder, it does not delete it");
+  fs.rmSync(rootDir, { recursive: true, force: true });
+
   console.log("PASS: bridge — one extension file, entries projected, three state files, throttled live flush, close.");
 })().catch((error) => {
   console.error(error);
