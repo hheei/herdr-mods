@@ -56,6 +56,30 @@ function messageEntry(id, message) {
   assert.equal(turns[0].tools[0].detail, "export const retry = ...");
   assert.equal(turns[1].prompt, "and the cap?");
   assert.equal(project.entriesToTurns([]).length, 0);
+  assert.deepEqual(project.entriesToTurns([
+    messageEntry("u3", { role: "user", content: "q", timestamp: 0 }),
+    messageEntry("a3", { role: "assistant", timestamp: 0, content: [{ type: "text", text: "hi" }],
+      usage: { input: 1, output: 2, cacheRead: 0, totalTokens: 3, cost: { total: 0.01 } } }),
+  ])[0].messages[0].usage, { input: 1, output: 2, cacheRead: 0, total: 3, cost: 0.01 },
+  "the projection carries usage through");
+
+  const marker = project.entriesToTurns([
+    messageEntry("u1", { role: "user", content: "before", timestamp: 0 }),
+    { type: "compaction", id: "c1", parentId: "u1", timestamp: new Date(0).toISOString(),
+      summary: "so far", firstKeptEntryId: "u1" },
+    messageEntry("u2", { role: "user", content: "after", timestamp: 0 }),
+  ]);
+  assert.deepEqual(Array.from(marker, (turn) => [turn.kind ?? "turn", turn.prompt]),
+    [["turn", "before"], ["marker", "Context compacted"], ["turn", "after"]],
+    "a compaction boundary is shown, not swallowed");
+
+  const usage = project.usageOf({ usage: { input: 10, output: 5, cacheRead: 100, totalTokens: 115,
+    cost: { input: 0.001, output: 0.002, cacheRead: 0, cacheWrite: 0, total: 0.003 } } });
+  assert.deepEqual({ ...usage }, { input: 10, output: 5, cacheRead: 100, total: 115, cost: 0.003 });
+  assert.equal(project.usageOf({ role: "assistant" }), null, "no usage is null, not zeroes");
+  assert.equal(project.asksForAnswer([{ text: "which database should I use?" }]), true);
+  assert.equal(project.asksForAnswer([{ text: "done. ¿" }]), false);
+  assert.equal(project.asksForAnswer([]), false);
 
   const long = project.entriesToTurns([
     messageEntry("u9", { role: "user", content: "big", timestamp: 0 }),

@@ -5,6 +5,8 @@ repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 export HERDR_APP_HOME="$tmp/home"
+# Never touch the developer's real Pi config.
+export PI_CODING_AGENT_DIR="$tmp/pihome"
 mkdir -p "$tmp/repo/mods/another-mod" "$tmp/repo/layouts" "$tmp/repo/scripts"
 cp "$repo/scripts/install.sh" "$tmp/repo/scripts/install.sh"
 cp "$repo/scripts/tui.sh" "$tmp/repo/scripts/tui.sh"
@@ -13,6 +15,10 @@ cp "$repo/scripts/patch-sidebar.awk" "$tmp/repo/scripts/patch-sidebar.awk"
 cp "$repo/scripts/demo-layout.awk" "$tmp/repo/scripts/demo-layout.awk"
 cp "$repo/layouts/herdr-mods.json" "$tmp/repo/layouts/herdr-mods.json"
 cp -R "$repo/mods/project-open" "$tmp/repo/mods/"
+mkdir -p "$tmp/repo/mods/pi-mod/bridge"
+printf '%s\n' 'export default class Pi {}' > "$tmp/repo/mods/pi-mod/main.js"
+printf '%s\n' '{"place":"none","install":"pi:herdr-agent-ui.js"}' > "$tmp/repo/mods/pi-mod/mod.json"
+printf '%s\n' 'export default function (pi) {}' > "$tmp/repo/mods/pi-mod/bridge/herdr-agent-ui.js"
 printf '%s\n' 'export default class Another {}' > "$tmp/repo/mods/another-mod/main.js"
 printf '%s\n' '{"place":"none","install":"sidebar"}' > "$tmp/repo/mods/another-mod/mod.json"
 install() { sh "$tmp/repo/scripts/install.sh" "$@" >/dev/null; }
@@ -25,6 +31,7 @@ install
 [ "$(grep -c '"mod": "project-open"' "$layout")" -eq 1 ]
 [ "$(grep -c '"id":"another-mod"' "$layout")" -eq 1 ]
 [ -f "$layout.bak" ]
+[ -f "$tmp/pihome/extensions/herdr-agent-ui.js" ]
 
 # Re-running is idempotent and keeps exactly one backup per asset.
 install
@@ -37,6 +44,11 @@ if command -v jq >/dev/null 2>&1; then
   jq -e '.children[]|select(.id=="work")|.children[]|select(.id=="status")|.type=="block" and .content.mod=="project-open"' "$layout" >/dev/null
   jq empty "$layout"
 fi
+
+# Re-running the extension is one update with one backup, not a second copy.
+install
+[ "$(find "$tmp/pihome/extensions" -maxdepth 1 -name 'herdr-agent-ui.js*' | wc -l | tr -d ' ')" -eq 2 ]
+[ -f "$tmp/pihome/extensions/herdr-agent-ui.js.bak" ]
 
 # A single mod installs only that mod.
 rm -rf "$HERDR_APP_HOME/mods" "$HERDR_APP_HOME/layouts"
@@ -52,6 +64,11 @@ install
 grep -q '"mod": "my-status"' "$layout"
 [ "$(grep -c '"mod": "project-open"' "$layout")" -eq 0 ]
 [ -f "$HERDR_APP_HOME/mods/project-open/main.js" ]
+
+# The Pi extension is not layout wiring: it installs with --no-layout too.
+HERDR_APP_HOME="$tmp/bare2" sh "$tmp/repo/scripts/install.sh" pi-mod --no-layout >/dev/null
+[ -f "$tmp/pihome/extensions/herdr-agent-ui.js" ]
+[ ! -e "$tmp/bare2/layouts" ]
 
 # --no-layout writes files and nothing else.
 HERDR_APP_HOME="$tmp/bare" sh "$tmp/repo/scripts/install.sh" --no-layout >/dev/null

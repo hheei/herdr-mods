@@ -42,6 +42,29 @@ export function textOf(message) {
   return content.filter((part) => part?.type === "text").map((part) => part.text ?? "").join("");
 }
 
+// Assistant messages always carry usage. Nothing here estimates: absent fields
+// stay 0 so a provider that omits cost still renders.
+export function usageOf(message) {
+  const usage = message?.usage;
+  if (!usage) return null;
+  return {
+    input: usage.input ?? 0,
+    output: usage.output ?? 0,
+    cacheRead: usage.cacheRead ?? 0,
+    total: usage.totalTokens ?? 0,
+    cost: usage.cost?.total ?? 0,
+  };
+}
+
+// Pi has no structured "I am asking you something" event, so this is a heuristic:
+// a settled turn whose last words are a question. The view labels it as a
+// question, never as an approval request -- approving a tool still needs the
+// Terminal.
+export function asksForAnswer(messages) {
+  const last = [...(messages ?? [])].reverse().find((message) => String(message.text ?? "").trim() !== "");
+  return Boolean(last) && /[?？]\s*$/.test(String(last.text).trim());
+}
+
 export function clip(value, max) {
   const text = String(value ?? "");
   return text.length > max ? `${text.slice(0, max)}\n\n[truncated ${text.length - max} chars]` : text;
@@ -55,6 +78,12 @@ export function entriesToTurns(entries = []) {
   const turns = [];
   let turn = null;
   for (const entry of entries) {
+    // A compaction boundary is part of the visible history, not a gap in it.
+    if (entry?.type === "compaction") {
+      turns.push({ id: entry.id, kind: "marker", prompt: "Context compacted",
+        status: "done", messages: [], tools: [] });
+      continue;
+    }
     const message = entry?.message;
     if (!message) continue;
     if (message.role === "user") {
@@ -66,7 +95,8 @@ export function entriesToTurns(entries = []) {
     if (message.role === "assistant") {
       const text = textOf(message);
       if (text.trim() !== "") {
-        turn.messages.push({ id: entry.id, role: "assistant", text: clip(text, LIMIT.text), open: false });
+        turn.messages.push({ id: entry.id, role: "assistant", text: clip(text, LIMIT.text),
+          open: false, usage: usageOf(message) });
       }
       for (const part of Array.isArray(message.content) ? message.content : []) {
         if (part?.type !== "toolCall") continue;
@@ -180,7 +210,8 @@ export default function (pi) {
 
   const settle = () => {
     if (!turn) return;
-    done = [...done, { ...turn, status: "done" }].slice(-DONE_LIMIT);
+    done = [...done, { ...turn, status: "done",
+      requiresUserAction: asksForAnswer(turn.messages) }].slice(-DONE_LIMIT);
     turn = null;
     guard(() => {
       box?.live(null, true);
@@ -211,7 +242,8 @@ export default function (pi) {
       return;
     }
     if (role !== "assistant") return;
-    ensureTurn().messages.push({ id: `a-${++count}`, role: "assistant", text: "", open: true });
+    ensureTurn().messages.push({ id: `a-${++count}`, role: "assistant", text: "",
+      open: true, usage: null });
     flush(true);
   });
 
@@ -227,6 +259,7 @@ export default function (pi) {
     const message = turn?.messages.at(-1);
     if (!message?.open) return;
     message.text = clip(textOf(event.message), LIMIT.text);
+    message.usage = usageOf(event.message);
     message.open = false;
     flush(true);
   });

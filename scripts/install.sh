@@ -1,6 +1,6 @@
 #!/bin/sh
 # Install or refresh Herdr mods. Each mod declares its own layout wiring in
-# mod.json ("install": "status" | "sidebar" | "derive:<layout>"), so this script
+# mod.json ("install": "status" | "sidebar" | "derive:<layout>" | "pi:<file>"), so this script
 # only applies the wiring shapes it knows and no mod by name.
 # Checkout: sh scripts/install.sh [mod...] [--no-layout]
 # Piped:    curl -fsSL .../install.sh | sh
@@ -100,21 +100,45 @@ wire_derive() {
     warn "layout $name left unchanged: $base has a customized work-body"
   fi
 }
+wire_pi() {
+  mod=$1 file=$2
+  src="$repo_dir/mods/$mod/bridge/$file"
+  dst="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/extensions/$file"
+  mkdir -p "$(dirname "$dst")"
+  if [ -e "$dst" ]; then
+    keep_bak "$dst"
+    verb=updated
+  else
+    verb=installed
+  fi
+  cp "$src" "$dst"
+  step "extension $verb ${dim}→ $dst${off}"
+}
+for mod in $mods; do
+  kind=$(install_kind "$mod")
+  case "$kind" in
+    *pi:*) wire_pi "$mod" "${kind##*pi:}" ;;
+  esac
+done
 if [ "$no_layout" = yes ]; then
   warn "layout untouched (--no-layout); wire the mods by hand"
 else
+  # Every status/sidebar patch lands before any derived layout is copied: a
+  # derived layout must inherit the already-wired base, not the shipped one.
   wired=no
   for mod in $mods; do
-    kind=$(install_kind "$mod")
-    case "$kind" in
-      status|sidebar) wire_personal "$mod" "$kind"; wired=yes ;;
-    esac
+    for kind in $(install_kind "$mod" | tr ',' ' '); do
+      case "$kind" in
+        status|sidebar) wire_personal "$mod" "$kind"; wired=yes ;;
+      esac
+    done
   done
   for mod in $mods; do
-    kind=$(install_kind "$mod")
-    case "$kind" in
-      derive:*) wire_derive "$mod" "${kind#derive:}"; wired=yes ;;
-    esac
+    for kind in $(install_kind "$mod" | tr ',' ' '); do
+      case "$kind" in
+        derive:*) wire_derive "$mod" "${kind#derive:}"; wired=yes ;;
+      esac
+    done
   done
   [ "$wired" = yes ] || warn "no layout wiring in$mods; see the mod README"
 fi

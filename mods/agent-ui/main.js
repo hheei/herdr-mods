@@ -1,13 +1,14 @@
 // Agent UI · standalone synthetic GPUI demo. NEVER starts or controls Pi.
 import { View, div } from "gpui-kit";
 import { h_flex, v_flex, TextView, TextareaState, Textarea } from "gpui-base";
-import { theme, appHome, exec, readTextFile, shared, watchFolder } from "herdr";
+import { theme, appHome, exec, home, notify, readTextFile, shared, watchFolder } from "herdr";
 import { DEMO_TURNS, fixtureSource } from "./fixtures.js";
 import { SOURCE_KEY, createBridgeSource } from "./bridge-source.js";
 import { applyEvent, createTranscript } from "./state.js";
 import {
   summarizeActivity, toRailNodes, shortPrompt, turnGeometry, clampScroll,
   visibleTurnIds, railLayout, railHit, railScrubOffset, previewTop,
+  turnUsage, formatUsage,
 } from "./model.js";
 
 const STATUSES = {
@@ -47,6 +48,8 @@ export default class AgentUi extends View {
     this.source = fixtureSource(DEMO_TURNS);
     this.bridge = null;
     this.bridgeHealth = null;
+    // null until the check runs: "unknown" is not "not installed".
+    this.bridgeInstalled = null;
     this.transcript = createTranscript(this.source.snapshot());
     // Herdr Mod guide: cx.focus_handle() in init, .track_focus(h), h.focus().
     this.h = cx.focus_handle();
@@ -124,6 +127,8 @@ export default class AgentUi extends View {
     this.source = this.bridge;
     cx.spawn(async (context) => {
       try {
+        this.bridgeInstalled = await readTextFile(
+          `${home()}/.pi/agent/extensions/herdr-agent-ui.js`) !== null;
         for (;;) {
           if (await this.bridge.refresh()) this.pump(context);
           this.bridgeHealth = this.bridge.health;
@@ -173,7 +178,21 @@ export default class AgentUi extends View {
     return event.type === "turn.start" && this.turns.length >= this.transcript.limit;
   }
 
+  // Pi has no structured question event; a settled turn that ends in a question
+  // is the one honest signal we have, so it gets a nudge and nothing more.
+  notifyQuestion(event) {
+    if (!this.bridge || event.type !== "turn.replace" || !event.turn?.requiresUserAction) return;
+    const before = this.turns.find((turn) => turn.id === event.turn.id);
+    if (before?.requiresUserAction) return;
+    try {
+      notify({ title: "Pi is asking", body: shortPrompt(event.turn.prompt), level: "warning" });
+    } catch {
+      // A host without notifications still shows the badge.
+    }
+  }
+
   apply(event) {
+    this.notifyQuestion(event);
     const top = this.atLimit(event)
       ? visibleTurnIds(turnGeometry(this.turns, this.turnHeights).ranges,
         this.scrollY, this.viewportHeight)[0]
@@ -595,11 +614,22 @@ export default class AgentUi extends View {
   }
 
   turn(t, turn) {
+    if (turn.kind === "marker") {
+      return h_flex().id(`agent-ui-turn-${turn.id}`).w_full().items_center().gap(9)
+        .on_size_change((size, cx) => this.measureTurn(turn.id, size, cx))
+        .child(div().flex_1().h(1).bg(t.border))
+        .child(div().text_size(10).text_color(t.dim).child(turn.prompt))
+        .child(div().flex_1().h(1).bg(t.border));
+    }
+    const usage = formatUsage(turnUsage(turn));
     return v_flex().id(`agent-ui-turn-${turn.id}`).w_full().gap(13)
       .on_size_change((size, cx) => this.measureTurn(turn.id, size, cx))
       .child(this.userMessage(t, turn))
       .child(v_flex().w_full().gap(9).px(4)
-        .child(div().text_size(10.5).font_semibold().text_color(t.accent).child("Pi"))
+        .child(h_flex().items_center().gap(8)
+          .child(div().text_size(10.5).font_semibold().text_color(t.accent).child("Pi"))
+          .when(usage !== "", (el) => el.child(div().id(`agent-ui-usage-${turn.id}`)
+            .text_size(10).text_color(t.dim).child(usage))))
         .children(turn.messages.map((message) =>
           markdown(t, `agent-ui-message-${message.id}`, message.text)))
         .when(turn.tools.length > 0, (el) => el.child(this.activity(t, turn))))
@@ -715,6 +745,11 @@ export default class AgentUi extends View {
           .child(div().text_size(10)
             .text_color(this.demo === "demo" ? t.dim : t.blocked)
             .child(this.demo.toUpperCase()))))
+      .when(this.bridge && this.bridgeInstalled === false, (el) => el.child(h_flex()
+        .id("agent-ui-bridge-missing").h(27).flex_none().px(12).gap(9).items_center()
+        .bg(t.raised).border_b(1).border_color(t.border)
+        .child(div().flex_1().truncate().text_size(11).text_color(t.blocked)
+          .child("! Pi GUI integration is not enabled · copy bridge/herdr-agent-ui.js into ~/.pi/agent/extensions/ and restart Pi"))))
       .when(this.demo === "offline", (el) => el.child(h_flex().id("agent-ui-offline")
         .h(27).flex_none().px(12).gap(9).items_center().bg(t.raised)
         .border_b(1).border_color(t.border)

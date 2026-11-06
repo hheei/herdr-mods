@@ -19,6 +19,9 @@ Use the official Herdr App mod API and validate with:
 
 ~~~sh
 node tests/project-open.test.cjs
+`node --check` parses a `.js` file with `import`/`export` as CommonJS and passes on real syntax errors, so check the Mods with `sh tests/syntax-check.sh <files...>` (it parses a `.mjs` copy); CI does.
+
+```sh
 sh tests/install-smoke.sh
 herdr-app check ~/.config/herdr-app/mods/project-open
 ~~~

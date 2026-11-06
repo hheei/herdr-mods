@@ -17,6 +17,23 @@ export function summarizeActivity(tools = []) {
   return { label, status, failed, pending, running, total: tools.length };
 }
 
+// Tokens and cost per turn, summed from the message usage the bridge publishes.
+export function turnUsage(turn) {
+  const total = { input: 0, output: 0, cacheRead: 0, total: 0, cost: 0 };
+  for (const message of turn?.messages ?? []) {
+    const usage = message?.usage;
+    if (!usage) continue;
+    for (const key of Object.keys(total)) total[key] += usage[key] ?? 0;
+  }
+  return total;
+}
+
+export function formatUsage(usage) {
+  if (!usage || usage.total <= 0) return "";
+  const tokens = usage.total >= 1000 ? `${(usage.total / 1000).toFixed(1)}k` : String(usage.total);
+  return usage.cost > 0 ? `${tokens} tok · $${usage.cost.toFixed(4)}` : `${tokens} tok`;
+}
+
 export function shortPrompt(prompt, max = 39) {
   const plain = String(prompt ?? "").replace(/\s+/g, " ").replace(/[*_`#<>]/g, "").trim();
   if (!plain) return "內容未載入";
@@ -30,7 +47,8 @@ export function actionable(turn) {
 }
 
 export function toRailNodes(turns) {
-  return turns.map((turn) => ({
+  // A compaction divider is not something you navigate to.
+  return turns.filter((turn) => turn.kind !== "marker").map((turn) => ({
     id: turn.id,
     preview: shortPrompt(turn.prompt),
     actionable: actionable(turn),

@@ -71,6 +71,9 @@ const box = {
   readTextFile: async () => null,
   shared: () => null,
   watchFolder: async () => [],
+  home: () => "/tmp/home",
+  notify: (note) => { box.notes.push(note); },
+  notes: [],
   Textarea: { new: () => node() },
 };
 const modelSrc = fs.readFileSync(path.join(root, "mods/agent-ui/model.js"), "utf8").replace(/^export /gm, "");
@@ -699,6 +702,42 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
     [["t-b0", "done"], ["t-b1", "working"]], "the transcript is the snapshot plus the turn in flight");
   assert.equal(bridged.turns[1].messages[0].text, "so far", "the in-flight turn arrives with its text");
   assert.equal(bridged.turns[1].tools[0].status, "running");
+
+  assert.equal(box.formatUsage(box.turnUsage({ messages: [{ usage: { input: 100, output: 40, cacheRead: 900, total: 1040, cost: 0.0123 } }] })),
+    "1.0k tok · $0.0123", "a turn sums its message usage");
+  assert.equal(box.formatUsage(box.turnUsage({ messages: [] })), "",
+    "no usage renders nothing rather than zeros");
+  assert.equal(box.turnUsage({ messages: [{ usage: { total: 5 } }, { usage: null }] }).total, 5);
+
+  const markerTree = ui.render(context);
+  ui.turns = [...ui.turns, { id: "m-1", kind: "marker", prompt: "Context compacted",
+    status: "done", messages: [], tools: [] }];
+  const withMarker = ui.render(context);
+  assert.ok(find(withMarker, "agent-ui-turn-m-1"), "a compaction boundary is a visible row");
+  assert.equal(box.toRailNodes(ui.turns).some((node) => node.id === "m-1"), false,
+    "a divider is not a navigation target");
+  assert.ok(markerTree, "the render before the marker still had turns");
+
+  const counted = { id: "t-usage", prompt: "how much did that cost", status: "done",
+    messages: [{ id: "a-usage", role: "assistant", text: "a lot", open: false,
+      usage: { input: 900, output: 300, cacheRead: 0, total: 1200, cost: 0.0042 } }], tools: [] };
+  ui.turns = [counted];
+  const usageTree = ui.render(context);
+  assert.equal(textOf(find(usageTree, "agent-ui-usage-t-usage")), "1.2k tok · $0.0042");
+
+  box.notes.length = 0;
+  bridged.turns = [];
+  bridged.apply({ type: "turn.replace", turn: { id: "q-1", prompt: "which db?", status: "done",
+    requiresUserAction: true, messages: [], tools: [] } });
+  assert.deepEqual(box.notes.map((note) => note.title), ["Pi is asking"],
+    "a settled question is the one nudge Pi can honestly signal");
+  bridged.apply({ type: "turn.replace", turn: { id: "q-1", prompt: "which db?", status: "done",
+    requiresUserAction: true, messages: [], tools: [] } });
+  assert.equal(box.notes.length, 1, "the same question is not announced twice");
+
+  bridged.bridgeInstalled = false;
+  const missing = bridged.render(context);
+  assert.ok(find(missing, "agent-ui-bridge-missing"), "an uninstalled extension says so");
 
   box.shared = () => null;
   const demoOnly = new box.AgentUi();

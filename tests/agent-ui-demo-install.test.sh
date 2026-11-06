@@ -5,6 +5,8 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 export HERDR_APP_HOME="$tmp/home"
+# Never install an extension into the developer's real Pi config.
+export PI_CODING_AGENT_DIR="$tmp/pihome"
 mkdir -p "$HERDR_APP_HOME/layouts" "$HERDR_APP_HOME/mods/agent-ui"
 cp "$root/layouts/herdr-mods.json" "$HERDR_APP_HOME/layouts/herdr-mods.json"
 cp "$root/layouts/herdr-mods.json" "$HERDR_APP_HOME/layouts/main.json"

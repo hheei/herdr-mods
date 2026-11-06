@@ -13,13 +13,13 @@ jobs:
           node-version: '22'
       - name: Static checks
         run: |
-          node --check mods/project-open/main.js
-          node --check mods/agent-ui/main.js
-          node --check mods/agent-ui/fixtures.js
-          node --check mods/agent-ui/model.js
-          node --check mods/agent-ui/state.js
-          node --check mods/agent-ui/bridge/herdr-agent-ui.js
-          node --check mods/agent-ui/bridge-source.js
+          sh tests/syntax-check.sh mods/project-open/main.js \
+            mods/agent-ui/main.js \
+            mods/agent-ui/fixtures.js \
+            mods/agent-ui/model.js \
+            mods/agent-ui/state.js \
+            mods/agent-ui/bridge/herdr-agent-ui.js \
+            mods/agent-ui/bridge-source.js
           node --check tests/project-open.test.cjs
           node --check tests/agent-ui.test.cjs
           node --check tests/agent-ui-state.test.cjs

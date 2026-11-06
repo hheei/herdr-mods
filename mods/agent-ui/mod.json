@@ -1,5 +1,5 @@
 {
   "place": "none",
   "focusable": true,
-  "install": "derive:agent-ui-demo"
+  "install": "derive:agent-ui-demo,pi:herdr-agent-ui.js"
 }
