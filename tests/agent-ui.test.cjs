@@ -17,7 +17,7 @@ function node() {
       if (prop === "when") return (condition, fn) => { if (condition) fn(proxy); return proxy; };
       if (prop === "child") return (child) => { target.kids.push(child); return proxy; };
       if (prop === "children") return (children) => { target.kids.push(...children); return proxy; };
-      if (String(prop).startsWith("on_")) return (fn) => { target.handlers[prop] = fn; return proxy; };
+      if (String(prop).startsWith("on_")) return (...args) => { target.handlers[prop] = args.find(x => typeof x === "function"); return proxy; };
       return (...args) => { target.style[prop] = args; return proxy; };
     },
   });
@@ -70,7 +70,7 @@ const modelSrc = fs.readFileSync(path.join(root, "mods/agent-ui/model.js"), "utf
 const fixtureSrc = fs.readFileSync(path.join(root, "mods/agent-ui/fixtures.js"), "utf8")
   .replace("export const DEMO_TURNS", "const DEMO_TURNS");
 vm.runInNewContext(modelSrc + "\n" + fixtureSrc
-  + "\nthis.summarizeActivity=summarizeActivity;this.toRailNodes=toRailNodes;this.shortPrompt=shortPrompt;this.turnGeometry=turnGeometry;this.clampScroll=clampScroll;this.visibleTurnIds=visibleTurnIds;this.railMarkers=railMarkers;this.previewTop=previewTop;this.DEMO_TURNS=DEMO_TURNS;", box);
+  + "\nthis.summarizeActivity=summarizeActivity;this.toRailNodes=toRailNodes;this.shortPrompt=shortPrompt;this.turnGeometry=turnGeometry;this.clampScroll=clampScroll;this.visibleTurnIds=visibleTurnIds;this.railMarkers=railMarkers;this.previewTop=previewTop;this.scrollbarGeometry=scrollbarGeometry;this.scrollbarOffsetAt=scrollbarOffsetAt;this.DEMO_TURNS=DEMO_TURNS;", box);
 
 assert.equal(box.DEMO_TURNS.length, 7);
 assert.equal(box.summarizeActivity([]).total, 0);
@@ -102,6 +102,19 @@ assert.ok(box.previewTop(marks[14].top, 340, true) + 52 <= 340 - 4,
   "last marker hover preview stays inside viewport");
 assert.ok(box.previewTop(marks[0].top, 340, false) >= 4);
 assert.equal(box.clampScroll(100000, 1650, 480), 1170);
+const scrollBar = box.scrollbarGeometry(1650, 480, 585);
+assert.equal(scrollBar.scrollable, true);
+assert.equal(scrollBar.maxScroll, 1170);
+assert.equal(scrollBar.thumbTop, 8 + scrollBar.travel / 2);
+assert.ok(scrollBar.thumbHeight >= 24 && scrollBar.thumbHeight < scrollBar.trackHeight);
+assert.equal(box.scrollbarOffsetAt(scrollBar.thumbTop + scrollBar.thumbHeight / 2,
+  scrollBar), 585);
+assert.equal(box.scrollbarOffsetAt(-500, scrollBar), 0);
+assert.equal(box.scrollbarOffsetAt(5000, scrollBar), scrollBar.maxScroll);
+assert.equal(box.scrollbarGeometry(100, 480, 0).scrollable, false,
+  "the scrollbar is hidden when content fits");
+assert.ok(box.scrollbarGeometry(10000, 120, 0).thumbHeight >= 24,
+  "long history keeps a grabbable minimum thumb");
 
 const src = fs.readFileSync(path.join(root, "mods/agent-ui/main.js"), "utf8");
 vm.runInNewContext(src.replace(/^import\s+\{[\s\S]*?\}\s+from\s+"[^"]+";\s*/gm, "")
@@ -115,6 +128,13 @@ assert.ok(find(tree, "agent-ui-root"));
 assert.ok(find(tree, "agent-ui-composer"));
 assert.ok(find(tree, "agent-ui-rail"));
 assert.ok(find(tree, "agent-ui-rail-marker-t-inspect"));
+assert.ok(find(tree, "agent-ui-scrollbar"));
+assert.ok(find(tree, "agent-ui-scrollbar-track"));
+assert.ok(find(tree, "agent-ui-scrollbar-thumb"));
+assert.equal(find(tree, "agent-ui-scrollbar-track").style.w[0], 1);
+assert.equal(find(tree, "agent-ui-scrollbar-thumb").style.w[0], 4);
+assert.equal(find(tree, "agent-ui-scrollbar-thumb").style.rounded[0], 2,
+  "native-style thin rounded scrollbar");
 assert.equal(find(tree, "agent-ui-rail-window"), null,
   "rail is made of circles, not a separate vertical range bar");
 assert.equal(find(tree, "agent-ui-root").style.rounded[0], 10,
@@ -170,6 +190,50 @@ assert.ok(find(oldTree, "agent-ui-user-t-live"), "continuous transcript remains 
 const oldY = ui.scrollY;
 find(oldTree, "agent-ui-main").handlers.on_scroll_wheel({ delta: { y: -380 } }, context);
 assert.equal(ui.scrollY, oldY + 380);
+let barVisual = find(ui.render(context), "agent-ui-scrollbar-thumb");
+assert.equal(barVisual.style.top[0], box.scrollbarGeometry(
+  box.turnGeometry(ui.turns, ui.turnHeights).total, ui.viewportHeight, ui.scrollY).thumbTop,
+  "wheel scrolling moves the scrollbar thumb from the same state");
+
+// Clicking the scrollbar track jumps the actual transcript and rail.
+let currentBar = box.scrollbarGeometry(box.turnGeometry(ui.turns, ui.turnHeights).total,
+  ui.viewportHeight, ui.scrollY);
+const pressAt = currentBar.trackTop + currentBar.trackHeight * 0.8;
+find(ui.render(context), "agent-ui-scrollbar").handlers.on_mouse_down({
+  position: { y: 1000 + pressAt }, local_position: { y: pressAt }, bounds: { y: 1000 },
+}, context);
+assert.ok(ui.scrollY > 380, "track press jumps toward its target");
+assert.ok(ui.scrollbarDrag, "a track press begins thumb drag");
+currentBar = box.scrollbarGeometry(box.turnGeometry(ui.turns, ui.turnHeights).total,
+  ui.viewportHeight, ui.scrollY);
+const beforeDrag = ui.scrollY;
+find(ui.render(context), "agent-ui-main").handlers.on_mouse_move({
+  position: { y: 1000 + pressAt - 75 },
+}, context);
+assert.ok(ui.scrollY < beforeDrag, "drag up moves transcript upward");
+assert.equal(find(ui.render(context), "agent-ui-scrollbar-thumb").style.top[0],
+  box.scrollbarGeometry(box.turnGeometry(ui.turns, ui.turnHeights).total,
+    ui.viewportHeight, ui.scrollY).thumbTop, "drag moves the thumb and transcript together");
+find(ui.render(context), "agent-ui-main").handlers.on_mouse_up({}, context);
+assert.equal(ui.scrollbarDrag, null, "release stops dragging");
+
+// Pressing the thumb itself should not jump it before dragging.
+currentBar = box.scrollbarGeometry(box.turnGeometry(ui.turns, ui.turnHeights).total,
+  ui.viewportHeight, ui.scrollY);
+const thumbPress = currentBar.thumbTop + currentBar.thumbHeight / 3;
+const scrollBeforeThumbPress = ui.scrollY;
+find(ui.render(context), "agent-ui-scrollbar").handlers.on_mouse_down({
+  position: { y: 1000 + thumbPress }, bounds: { y: 1000 },
+}, context);
+assert.ok(Math.abs(ui.scrollY - scrollBeforeThumbPress) < 0.01);
+find(ui.render(context), "agent-ui-main").handlers.on_mouse_move({
+  position: { y: 15000 },
+}, context);
+assert.equal(ui.scrollY, box.turnGeometry(ui.turns, ui.turnHeights).total - ui.viewportHeight,
+  "dragging far beyond the bottom clamps to the end");
+find(ui.render(context), "agent-ui-main").handlers.on_hover(false, context);
+assert.equal(ui.scrollbarDrag, null, "leaving viewport cancels capture");
+
 const scrolled = ui.render(context);
 const visible = box.visibleTurnIds(
   box.turnGeometry(ui.turns, ui.turnHeights).ranges, ui.scrollY, ui.viewportHeight);
@@ -232,6 +296,9 @@ assert.equal(ui.scrollY, box.clampScroll(
   box.turnGeometry(ui.turns, ui.turnHeights).total, ui.viewportHeight),
   "click scrolls to measured turn location in the same transcript");
 assert.equal(ui.hoveredTurn, null);
+assert.equal(find(ui.render(context), "agent-ui-scrollbar-thumb").style.top[0],
+  box.scrollbarGeometry(box.turnGeometry(ui.turns, ui.turnHeights).total,
+    ui.viewportHeight, ui.scrollY).thumbTop, "rail click moves the same scrollbar");
 const anchorBefore = ui.scrollY;
 ui.measureTurn("t-intro", { height: measured[0] + 55 }, context);
 assert.equal(ui.scrollY, anchorBefore + 55,
@@ -239,6 +306,15 @@ assert.equal(ui.scrollY, anchorBefore + 55,
 ui.measureViewport({ height: 48 }, context);
 assert.equal(find(ui.render(context), "agent-ui-rail"), null,
   "when the viewport is too short even for markers, hide rather than overflow");
+ui.measureViewport({ height: 360 }, context);
+assert.equal(find(ui.render(context), "agent-ui-scrollbar-thumb").style.top[0],
+  box.scrollbarGeometry(box.turnGeometry(ui.turns, ui.turnHeights).total,
+    ui.viewportHeight, ui.scrollY).thumbTop, "viewport resize updates scrollbar geometry");
+ui.measureViewport({ height: 10000 }, context);
+assert.equal(find(ui.render(context), "agent-ui-scrollbar-thumb"), null,
+  "hide the thumb when all transcript content fits");
+assert.equal(find(ui.render(context), "agent-ui-scrollbar-track"), null,
+  "hide the track when all transcript content fits");
 ui.measureViewport({ height: 360 }, context);
 
 ui.composer.set_value("本地測試訊息");

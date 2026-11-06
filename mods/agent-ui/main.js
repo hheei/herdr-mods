@@ -5,7 +5,7 @@ import { theme } from "herdr";
 import { DEMO_TURNS } from "./fixtures.js";
 import {
   summarizeActivity, toRailNodes, shortPrompt, turnGeometry, clampScroll,
-  visibleTurnIds, railMarkers, previewTop,
+  visibleTurnIds, railMarkers, previewTop, scrollbarGeometry, scrollbarOffsetAt,
 } from "./model.js";
 
 const STATUSES = {
@@ -43,6 +43,7 @@ export default class AgentUi extends View {
     this.turnHeights = new Map();
     this.viewportHeight = 460;
     this.scrollY = 0;
+    this.scrollbarDrag = null;
     this.pendingJump = null;
     this.width = 800;
     this.localCount = 0;
@@ -68,6 +69,7 @@ export default class AgentUi extends View {
     const height = Math.max(1, Math.round(size?.height ?? this.viewportHeight));
     if (Math.abs(height - this.viewportHeight) < 1) return;
     this.viewportHeight = height;
+    this.scrollbarDrag = null;
     const geometry = turnGeometry(this.turns, this.turnHeights);
     this.scrollY = clampScroll(this.scrollY, geometry.total, height);
     cx.notify();
@@ -105,6 +107,58 @@ export default class AgentUi extends View {
     this.pendingJump = null;
     if (next === this.scrollY) return;
     this.scrollY = next;
+    cx.stop_propagation();
+    cx.notify();
+  }
+
+  // One measured scroll offset powers the transcript, rail, wheel and bar.
+  // The native Scrollbar.vertical targets a native scrolling element instead;
+  // overlaying it on this manually positioned transcript would desynchronize.
+  setScrollbarScroll(value, cx) {
+    const geometry = turnGeometry(this.turns, this.turnHeights);
+    const next = clampScroll(value, geometry.total, this.viewportHeight);
+    this.pendingJump = null;
+    if (next === this.scrollY) return;
+    this.scrollY = next;
+    cx.notify();
+  }
+
+  scrollbarPress(event, cx) {
+    const geometry = turnGeometry(this.turns, this.turnHeights);
+    const bar = scrollbarGeometry(geometry.total, this.viewportHeight, this.scrollY);
+    const screenY = Number(event?.position?.y);
+    const localY = Number.isFinite(Number(event?.local_position?.y))
+      ? Number(event.local_position.y) : screenY - Number(event?.bounds?.y);
+    if (!bar.scrollable || !Number.isFinite(screenY) || !Number.isFinite(localY)) return;
+    const onThumb = localY >= bar.thumbTop && localY <= bar.thumbTop + bar.thumbHeight;
+    const grab = onThumb ? localY - bar.thumbTop : bar.thumbHeight / 2;
+    this.setScrollbarScroll(scrollbarOffsetAt(localY, bar, grab), cx);
+    this.scrollbarDrag = { screenY, startScrollY: this.scrollY };
+    cx.stop_propagation();
+    cx.notify();
+  }
+
+  scrollbarMove(event, cx) {
+    if (!this.scrollbarDrag) return;
+    const y = Number(event?.position?.y);
+    if (!Number.isFinite(y)) return;
+    const content = turnGeometry(this.turns, this.turnHeights).total;
+    const bar = scrollbarGeometry(content, this.viewportHeight, this.scrollY);
+    if (!bar.scrollable) {
+      this.scrollbarDrag = null;
+      cx.notify();
+      return;
+    }
+    const next = bar.travel > 0
+      ? this.scrollbarDrag.startScrollY
+        + (y - this.scrollbarDrag.screenY) * bar.maxScroll / bar.travel : 0;
+    this.setScrollbarScroll(next, cx);
+    cx.stop_propagation();
+  }
+
+  scrollbarRelease(cx) {
+    if (!this.scrollbarDrag) return;
+    this.scrollbarDrag = null;
     cx.stop_propagation();
     cx.notify();
   }
@@ -277,6 +331,21 @@ export default class AgentUi extends View {
             .bg(visible.has(node.id) ? t.muted : t.dim))));
   }
 
+  scrollbar(t, geometry) {
+    const bar = scrollbarGeometry(geometry.total, this.viewportHeight, this.scrollY);
+    return div().id("agent-ui-scrollbar").w(12).flex_none().h_full()
+      .relative().overflow_hidden()
+      .when(bar.scrollable, (el) => el
+        .cursor_pointer()
+        .on_mouse_down("left", (event, cx) => this.scrollbarPress(event, cx))
+        .child(div().id("agent-ui-scrollbar-track").absolute()
+          .left(6).top(bar.trackTop).w(1).h(bar.trackHeight)
+          .bg(t.dim).opacity(0.35))
+        .child(div().id("agent-ui-scrollbar-thumb").absolute()
+          .left(4).top(bar.thumbTop).w(4).h(bar.thumbHeight)
+          .rounded(2).bg(t.muted)));
+  }
+
   hoverPreview(t, geometry) {
     if (!this.hoveredTurn) return null;
     const nodes = toRailNodes(this.turns);
@@ -286,7 +355,7 @@ export default class AgentUi extends View {
     const mark = railMarkers(geometry.ranges, geometry.total, this.viewportHeight)
       .find((item) => item.id === this.hoveredTurn);
     if (!mark) return null;
-    return v_flex().id("agent-ui-rail-preview").absolute().right(36)
+    return v_flex().id("agent-ui-rail-preview").absolute().right(48)
       // Keep preview wholly inside the conversation viewport, even for the
       // first/last marker. The containing main area clips excess pixels.
       .top(previewTop(mark.top, this.viewportHeight, node.actionable))
@@ -320,6 +389,11 @@ export default class AgentUi extends View {
       .child(h_flex().id("agent-ui-main").flex_1().min_h(0)
         .relative().overflow_hidden()
         .on_scroll_wheel((event, context) => this.scrollWheel(event, context))
+        .on_mouse_move((event, context) => this.scrollbarMove(event, context))
+        .on_mouse_up("left", (_event, context) => this.scrollbarRelease(context))
+        .on_hover((hovered, context) => {
+          if (!hovered && this.scrollbarDrag) this.scrollbarRelease(context);
+        })
         .child(div().id("agent-ui-viewport").flex_1().min_w(0).h_full()
           .relative().overflow_hidden()
           .on_size_change((size, context) => this.measureViewport(size, context))
@@ -328,6 +402,7 @@ export default class AgentUi extends View {
             .px(compact ? 13 : 23).py(18).gap(19)
             .children(this.turns.map((turn) => this.turn(t, turn)))))
         .when(railEnabled, (el) => el.child(this.rail(t, geometry, visible)))
+        .child(this.scrollbar(t, geometry))
         .when(railEnabled && Boolean(this.hoveredTurn),
           (el) => el.child(this.hoverPreview(t, geometry))))
       .child(v_flex().id("agent-ui-composer").flex_none().px(compact ? 13 : 21)

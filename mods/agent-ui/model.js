@@ -86,3 +86,26 @@ export function previewTop(pinTop, viewportHeight, actionablePreview = false) {
   const height = actionablePreview ? 52 : 36;
   return Math.max(4, Math.min(pinTop - 5, viewportHeight - height - 4));
 }
+
+// Single scroll owner: the transcript, rail, wheel and scrollbar all consume
+// this geometry. The scrollbar never has an independent scroll offset.
+export function scrollbarGeometry(contentHeight, viewportHeight, scrollY, inset = 8, minThumb = 24) {
+  const trackHeight = Math.max(0, viewportHeight - 2 * inset);
+  const maxScroll = Math.max(0, contentHeight - viewportHeight);
+  const scrollable = maxScroll > 0 && trackHeight > 0;
+  if (!scrollable) return {
+    scrollable: false, trackTop: inset, trackHeight, thumbTop: inset,
+    thumbHeight: trackHeight, travel: 0, maxScroll: 0,
+  };
+  const thumbHeight = Math.min(trackHeight, Math.max(minThumb,
+    trackHeight * Math.min(1, viewportHeight / contentHeight)));
+  const travel = Math.max(0, trackHeight - thumbHeight);
+  const thumbTop = inset + travel * clampScroll(scrollY, contentHeight, viewportHeight) / maxScroll;
+  return { scrollable, trackTop: inset, trackHeight, thumbTop, thumbHeight, travel, maxScroll };
+}
+
+export function scrollbarOffsetAt(pointerY, geometry, grab = geometry.thumbHeight / 2) {
+  if (!geometry.scrollable || geometry.travel <= 0) return 0;
+  return Math.max(0, Math.min(geometry.maxScroll,
+    (pointerY - geometry.trackTop - grab) / geometry.travel * geometry.maxScroll));
+}

@@ -5,6 +5,8 @@
 
 **Stack 與圓點設計**：Agent UI 是 **Chrome Layout Stack 內的 UI child**，不建立獨立的 model Pane。Message Rail 預設每輪一個 **4px 圓點**，所有與 viewport 相交的輪次圓點均放大到 **8px**，共用同一條中心線；Theme `dim`／`muted` 中性色，不依工具狀態染色。移除額外的縱向區間高亮條，避免與 Scrollbar 混淆。Stack 子視圖輕量使用 Herdr 同款圓角／邊線／Topbar，沒有重複建立 Pane Frame。手動 transcript `scrollY` 暫為唯一 scroll owner，不能疊加未同步的 native Scrollbar。
 
+**Scrollbar 實作更新**：目前已用原生 GPUI builder 製作與 Herdr Terminal 相近的細型 Scrollbar（1px Track／4px Thumb，12px 點擊區），不是另一個獨立 Scrollbar scroll owner。Track click、Thumb drag、Wheel、Rail Click 都修改原有 transcript `scrollY`；Rail 可視圓點由同一幾何計算。測試已檢查 mouse-down／move／up、上下邊界、resize、無可捲內容自動隱藏。具體 [11](11-agent-ui-demo-implementation.md)；真正 Herdr App 指標捕捉和視覺仍待實機測試。
+
 本文件回應 P0 試用後兩項新增要求：**工具卡參考其他 Agent UI 重新設計**，以及**不加 Search，改評估即時對話導航側欄：點擊跳轉、hover 預覽**。沿用 [02 UI／UX](02-ux-spec.md) 和 [07 P1 polish](07-post-prototype-polish.md)；不修改現有 Pi 程序／Session、不建立 JSONL Reader。
 
 ## 1. 設計定位：兩個不同、相輔相成的層次

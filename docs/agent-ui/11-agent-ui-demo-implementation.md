@@ -62,7 +62,7 @@ sh scripts/install.sh agent-ui project-open
 
 **已完成：連續 transcript 的量測式 Jump 和「可視範圍涵蓋多輪就全部放大圓點」。** 尚未完成／實機未驗證：長歷史 cluster、原生 Scrollbar thumb、鍵盤 Focus／Screen Reader 和 GPUI 真實文字幾何。這些不是已完成產品功能。
 
-**Scrollbar 下一步**：Herdr Terminal 使用細圓角 Thumb，其他 Mod 亦可使用 `gpui-base.Scrollbar.vertical`。但本 Demo 目前由單一手動 `scrollY` 與 measured turns 管理 viewport；未有同步 Scrollbar 拖曳與 Rail 可視集合的可靠橋接前，**不直接疊加另一個獨立 Scrollbar**。保留 Herdr 原生外觀作為整合目標。
+**Scrollbar 現已實作（headless 測試通過，待實機 GUI 驗證）**：在對話最右緣建立 **12px 命中區、1px 低對比 Track、4px 圓角 Thumb**；內容不需滾動時不渲染線條。Thumb 高度與位置從同一份 `turnGeometry`／`scrollY`／`viewportHeight` 計算。滑鼠點擊 Track 按比例定位；拖曳 Thumb 使用相同 `scrollY`，可拉到頂／底，mouse-up／離開視野時終止；Wheel、Rail 點擊、resize 和工具展開均共用這份位置。因此沒有第二套獨立捲動狀態。這是**按照 Herdr Terminal 風格自行畫出的 GPUI Scrollbar**，而非直接掛上 `gpui-base.Scrollbar.vertical`（後者需原生 scroll container，與當前手動 transcript owner 不同）。原生 App 的 pointer capture／觸控／鍵盤與最終實際渲染仍須實測。
 
 ## 安裝與不干擾要求
 
@@ -79,6 +79,6 @@ node tests/project-open.test.cjs
 sh tests/agent-ui-demo-install.test.sh
 ```
 
-已覆蓋的行為：七輪 fixtures、group 和 tool detail 的折疊、失敗摘要（**右側不顯示狀態**）、工具失敗不觸發 `requiresUserAction`、Markdown 的原生 API 參數、**所有可見輪次的 Rail multi-highlight**、按 ID 捲動完整 transcript、Hover／Pin 可視範圍 clamp、**圓角 root**、本地 Composer、窄畫面、單 SVG status control、獨立 derive layout、不覆蓋一般個人 Layout／main、備份。
+已覆蓋的行為：七輪 fixtures、group 和 tool detail 的折疊、失敗摘要（**右側不顯示狀態**）、工具失敗不觸發 `requiresUserAction`、Markdown 的原生 API 參數、**所有可見輪次的 Rail multi-highlight**、按 ID 捲動完整 transcript、Hover／Pin 可視範圍 clamp、**Scrollbar：依比例的 Thumb、Track 點擊、拖曳、放開、上下邊界、Wheel／Rail／Resize 同步**、圓角 root、本地 Composer、窄畫面、單 SVG status control、獨立 derive layout、不覆蓋一般個人 Layout／main、備份。
 
 實機進行以下 QA 才算完成下一個 Gate：`herdr-app check`、真實視窗截圖、Markdown code blocks、Hover 是否裁切、click 過程是否跳動、窄 Pane／IME／鍵盤 focus、當實際 UI 初始化失敗時是否仍能從 Status Bar 回 Terminal。**這台 Linux 執行環境沒有 `herdr-app` desktop binary，故無法代替目標 Mac 上的實機結果。**
