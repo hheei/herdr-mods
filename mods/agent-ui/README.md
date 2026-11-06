@@ -13,7 +13,7 @@ sh scripts/install.sh agent-ui project-open
 Select the **`agent-ui-demo`** layout in Herdr's Layout picker, or, if the CLI is installed:
 
 ```sh
-herdr-app do layout.switch --name agent-ui-demo
+herdr-app do layout.switch '{"name":"agent-ui-demo"}'
 ```
 
 The usual Status Bar (rendered by `project-open`) shows **one small icon**. On the Terminal view, it is a conversation icon to switch to the Agent UI. In the Agent UI, it becomes a terminal icon to switch back. No tooltip, no extra status-bar slot, no two-part control. The old two-button segmented control has been removed.
@@ -27,8 +27,9 @@ The installer derives `agent-ui-demo.json` from your own `herdr-mods.json` if av
 3. **Native Markdown** is passed to the official `TextView.markdown(id, text)` interface rather than `para()`. A test turn includes headings, bold, italics, inline and fenced code, and a quote.
 4. **Message Rail IS the scrollbar**: one **18px-wide interaction strip** containing only user-turn dots, **no track or thumb**. The column is fixed at the vertical centre, **right-aligned 3px from the strip edge**, dots are **3px apart** and drawn at **70% opacity**, and the whole column never exceeds **40% of the view height**. A dot is **4px at the ends and grows to 9px at the reading position** (a Gaussian packet centred on the dot nearest the viewport centre), so the focus reads as one spot instead of a highlighted range. Hover shows one short user prompt; tool status never affects dot color. **Tap a dot to jump; drag vertically anywhere along the rail to scrub** (5px threshold for a dot press). Space above and below the column also scrubs proportionally.
 5. **Keyboard** works without a pointer: the Stack view takes focus (`track_focus` + `on_key_down`), **↑/↓ move the selected dot**, **Home/End** jump to the first/last bucket, **Enter** jumps to it, **Esc** clears focus and the preview. The focused dot is drawn solid, and it shows the same preview hover shows.
-6. **Narrow panes** (under 240px wide, or a very short view) drop the strip and show a **Turns** button that opens the same buckets as a short list, so navigation is not lost.
-7. **Composer (demo only)** echoes your input as a synthetic user turn with a local response. It never sends, queues or changes a real Pi prompt.
+6. **States are rendered, not implied.** The chip in the header cycles **DEMO → OFFLINE → EMPTY**: offline shows a banner, keeps the last turns readable and refuses to send ("nothing was sent or queued"); empty replaces the transcript with what is actually missing instead of a spinner. **Sticky bottom:** a turn that arrives while you are reading above does **not** move the transcript — a `↓ N new` counter appears and jumping clears it. `+ turn` (wide panes) simulates such an arrival; at the bottom, growth follows.
+7. **Narrow panes** (under 240px wide, or a very short view) drop the strip and show a **Turns** button that opens the same buckets as a short list, so navigation is not lost.
+8. **Composer (demo only)** echoes your input as a synthetic user turn with a local response. It never sends, queues or changes a real Pi prompt.
 
 ### Scope limits
 

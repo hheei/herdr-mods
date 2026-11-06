@@ -17,7 +17,7 @@ Run on the computer hosting the Herdr App GUI:
 sh scripts/install.sh agent-ui project-open
 ```
 
-Select **`agent-ui-demo`** in the Layout picker. The **single SVG icon** in the existing Status Bar switches between your Terminal Tab display and the synthetic Agent UI. The conversation is a **60-turn synthetic history** (7 scripted turns plus 53 generated follow-ups), with grouped tool details, native Markdown and **a Message Rail that itself functions as the scrollbar**. An 18px strip holds one column of dots—right-aligned 3px from the edge, 3px apart, 4px to 9px wide at 70% opacity, never taller than 40% of the view—and **no track or thumb**. Dot size follows a Gaussian packet around the reading position, so the focus reads as a single spot; hover shows a short question, tapping a dot jumps to its turn, dragging vertically scrubs, and ↑/↓/Home/End/Enter/Esc do the same from the keyboard. Narrow panes swap the strip for a **Turns** list. Dense histories merge turns into one dot each (`+N` on hover) instead of shrinking or overflowing.
+Select **`agent-ui-demo`** in the Layout picker. The **single SVG icon** in the existing Status Bar switches between your Terminal Tab display and the synthetic Agent UI. The conversation is a **60-turn synthetic history** (7 scripted turns plus 53 generated follow-ups), with grouped tool details, native Markdown and **a Message Rail that itself functions as the scrollbar**. An 18px strip holds one column of dots—right-aligned 3px from the edge, 3px apart, 4px to 9px wide at 70% opacity, never taller than 40% of the view—and **no track or thumb**. Dot size follows a Gaussian packet around the reading position, so the focus reads as a single spot; hover shows a short question, tapping a dot jumps to its turn, dragging vertically scrubs, and ↑/↓/Home/End/Enter/Esc do the same from the keyboard. Narrow panes swap the strip for a **Turns** list, and the header chip cycles the demo through **offline** and **empty** states — a turn arriving while you read above shows a `↓ N new` counter instead of yanking the transcript. Dense histories merge turns into one dot each (`+N` on hover) instead of shrinking or overflowing.
 
 This is an **opt-in Tab-display chrome-stack preview**, not a live Pi client or per-model split-Pane switch. It does not start, stop or send commands to Pi. [Installation and limitations](mods/agent-ui/README.md) · [implementation status](docs/agent-ui/11-agent-ui-demo-implementation.md).
 
@@ -44,7 +44,7 @@ No Python, Node, jq, sudo, or additional dependency required for installation. T
 **Next:** in Herdr App switch to layout **herdr-mods** (from the layout picker or command palette); alternatively:
 
 ~~~sh
-herdr-app do layout.switch --name herdr-mods
+herdr-app do layout.switch '{"name":"herdr-mods"}'
 ~~~
 
 The source is available at **https://github.com/hheei/herdr-mods**. Direct-install commands always use the repository's `main` branch; inspect the script first or use a pinned release archive when you need a reproducible build.
@@ -92,6 +92,8 @@ Node is for **developer tests only**. If Herdr App is installed, additionally va
 ~~~sh
 herdr-app check "$HOME/.config/herdr-app/mods/project-open"
 ~~~
+
+These `herdr-app` commands talk to the **running App** (`herdr-app commands` lists every one with its arguments); there is no separate CLI package to install, and `do` takes a JSON object rather than flags: `herdr-app do layout.switch '{"name":"herdr-mods"}'`.
 
 This does not replace visual GUI testing.
 

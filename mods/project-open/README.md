@@ -55,7 +55,7 @@ Change one line:
   "content": { "mod": "project-open" }
 ~~~
 
-Keep a copy of the file first, switch to that layout in Herdr App, then validate with `herdr-app check`. Machine, branch, agent count and the Commands hint stay because the Mod renders them itself. A sidebar entry also works, but the whole status row then renders inside the sidebar.
+Keep a copy of the file first, switch to that layout in Herdr App, then validate with `herdr-app check "$HOME/.config/herdr-app/mods/project-open"`. These `herdr-app` commands need the App running on this machine; they are not a separate CLI. Machine, branch, agent count and the Commands hint stay because the Mod renders them itself. A sidebar entry also works, but the whole status row then renders inside the sidebar.
 
 The installer backs up the personal Layout to a single `*.bak` file, then **changes the `status` block to use the Project Open status renderer**, which includes the original status content plus the icon. To keep a different personal layout, install with `--no-layout` and see the manual section below. Older Sidebar entries and split-row status versions are migrated automatically. The original shipped `workspace-status` mod is not modified. Clone a shipped layout first if needed:
 

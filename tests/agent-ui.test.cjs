@@ -521,4 +521,57 @@ assert.ok(find(edge, "agent-ui-detail-partial-x-partial"),
 assert.equal(find(edge, "agent-ui-detail-partial-x-unknown"), null,
   "only edit details carry the partial-patch notice");
 
-console.log("PASS: dots-only scroll rail, scrubbing, dot jump, keyboard focus, narrow turn list, bounded hover, tool detail edges, Markdown and Stack view.");
+// Empty and offline are states, not missing renders: the chip cycles them.
+const demoChip = () => find(ui.render(context), "agent-ui-demo-state");
+assert.equal(textOf(demoChip()), "DEMO");
+demoChip().handlers.on_click({}, context);
+let offline = ui.render(context);
+assert.ok(find(offline, "agent-ui-offline"), "offline shows a banner");
+assert.match(textOf(find(offline, "agent-ui-offline")), /bridge offline/i);
+assert.equal(find(offline, "agent-ui-send").handlers.on_click, undefined,
+  "sending is disabled while the bridge is offline");
+assert.equal(find(offline, "agent-ui-transcript") !== null, true,
+  "the last known turns stay readable offline");
+const offlineCount = ui.turns.length;
+ui.composer.set_value("hello");
+ui.notice = "";
+ui.send(context);
+assert.equal(ui.turns.length, offlineCount, "offline send does not append");
+assert.match(ui.notice, /offline · nothing was sent/i);
+ui.composer.set_value("");
+demoChip().handlers.on_click({}, context);
+const empty = ui.render(context);
+assert.ok(find(empty, "agent-ui-empty"), "empty state replaces the transcript");
+assert.equal(find(empty, "agent-ui-transcript"), null);
+assert.equal(find(empty, "agent-ui-rail-marker-0"), null, "no markers with no turns");
+assert.equal(find(empty, "agent-ui-send").handlers.on_click, undefined);
+find(empty, "agent-ui-empty-restore").handlers.on_click({}, context);
+assert.equal(ui.turns.length, offlineCount, "demo turns come back");
+assert.equal(find(ui.render(context), "agent-ui-empty"), null);
+
+// A turn that arrives while the reader is above does not move the transcript.
+ui.changeSize({ width: 800 }, context);
+ui.measureViewport({ height: 460 }, context);
+ui.scrollY = 0;
+ui.render(context);
+assert.equal(ui.stick, false, "the top of a long transcript is not sticky");
+const readingY = ui.scrollY;
+ui.demoAppend(context);
+assert.equal(ui.newTurns, 1, "an unnoticed turn is counted");
+assert.equal(ui.scrollY, readingY, "the reading anchor is preserved");
+const pill = find(ui.render(context), "agent-ui-new-turns-pill");
+assert.match(textOf(pill), /1 new/);
+pill.handlers.on_click({}, context);
+assert.equal(ui.newTurns, 0, "jumping clears the counter");
+const bottomY = box.turnGeometry(ui.turns, ui.turnHeights).total - ui.viewportHeight;
+assert.equal(ui.scrollY, bottomY, "the pill lands at the bottom");
+assert.equal(ui.stick, true, "the bottom is sticky");
+
+// At the bottom, growth follows; that is the whole difference.
+ui.demoAppend(context);
+ui.render(context);
+assert.equal(ui.newTurns, 0, "a following reader is not told about new turns");
+assert.ok(ui.scrollY > bottomY, "a following reader moves with the content");
+assert.equal(find(ui.render(context), "agent-ui-new-turns-pill"), null);
+
+console.log("PASS: dots-only scroll rail, scrubbing, dot jump, keyboard focus, narrow turn list, empty and offline states, sticky bottom, bounded hover, tool detail edges, Markdown and Stack view.");

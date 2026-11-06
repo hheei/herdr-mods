@@ -65,6 +65,8 @@ sh scripts/install.sh agent-ui project-open
 
 **明確不做（宿主缺口，見 [01 §4](01-evidence.md)）：** 螢幕閱讀器／accessibility tree —— Herdr 沒有相關接口，因此只能宣稱「鍵盤可達」。**未實作／實機未驗證：** 跨視窗 pointer capture、桶合併的 Hover 文字長度、GPUI 真實文字幾何、全域快捷鍵（本 Mod 不附 `keys.json`）。
 
+**狀態與貼底已實作**：標頭 chip 循環 **DEMO／OFFLINE／EMPTY**；offline 顯示 banner、既有輪次仍可讀、`send()` 直接拒絕並說明「沒有送出、沒有排隊」；empty 以「沒有東西可顯示」取代 transcript，而不是無盡 spinner。**Sticky bottom**：讀者在上方閱讀時新輪次不改 `scrollY`，只出現 `↓ N new`；按下去才到底並歸零；已在底部時內容成長自動跟隨。`+ turn`（寬 pane）模擬這種到達，也是後續 streaming 回放要用的同一條 `appendTurn()` 路徑。
+
 **窄 pane／矮 pane fallback 已實作**：視窗寬度 < 240px 或高度 < 80px 時不畫圓點列，標題列出現 **Turns** 控制，展開後列出同一批桶（`短問題 +N`），點一列即跳轉；列數依可用高度截斷並顯示剩餘數量。
 
 **Tool 細節邊界已實作**：詳情最多顯示 18 行／4000 字元，超出時說明「顯示 N / M 行，完整輸出仍在 Terminal」；`edit` 詳情沒有 hunk header 時標示 **partial**，不假裝是完整 patch；未知 `kind` 直接印出原字串，不冒認 Read／Run／Edit。Mod 沒有 clipboard API，因此不做 Copy 按鈕。

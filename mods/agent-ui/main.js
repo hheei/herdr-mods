@@ -57,6 +57,12 @@ export default class AgentUi extends View {
     this.width = 800;
     this.localCount = 0;
     this.notice = "";
+    // Demo-only states. "offline" is the bridge-error case, "empty" the
+    // before-any-turn case; both are reachable with one click on the chip.
+    this.demo = "demo";
+    this.saved = null;
+    this.stick = false;
+    this.newTurns = 0;
     this.composer = TextareaState.new({
       value: "",
       rows: 3,
@@ -85,6 +91,65 @@ export default class AgentUi extends View {
     cx.notify();
   }
 
+  setMode(mode, cx) {
+    if (mode !== this.demo) {
+      if (mode === "empty") {
+        this.saved = this.turns;
+        this.turns = [];
+        this.scrollY = 0;
+        this.stick = false;
+      } else if (this.demo === "empty") {
+        this.turns = this.saved ?? [];
+        this.saved = null;
+      }
+      this.demo = mode;
+    }
+    this.newTurns = 0;
+    this.keyTurn = null;
+    this.hoveredTurn = null;
+    this.turnList = false;
+    cx.notify();
+  }
+
+  cycleMode(cx) {
+    this.setMode(this.demo === "demo" ? "offline"
+      : this.demo === "offline" ? "empty" : "demo", cx);
+  }
+
+  appendTurn(turn, cx) {
+    this.turns.push(turn);
+    const geometry = turnGeometry(this.turns, this.turnHeights);
+    // Following the bottom is a promise the reader revokes by scrolling up.
+    if (this.stick) {
+      this.scrollY = clampScroll(geometry.total, geometry.total, this.viewportHeight);
+      this.newTurns = 0;
+    } else {
+      this.newTurns += 1;
+    }
+    cx.notify();
+  }
+
+  jumpToBottom(cx) {
+    const geometry = turnGeometry(this.turns, this.turnHeights);
+    this.scrollY = clampScroll(geometry.total, geometry.total, this.viewportHeight);
+    this.pendingJump = null;
+    this.stick = true;
+    this.newTurns = 0;
+    cx.notify();
+  }
+
+  demoAppend(cx) {
+    const n = ++this.localCount;
+    this.appendTurn({
+      id: `t-more-${n}`,
+      prompt: `Arrives while you are reading (${n})`,
+      status: "done",
+      messages: [{ id: `a-more-${n}`, role: "assistant",
+        text: "A new turn landed. If you were reading above, the transcript did not move: only the counter at the bottom changed." }],
+      tools: [],
+    }, cx);
+  }
+
   measureTurn(id, size, cx) {
     const height = Number(size?.height);
     if (!Number.isFinite(height) || height <= 0) return;
@@ -104,7 +169,8 @@ export default class AgentUi extends View {
       if (target) this.scrollY = target.start;
       if (after.complete) this.pendingJump = null;
     }
-    this.scrollY = clampScroll(this.scrollY, after.total, this.viewportHeight);
+    if (this.stick) this.scrollY = clampScroll(after.total, after.total, this.viewportHeight);
+    else this.scrollY = clampScroll(this.scrollY, after.total, this.viewportHeight);
     cx.notify();
   }
 
@@ -297,6 +363,13 @@ export default class AgentUi extends View {
   send(cx) {
     const draft = String(this.composer.value() ?? "").trim();
     if (!draft) return;
+    if (this.demo !== "demo") {
+      this.notice = this.demo === "offline"
+        ? "Bridge offline · nothing was sent or queued"
+        : "No session to send to";
+      cx.notify();
+      return;
+    }
     const id = `t-local-${++this.localCount}`;
     this.turns.push({
       id,
@@ -472,6 +545,17 @@ export default class AgentUi extends View {
         div().text_size(10.5).text_color(t.blocked).child("! 需要處理")));
   }
 
+  // No turns is a real state, not a spinner forever; say what is missing.
+  emptyState(t) {
+    return v_flex().id("agent-ui-empty").size_full().items_center().justify_center()
+      .gap(7).px(18)
+      .child(div().text_size(13).text_color(t.muted).child("No turns yet"))
+      .child(div().text_size(11).text_color(t.dim)
+        .child("Nothing has arrived from the bridge, so there is no transcript to show."))
+      .child(control(t, "agent-ui-empty-restore", "Restore demo turns",
+        (context) => this.setMode("demo", context), true));
+  }
+
   render(cx) {
     const t = theme();
     const compact = this.width < 520;
@@ -482,6 +566,14 @@ export default class AgentUi extends View {
     const geometry = turnGeometry(this.turns, this.turnHeights);
     this.scrollY = clampScroll(this.scrollY, geometry.total, this.viewportHeight);
     const visible = new Set(visibleTurnIds(geometry.ranges, this.scrollY, this.viewportHeight));
+    const last = this.turns.at(-1);
+    // Sticky bottom: content growth follows only while the reader is at the end.
+    const maxY = clampScroll(geometry.total, geometry.total, this.viewportHeight);
+    this.stick = geometry.total <= this.viewportHeight + 1 || this.scrollY >= maxY - 2;
+    if (this.stick && this.scrollY < maxY) {
+      this.scrollY = maxY;
+      this.newTurns = 0;
+    }
     return v_flex().id("agent-ui-root").size_full().min_h(0)
       // A Layout Stack child, not an independent Pane. Mimic the native
       // card frame here, without introducing a second host Pane Frame.
@@ -498,8 +590,22 @@ export default class AgentUi extends View {
             this.turnList = !this.turnList;
             context.notify();
           }, this.turns.length > 0)))
-        .child(this.statusLine(t, this.turns.at(-1).status))
-        .child(div().text_color(t.dim).text_size(10).child("DEMO")))
+        .when(this.width >= 520 && Boolean(last), (el) => el.child(control(t,
+          "agent-ui-append-turn", "+ turn", (context) => this.demoAppend(context), true)))
+        .when(Boolean(last), (el) => el.child(this.statusLine(t, last.status)))
+        .child(h_flex().id("agent-ui-demo-state").h(24).px(8).items_center().rounded(6)
+          .cursor_pointer().border_1().border_color(t.border)
+          .on_click((_event, context) => this.cycleMode(context))
+          .child(div().text_size(10)
+            .text_color(this.demo === "demo" ? t.dim : t.blocked)
+            .child(this.demo.toUpperCase()))))
+      .when(this.demo === "offline", (el) => el.child(h_flex().id("agent-ui-offline")
+        .h(27).flex_none().px(12).gap(9).items_center().bg(t.raised)
+        .border_b(1).border_color(t.border)
+        .child(div().flex_1().truncate().text_size(11).text_color(t.blocked)
+          .child("! Pi bridge offline · the transcript is read-only and nothing is queued"))
+        .child(control(t, "agent-ui-reconnect", "Retry",
+          (context) => this.setMode("demo", context), true))))
       .child(h_flex().id("agent-ui-main").flex_1().min_h(0)
         .relative().overflow_hidden()
         .on_scroll_wheel((event, context) => this.scrollWheel(event, context))
@@ -511,16 +617,24 @@ export default class AgentUi extends View {
         .child(div().id("agent-ui-viewport").flex_1().min_w(0).h_full()
           .relative().overflow_hidden()
           .on_size_change((size, context) => this.measureViewport(size, context))
-          .child(v_flex().id("agent-ui-transcript").absolute()
-            .left(0).right(0).top(-this.scrollY)
+          .when(this.turns.length > 0, (el) => el.child(v_flex().id("agent-ui-transcript")
+            .absolute().left(0).right(0).top(-this.scrollY)
             .px(compact ? 13 : 23).py(18).gap(19)
             .children(this.turns.map((turn) => this.turn(t, turn)))))
+          .when(this.turns.length === 0, (el) => el.child(this.emptyState(t))))
         .when(railEnabled, (el) =>
           el.child(this.navigationStrip(t, geometry, visible, true)))
         .when(railEnabled && Boolean(this.hoveredTurn ?? this.keyTurn),
           (el) => el.child(this.hoverPreview(t, geometry)))
         .when(listEnabled && this.turnList, (el) => el.child(this.turnListPanel(t,
-          railLayout(geometry.ranges, this.viewportHeight, [...visible])))))
+          railLayout(geometry.ranges, this.viewportHeight, [...visible]))))
+        .when(this.newTurns > 0, (el) => el.child(h_flex().id("agent-ui-new-turns")
+          .absolute().bottom(10).left(0).right(0).justify_center()
+          .child(h_flex().id("agent-ui-new-turns-pill").h(24).px(10).gap(6)
+            .items_center().rounded(12).bg(t.accent).cursor_pointer()
+            .on_click((_event, context) => this.jumpToBottom(context))
+            .child(div().text_size(10.5).text_color(t.background)
+              .child(`↓ ${this.newTurns} new`))))))
       .child(v_flex().id("agent-ui-composer").flex_none().px(compact ? 13 : 21)
         .pt(10).pb(12).gap(8).border_t(1).border_color(t.border).bg(t.chrome)
         .child(Textarea.new(this.composer).id("agent-ui-textarea").w_full()
@@ -529,8 +643,10 @@ export default class AgentUi extends View {
           .bg(t.background).text_color(t.foreground).text_size(12.5))
         .child(h_flex().items_center().gap(9)
           .child(div().flex_1().text_size(10.5).text_color(t.dim)
-            .child(this.notice || "Synthetic data · no live Pi connection"))
+            .child(this.notice || (this.demo === "demo"
+              ? "Synthetic data · no live Pi connection"
+              : "Read-only in this state · the draft is kept")))
           .child(control(t, "agent-ui-send", "Try send · demo",
-            (context) => this.send(context), Boolean(draft)))));
+            (context) => this.send(context), Boolean(draft) && this.demo === "demo"))));
   }
 }
