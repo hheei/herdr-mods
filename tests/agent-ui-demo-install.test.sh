@@ -12,7 +12,7 @@ cp "$root/layouts/herdr-mods.json" "$HERDR_APP_HOME/layouts/herdr-mods.json"
 cp "$root/layouts/herdr-mods.json" "$HERDR_APP_HOME/layouts/main.json"
 printf '{"id":"untouched-personal-layout"}\n' > "$HERDR_APP_HOME/layouts/personal.json"
 printf 'old Agent UI version\n' > "$HERDR_APP_HOME/mods/agent-ui/OLD"
-sh "$root/scripts/install.sh" agent-ui project-open >/dev/null
+sh "$root/scripts/install.sh" agent-ui project-open --yes >/dev/null
 [ -f "$HERDR_APP_HOME/mods/agent-ui/main.js" ]
 [ -f "$HERDR_APP_HOME/mods/agent-ui/model.js" ]
 [ -f "$HERDR_APP_HOME/mods/agent-ui/fixtures.js" ]
@@ -40,7 +40,7 @@ assert.equal(status.children.some(x => x.content.mod === "project-open"), true);
 NODE
 
 printf '{"id":"custom-demo"}\n' > "$HERDR_APP_HOME/layouts/agent-ui-demo.json"
-sh "$root/scripts/install.sh" agent-ui project-open >/dev/null
+sh "$root/scripts/install.sh" agent-ui project-open --yes >/dev/null
 grep -q custom-demo "$HERDR_APP_HOME/layouts/agent-ui-demo.json.bak"
 [ "$(find "$HERDR_APP_HOME/layouts" -name 'agent-ui-demo.json.bak*' | wc -l | tr -d ' ')" -eq 1 ]
 [ "$(find "$HERDR_APP_HOME/mods" -maxdepth 1 -name 'agent-ui.bak*' | wc -l | tr -d ' ')" -eq 0 ]
@@ -49,6 +49,6 @@ grep -q untouched-personal-layout "$HERDR_APP_HOME/layouts/personal.json"
 # Customized work-body must not be guessed/replaced.
 mkdir -p "$tmp/unsupported/layouts"
 sed 's/"id": "main"/"id": "custom-tab"/' "$root/layouts/herdr-mods.json" > "$tmp/unsupported/layouts/herdr-mods.json"
-HERDR_APP_HOME="$tmp/unsupported" sh "$root/scripts/install.sh" agent-ui project-open >/dev/null 2>&1
+HERDR_APP_HOME="$tmp/unsupported" sh "$root/scripts/install.sh" agent-ui project-open --yes >/dev/null 2>&1
 [ ! -e "$tmp/unsupported/layouts/agent-ui-demo.json" ]
 echo "PASS: canonical Agent UI installation, backup, isolated layout, no duplicate v2."

@@ -24,8 +24,14 @@ printf '%s\n' 'export default function (pi) {}' > "$tmp/repo/mods/pi-mod/bridge/
 printf '%s\n' 'export default class Another {}' > "$tmp/repo/mods/another-mod/main.js"
 printf '%s\n' '{"place":"none"}' > "$tmp/repo/mods/another-mod/mod.json"
 printf '%s\n' '{"sidebar": true}' > "$tmp/repo/mods/another-mod/layout.json"
-install() { sh "$tmp/repo/scripts/install.sh" "$@" >/dev/null; }
+install() { sh "$tmp/repo/scripts/install.sh" --yes "$@" >/dev/null; }
 layout="$HERDR_APP_HOME/layouts/herdr-mods.json"
+
+# Without a terminal and without --yes it reports and writes nothing: a piped or CI
+# run never installs something nobody asked for.
+out=$(sh "$tmp/repo/scripts/install.sh" 2>&1 || true)
+case "$out" in *"re-run with --yes"*) ;; *) echo "FAIL: no-terminal run did not ask for --yes"; exit 1 ;; esac
+[ ! -e "$HERDR_APP_HOME/mods/project-open" ]
 
 # Nothing installed: the starting set is the whole checkout, so the same command
 # that later refreshes also does the first install.
@@ -112,12 +118,12 @@ grep -q '"mod": "my-status"' "$layout"
 [ -f "$HERDR_APP_HOME/mods/project-open/main.js" ]
 
 # The Pi extension is not layout wiring: it installs with --no-layout too.
-HERDR_APP_HOME="$tmp/bare2" sh "$tmp/repo/scripts/install.sh" pi-mod --no-layout >/dev/null
+HERDR_APP_HOME="$tmp/bare2" sh "$tmp/repo/scripts/install.sh" pi-mod --no-layout --yes >/dev/null
 [ -f "$tmp/pihome/extensions/herdr-agent-ui.js" ]
 [ ! -e "$tmp/bare2/layouts" ]
 
 # --no-layout writes files and nothing else.
-HERDR_APP_HOME="$tmp/bare" sh "$tmp/repo/scripts/install.sh" --all --no-layout >/dev/null
+HERDR_APP_HOME="$tmp/bare" sh "$tmp/repo/scripts/install.sh" --all --no-layout --yes >/dev/null
 [ -f "$tmp/bare/mods/project-open/main.js" ]
 [ ! -e "$tmp/bare/layouts" ]
 sh "$tmp/repo/scripts/install.sh" --help >/dev/null
@@ -126,7 +132,7 @@ sh "$tmp/repo/scripts/install.sh" --nope 2>/dev/null && exit 1 || true
 # An explicit XDG_CONFIG_HOME or HOME fallback still finds Herdr App Home.
 unset HERDR_APP_HOME XDG_CONFIG_HOME
 mkdir -p "$tmp/newhome"
-HOME="$tmp/newhome" sh "$tmp/repo/scripts/install.sh" --all >/dev/null
+HOME="$tmp/newhome" sh "$tmp/repo/scripts/install.sh" --all --yes >/dev/null
 [ -f "$tmp/newhome/.config/herdr-app/layouts/herdr-mods.json" ]
 
 # The piped one-liner stages the archive it was given.
@@ -134,8 +140,8 @@ mkdir -p "$tmp/src/herdr-mods-main" "$tmp/pipehome"
 cp -R "$tmp/repo/." "$tmp/src/herdr-mods-main/"
 tar -czf "$tmp/src.tgz" -C "$tmp/src" herdr-mods-main
 HERDR_APP_HOME="$tmp/pipehome" HERDR_MODS_ARCHIVE_URL="file://$tmp/src.tgz" \
-  sh -s -- --all < "$tmp/repo/scripts/install.sh" >/dev/null 2>&1
+  sh -s -- --all --yes < "$tmp/repo/scripts/install.sh" >/dev/null 2>&1
 [ -f "$tmp/pipehome/mods/project-open/main.js" ]
 [ -f "$tmp/pipehome/layouts/herdr-mods.json" ]
 
-echo "PASS: refresh default, --all, named scope, declared wiring, unchanged is not rewritten, customized status untouched, no-layout, env fallback, piped one-liner."
+echo "PASS: --yes required without a terminal, refresh default, --all, named scope, declared wiring, unchanged is not rewritten, customized status untouched, no-layout, env fallback, piped one-liner."

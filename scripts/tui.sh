@@ -11,9 +11,11 @@ layout=herdr-mods
 app_home() { printf '%s\n' "${HERDR_APP_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/herdr-app}"; }
 step() { printf '  %s✓%s %s\n' "$good" "$off" "$*"; }
 warn() { printf '  %s!%s %s\n' "$hot" "$off" "$*" >&2; }
+# No terminal means nobody can answer: report instead of guessing yes, so a piped or
+# CI run never writes anything the caller did not ask for with --yes.
 confirm() {
   [ "${assume_yes:-no}" = yes ] && return 0
-  [ "$interactive" = yes ] || return 0
+  [ "$interactive" = yes ] || return 1
   printf '  %s?%s %s [Y/n] ' "$hot" "$off" "$1"
   answer=''
   read -r answer </dev/tty || return 0

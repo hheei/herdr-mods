@@ -118,8 +118,12 @@ done
 changes=$(printf '%s %s' "$mods_todo" "$pi_todo" | wc -w | tr -d ' ')
 if [ "$changes" -gt 0 ]; then
   if ! confirm "apply $changes change(s)"; then
-    warn "nothing changed; ${changes} pending (--yes to skip this prompt)"
-    exit 0
+    if [ "$interactive" = yes ]; then
+      warn "nothing changed; ${changes} pending"
+    else
+      warn "nothing changed: ${changes} pending and no terminal to ask, re-run with --yes"
+    fi
+    exit 1
   fi
   # Already said yes to this run: the layout follows without a second prompt, and
   # --no-layout is how you take the Mods without the wiring.
