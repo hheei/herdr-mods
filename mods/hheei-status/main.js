@@ -175,11 +175,11 @@ export default class HheeiStatus extends View {
         .child(div().size(6).rounded(3).bg(t.dim))
         .child(`${list.length} agents`)
         .when(needs > 0, (el) => el.child(div().text_color(t.blocked).child(`· ${needs} needs you`)))
-        // The launcher belongs to the existing left status cluster, not in
-        // a new far-right slot after the Commands hint.
-        .child(button))
+        // Both buttons belong to the existing left status cluster: the bar reads
+        // left to right, and a lone icon on the far side reads as a different bar.
+        .child(button)
+        .when(modeToggle !== null, (el) => el.child(modeToggle)))
       .child(div().flex_1())
-      .when(modeToggle !== null, (el) => el.child(modeToggle))
       .child(div().id("palette").text_color(t.dim)
         .on_click(() => run("app.palette")).child(this.hint()));
   }

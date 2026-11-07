@@ -3,7 +3,7 @@
 整套 mods 的状态栏：Herdr 内置 `workspace-status` 的克隆，多两个图标。
 
 - 左键：用上次的选择打开项目（VS Code，或 Finder / 文件管理器）；右键：换默认
-- 右侧小图标：聚焦的是被识别的 Agent 时出现，点开 `agent-ui` 的浮层，再点关闭
+- 紧挨着它的第二个小图标：聚焦的是被识别的 Agent 时出现，点开 `agent-ui` 的浮层，再点关闭
 
 机器名、分支、agent 数、「Commands」提示全部沿用官方渲染 —— 那是 `workspace-status` 的 31 行，原样保留，只加了图标。
 

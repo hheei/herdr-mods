@@ -148,8 +148,14 @@ async function main() {
   assert.equal(findById(withoutAgent, "agent-ui-mode"), null,
     "no focused agent, no Agent UI to offer");
   state.agents = [{ address: "a1", status: "working", focused: true }];
-  let switcher = findById(mod.render(cx), "agent-ui-mode");
+  const withAgent = mod.render(cx);
+  let switcher = findById(withAgent, "agent-ui-mode");
   assert.ok(switcher, "a focused agent gets one mode icon");
+  const cluster = withAgent.kids.find((kid) => (kid.kids || []).some((x) => x.nodeId === "agent-ui-mode"));
+  assert.ok(cluster && cluster.kids.some((x) => x.nodeId === "hheei-status-button"),
+    "the Agent UI icon sits in the left status cluster beside the launcher");
+  assert.equal((cluster.kids || []).some((x) => x.nodeId === "palette"), false,
+    "the Commands hint stays at the far end, past the spacer");
   assert.equal(switcher.kids.length, 1);
   assert.equal(switcher.kids[0].icon, "mods/hheei-status/agent-ui.svg");
   switcher.handlers.on_click(null, cx);
