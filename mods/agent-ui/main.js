@@ -49,6 +49,10 @@ export default class AgentUi extends View {
     this.bridge = null;
     this.bridgeHealth = null;
     this.asking = null;
+    this.askPicks = {};
+    this.askTyping = -1;
+    this.answer = TextareaState.new({ value: "", rows: 2, placeholder: "Type your answer…" });
+    this.answer.on("change", (_event, cx) => cx.notify());
     // null until the check runs: "unknown" is not "not installed".
     this.bridgeInstalled = null;
     this.transcript = createTranscript(this.source.snapshot());
@@ -193,19 +197,6 @@ export default class AgentUi extends View {
     } catch {
       // A host without notifications still shows the banner.
     }
-  }
-
-  // Clicking an option writes the one file the bridge is polling; the plugin
-  // resolves its own prompt with it, so there is no second code path to keep.
-  answerOption(option, cx) {
-    const dir = this.bridge?.dir;
-    if (!dir || !this.asking) return;
-    const text = JSON.stringify({ response: { kind: "selection", selections: [option.title] } });
-    this.asking = null;
-    cx.spawn(async () => {
-      await writeTextFile(`${dir}/answer.json`, text, null);
-      cx.notify();
-    });
   }
 
   apply(event) {
@@ -432,6 +423,10 @@ export default class AgentUi extends View {
   keyDown(event, cx) {
     const key = String(event?.keystroke?.key ?? "").toLowerCase();
     if (!key) return;
+    if (this.asking !== null) {
+      this.askKey(key, cx);
+      return;
+    }
     const geometry = turnGeometry(this.turns, this.turnHeights);
     const layout = railLayout(geometry.ranges, this.viewportHeight,
       visibleTurnIds(geometry.ranges, this.scrollY, this.viewportHeight));
@@ -771,22 +766,6 @@ export default class AgentUi extends View {
         .bg(t.raised).border_b(1).border_color(t.border)
         .child(div().flex_1().truncate().text_size(11).text_color(t.blocked)
           .child("! Pi GUI integration is not enabled · copy bridge/herdr-agent-ui.js into ~/.pi/agent/extensions/ and restart Pi"))))
-      .when(this.asking !== null, (el) => {
-        const asked = this.asking.questions ?? [];
-        const one = asked.length === 1 ? asked[0] : null;
-        const choices = one && !one.allowMultiple ? (one.options ?? []) : [];
-        return el.child(h_flex().id("agent-ui-asking")
-          .h(31).flex_none().px(12).gap(9).items_center().bg(t.raised)
-          .border_b(1).border_color(t.blocked)
-          .child(div().text_size(11).flex_none().text_color(t.blocked).child("?"))
-          .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim)
-            .child(one?.question ?? this.asking.heading ?? ""))
-          .when(choices.length > 0, (bar) => choices.reduce(
-            (row, option) => row.child(control(t, `agent-ui-answer-${option.title}`,
-              option.title, (context) => this.answerOption(option, context), true)), bar))
-          .when(choices.length === 0, (bar) => bar.child(
-            div().text_size(10).flex_none().text_color(t.dim).child("answer in the Terminal"))));
-      })
       .when(this.demo === "offline", (el) => el.child(h_flex().id("agent-ui-offline")
         .h(27).flex_none().px(12).gap(9).items_center().bg(t.raised)
         .border_b(1).border_color(t.border)
@@ -823,25 +802,173 @@ export default class AgentUi extends View {
             .on_click((_event, context) => this.jumpToBottom(context))
             .child(div().text_size(10.5).text_color(t.background)
               .child(this.live > 0 ? "↓ live" : `↓ ${this.newTurns} new`))))))
-      .child(v_flex().id("agent-ui-composer").flex_none().px(compact ? 13 : 21)
-        .pt(10).pb(12).gap(8).border_t(1).border_color(t.border).bg(t.chrome)
-        .child(Textarea.new(this.composer).id("agent-ui-textarea").w_full()
-          .h(compact ? 70 : 78).p(10).rounded(8)
-          .border_1().border_color(t.input)
-          .bg(t.background).text_color(t.foreground).text_size(12.5))
-        .child(h_flex().items_center().gap(9)
-          .child(div().flex_1().text_size(10.5).text_color(t.dim)
-            .child(this.notice || (this.demo === "demo"
-              ? "Synthetic data · no live Pi connection"
-              : "Read-only in this state · the draft is kept")))
-          .when(this.width >= 520 && this.demo === "demo", (el) => el.child(control(t,
-            "agent-ui-stream", this.source.streaming() ? "⏭ finish" : "▶ stream",
-            (context) => {
-              if (this.source.streaming()) this.source.finish();
-              else this.source.replay();
-              this.pump(context);
-            }, true)))
-          .child(control(t, "agent-ui-send", "Try send · demo",
-            (context) => this.send(context), Boolean(draft) && this.demo === "demo"))));
+      .child(this.asking !== null
+        ? this.askPanel(t, compact)
+        : this.composerArea(t, compact));
+  }
+
+  composerArea(t, compact) {
+    const draft = String(this.composer.value() ?? "").trim();
+    return v_flex().id("agent-ui-composer").flex_none().px(compact ? 13 : 21)
+      .pt(10).pb(12).gap(8).border_t(1).border_color(t.border).bg(t.chrome)
+      .child(Textarea.new(this.composer).id("agent-ui-textarea").w_full()
+        .h(compact ? 70 : 78).p(10).rounded(8)
+        .border_1().border_color(t.input)
+        .bg(t.background).text_color(t.foreground).text_size(12.5))
+      .child(h_flex().items_center().gap(9)
+        .child(div().flex_1().text_size(10.5).text_color(t.dim)
+          .child(this.notice || (this.demo === "demo"
+            ? "Synthetic data · no live Pi connection"
+            : "Read-only in this state · the draft is kept")))
+        .when(this.width >= 520 && this.demo === "demo", (el) => el.child(control(t,
+          "agent-ui-stream", this.source.streaming() ? "⏭ finish" : "▶ stream",
+          (context) => {
+            if (this.source.streaming()) this.source.finish();
+            else this.source.replay();
+            this.pump(context);
+          }, true)))
+        .child(control(t, "agent-ui-send", "Try send · demo",
+          (context) => this.send(context), Boolean(draft) && this.demo === "demo")));
+  }
+
+  // The question takes the composer's slot rather than floating above it: answering
+  // is a reply, so it belongs where replies are typed, in the same shell and with
+  // nothing moving when the prompt opens. Row rhythm follows pi-ask-user's own
+  // list: option, its description, a helper line, then the keys.
+  askPanel(t, compact) {
+    const asked = this.asking.questions ?? [];
+    const picks = (index) => this.askPicks[index] ?? [];
+    const rows = [];
+    for (const [index, question] of asked.entries()) {
+      if (asked.length > 1)
+        rows.push(h_flex().id(`agent-ui-ask-head-${index}`).gap(8).items_center()
+          .pt(index ? 10 : 0)
+          .child(div().flex_none().text_size(10).text_color(t.dim)
+            .child(`${index + 1}/${asked.length}`))
+          .child(div().flex_1().min_w(0).text_size(12).text_color(t.foreground)
+            .child(question.question)));
+      else
+        rows.push(h_flex().id("agent-ui-ask-head-0").gap(8).items_center()
+          .child(div().flex_none().text_size(11).text_color(t.blocked).child("?"))
+          .child(div().flex_1().min_w(0).text_size(12.5).text_color(t.foreground)
+            .child(question.question)));
+      if (question.context)
+        rows.push(div().id(`agent-ui-ask-context-${index}`).text_size(10.5)
+          .text_color(t.dim).child(question.context));
+      for (const [slot, option] of (question.options ?? []).entries()) {
+        const on = picks(index).includes(option.title);
+        rows.push(h_flex().id(`agent-ui-ask-${index}-${slot}`).h(27).px(8).gap(9)
+          .items_center().rounded(6).cursor_pointer()
+          .when(on, (el) => el.bg(t.raised))
+          .on_click((_event, context) => this.pickAnswer(index, option.title, context))
+          .child(div().w(12).flex_none().text_size(10.5)
+            .text_color(on ? t.accent : t.dim).child(String(slot + 1)))
+          .child(div().flex_none().text_size(12)
+            .text_color(on ? t.accent : t.foreground).child(option.title))
+          .when(Boolean(option.description), (el) => el.child(div().flex_1().min_w(0)
+            .truncate().text_size(10.5).text_color(t.dim).child(option.description))));
+      }
+      if (question.allowFreeform)
+        rows.push(this.askTyping === index
+          ? Textarea.new(this.answer).id(`agent-ui-ask-input-${index}`).w_full()
+            .h(compact ? 46 : 52).p(8).rounded(6).border_1().border_color(t.input)
+            .bg(t.background).text_color(t.foreground).text_size(12)
+          : h_flex().id(`agent-ui-ask-free-${index}`).h(27).px(8).gap(9).items_center()
+            .rounded(6).cursor_pointer()
+            .on_click((_event, context) => {
+              this.askTyping = index;
+              context.notify();
+            })
+            .child(div().w(12).flex_none().text_size(10.5).text_color(t.dim).child("✎"))
+            .child(div().flex_none().text_size(12).text_color(t.dim)
+              .child("Type your own answer")));
+    }
+
+    const one = asked.length === 1 ? asked[0] : null;
+    const instant = Boolean(one) && !one.allowMultiple;
+    const ready = asked.length > 0 && asked.every((question, index) =>
+      picks(index).length > 0 || (this.askTyping === index
+        && String(this.answer.value() ?? "").trim() !== ""));
+    return v_flex().id("agent-ui-composer").flex_none().px(compact ? 13 : 21)
+      .pt(10).pb(12).gap(8).border_t(1).border_color(t.border).bg(t.chrome)
+      .child(v_flex().id("agent-ui-ask").w_full().gap(2).p(8).rounded(8)
+        .border_1().border_color(t.blocked).bg(t.background)
+        .children(rows))
+      .child(h_flex().items_center().gap(9)
+        .child(div().flex_1().text_size(10.5).text_color(t.dim)
+          .child(this.asking.heading && asked.length > 1 ? this.asking.heading
+            : instant ? "Click an option · or type your own"
+            : "Click to pick · 1-9 works too"))
+        .when(!instant, (el) => el.child(control(t, "agent-ui-ask-enter",
+          "Answer in the Terminal", (context) => this.cancelAsk(context), true)))
+        .when(!instant, (el) => el.child(control(t, "agent-ui-ask-send",
+          "Send answer", (context) => this.sendAnswer(context), ready))));
+  }
+
+  // A click is the answer. For one single-choice question it goes out at once; a
+  // multi-select or a batch collects first, because those have more than one step
+  // and guessing when the user is done would be worse than a Send button.
+  pickAnswer(index, title, cx) {
+    const question = (this.asking?.questions ?? [])[index];
+    if (!question) return;
+    if ((this.asking.questions ?? []).length === 1 && !question.allowMultiple) {
+      this.postAnswer({ response: { kind: "selection", selections: [title] } }, cx);
+      return;
+    }
+    const picks = this.askPicks[index] ?? [];
+    this.askPicks[index] = question.allowMultiple
+      ? (picks.includes(title) ? picks.filter((item) => item !== title) : [...picks, title])
+      : [title];
+    cx.notify();
+  }
+
+  sendAnswer(cx) {
+    const asked = this.asking?.questions ?? [];
+    const answers = [];
+    for (const [index, question] of asked.entries()) {
+      const picks = this.askPicks[index] ?? [];
+      const typed = this.askTyping === index ? String(this.answer.value() ?? "").trim() : "";
+      if (!picks.length && !typed) return;
+      answers.push({ status: "answered",
+        response: picks.length
+          ? { kind: "selection", selections: picks }
+          : { kind: "freeform", text: typed } });
+    }
+    if (!answers.length) return;
+    // A batch is answered as a whole, which is the shape the plugin's own batch
+    // surface returns; a single question is just its response.
+    this.postAnswer({ response: asked.length > 1 ? answers : answers[0].response }, cx);
+  }
+
+  cancelAsk(cx) {
+    this.postAnswer({ cancel: true }, cx);
+  }
+
+  // The bridge owns delivery: this only writes the file, and the plugin that asked
+  // resolves its own await with it. Optimistic close, because a banner that lingers
+  // would look like a failed click.
+  postAnswer(payload, cx) {
+    const dir = this.bridge?.dir;
+    this.asking = null;
+    this.askPicks = {};
+    this.askTyping = -1;
+    this.answer.set_value("");
+    cx.notify();
+    if (!dir) return;
+    cx.spawn(async () => {
+      await writeTextFile(`${dir}/answer.json`, JSON.stringify(payload), null);
+    });
+  }
+
+  // Keys answer the same question the panel shows: 1-9 pick, escape declines.
+  askKey(key, cx) {
+    if (key === "escape") {
+      this.cancelAsk(cx);
+      return;
+    }
+    const slot = Number.parseInt(key, 10);
+    if (!Number.isInteger(slot) || slot < 1) return;
+    const option = this.asking?.questions?.[0]?.options?.[slot - 1];
+    if (option) this.pickAnswer(0, option.title, cx);
   }
 }

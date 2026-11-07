@@ -735,27 +735,70 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
   bridged.apply({ type: "asking", asking: openAsk });
   assert.deepEqual(box.notes.map((note) => note.title), ["Pi is asking"],
     "the plugin's open question is what raises a notification");
-  assert.ok(find(bridged.render(context), "agent-ui-asking"), "and it shows above the transcript");
+  const panel = bridged.render(context);
+  assert.ok(find(panel, "agent-ui-ask"), "the question takes the composer's slot");
+  assert.ok(find(panel, "agent-ui-ask-0-1"), "each option is its own row");
   bridged.apply({ type: "asking", asking: openAsk });
   assert.equal(box.notes.length, 1, "the same question is not announced twice");
 
   bridged.bridge = { dir: "/bridge/9" };
-  const asking = bridged.render(context);
-  bridged.answerOption({ title: "sqlite" }, context);
+  bridged.pickAnswer(0, "sqlite", context);
   await context.task();
-  assert.equal(bridged.asking, null, "answering closes the banner at once");
+  assert.equal(bridged.asking, null, "answering closes the panel at once");
   assert.deepEqual(box.written.at(-1), ["/bridge/9/answer.json",
     JSON.stringify({ response: { kind: "selection", selections: ["sqlite"] } })],
     "the click becomes the one file the bridge hands back to the plugin");
-  assert.equal(find(bridged.render(context), "agent-ui-asking"), null, "and it goes away");
+  assert.equal(find(bridged.render(context), "agent-ui-ask"), null, "and the textarea comes back");
 
   bridged.apply({ type: "asking", asking: { heading: null,
     questions: [{ index: 0, total: 1, question: "type a name", allowMultiple: false,
       allowFreeform: true, options: [] }] } });
   const freeform = bridged.render(context);
-  assert.ok(find(freeform, "agent-ui-asking"), "a question without options still shows");
+  assert.ok(find(freeform, "agent-ui-ask"), "a question without options still shows");
+  assert.ok(find(freeform, "agent-ui-ask-free-0"), "and offers the freeform row");
   bridged.apply({ type: "asking", asking: null });
   assert.equal(bridged.asking, null);
+
+  // A single choice goes out on click; a multi-select collects, then sends.
+  const multiAsk = { heading: null, questions: [{ index: 0, total: 1, question: "pick some",
+    allowMultiple: true, allowFreeform: false, options: [{ title: "a" }, { title: "b" }] }] };
+  bridged.apply({ type: "asking", asking: multiAsk });
+  bridged.pickAnswer(0, "a", context);
+  assert.ok(bridged.asking, "multi-select waits for the Send button");
+  bridged.pickAnswer(0, "b", context);
+  bridged.pickAnswer(0, "a", context);
+  bridged.sendAnswer(context);
+  await context.task();
+  assert.deepEqual(JSON.parse(box.written.at(-1)[1]),
+    { response: { kind: "selection", selections: ["b"] } }, "a tick toggles off again");
+
+  bridged.apply({ type: "asking", asking: openAsk });
+  bridged.askKey("2", context);
+  await context.task();
+  assert.deepEqual(JSON.parse(box.written.at(-1)[1]),
+    { response: { kind: "selection", selections: ["sqlite"] } }, "1-9 picks the n-th option");
+
+  bridged.apply({ type: "asking", asking: openAsk });
+  bridged.askKey("escape", context);
+  await context.task();
+  assert.deepEqual(JSON.parse(box.written.at(-1)[1]), { cancel: true }, "escape declines");
+
+  // A batch is answered as a whole, which is the shape the plugin's batch surface
+  // returns; anything less would answer half a prompt.
+  const batchAsk = { heading: "Setup", questions: [
+    { index: 0, total: 2, question: "db?", allowMultiple: false, allowFreeform: false,
+      options: [{ title: "pg" }] },
+    { index: 1, total: 2, question: "cache?", allowMultiple: false, allowFreeform: false,
+      options: [{ title: "redis" }] }] };
+  bridged.apply({ type: "asking", asking: batchAsk });
+  assert.ok(find(bridged.render(context), "agent-ui-ask-1-0"), "a batch shows every question");
+  bridged.pickAnswer(0, "pg", context);
+  bridged.pickAnswer(1, "redis", context);
+  bridged.sendAnswer(context);
+  await context.task();
+  assert.deepEqual(JSON.parse(box.written.at(-1)[1]), { response: [
+    { status: "answered", response: { kind: "selection", selections: ["pg"] } },
+    { status: "answered", response: { kind: "selection", selections: ["redis"] } }] });
 
   bridged.bridgeInstalled = false;
   const missing = bridged.render(context);
