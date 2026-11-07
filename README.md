@@ -39,7 +39,7 @@ With no mod name it installs **every** mod under `mods/` and applies the layout 
 
 To install the Mod files without touching any layout, add `--no-layout` and wire it into your own layout by hand; see the [Project Open notes](mods/project-open/README.md#install-without-touching-any-layout) for the exact JSON.
 
-No Python, Node, jq, sudo, or additional dependency required for installation. The installer copies the mods and **patches a shared personal layout** named `herdr-mods`; a mod that declares a derived layout (the Agent UI preview) also writes that extra file. **Project Open is embedded inside the bottom Status Bar renderer**, immediately after the Commands hint, with the same background and border (not a separate 32px layout block). It preserves machine, agent count, and Commands information. On first install, the installer copies the official `main` layout (or the bundled template) to a personal copy; each subsequent Mod is added to the **same layout**, with a single fixed **`.bak`** backup per changed file/directory (the previous `.bak` is replaced on each update). Shipped layouts are never modified. In a terminal the installer asks `? patch layout herdr-mods [Y/n]` before writing and leaves the layout (even a copy it just created) alone if you answer `n`; non-interactive runs take the default.
+No Python, Node, jq, sudo, or additional dependency required for installation. The installer copies the mods and **patches a shared personal layout** named `herdr-mods`; a mod that declares a derived layout (the Agent UI preview) also writes that extra file. **Project Open is embedded inside the bottom Status Bar renderer**, immediately after the Commands hint, with the same background and border (not a separate 32px layout block). It preserves machine, agent count, and Commands information. On first install, the installer copies the official `main` layout (or the bundled template) to a personal copy; each subsequent Mod is added to the **same layout**, with a single fixed backup per changed asset (the previous one is replaced on each update): a Layout keeps a `*.bak` beside itself, and a replaced Mod goes to `~/.config/herdr-app/backups/<mod>/`, outside `mods/` where Herdr would read a backup as a Mod of its own. Shipped layouts are never modified. In a terminal the installer asks `? patch layout herdr-mods [Y/n]` before writing and leaves the layout (even a copy it just created) alone if you answer `n`; non-interactive runs take the default.
 
 **Next:** in Herdr App switch to layout **herdr-mods** (from the layout picker or command palette); alternatively:
 
@@ -51,13 +51,13 @@ The source is available at **https://github.com/hheei/herdr-mods**. Direct-insta
 
 ### Update
 
-Run the same command again: an existing Mod is moved to `<mod>.bak` and replaced, and a layout is only touched when it actually changes.
+Run the same command again: an existing Mod is moved to `~/.config/herdr-app/backups/<mod>/` and replaced, and a layout is only touched when it actually changes.
 
 ~~~sh
 curl -fsSL https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/install.sh | sh
 ~~~
 
-Backups are fixed `.bak` names, so each install or update replaces the previous one instead of piling up archives. Layout patching is idempotent and never overwrites an existing layout: a Mod is only added when its id is absent, and a customized status bar is left byte-identical (the Mod files are still installed, for manual wiring). The installer migrates earlier Sidebar and split-row Status Bar versions into a seamless single Status Bar renderer. Right-click changes only the default tool and icon; left-click performs the actual open.
+Backups are fixed paths, so each install or update replaces the previous one instead of piling up archives. Layout patching is idempotent and never overwrites an existing layout: a Mod is only added when its id is absent, and a customized status bar is left byte-identical (the Mod files are still installed, for manual wiring). The installer migrates earlier Sidebar and split-row Status Bar versions into a seamless single Status Bar renderer. Right-click changes only the default tool and icon; left-click performs the actual open.
 
 The official Herdr App home is **~/.config/herdr-app**, even on Windows. XDG_CONFIG_HOME changes its config root; HERDR_APP_HOME overrides directly.
 

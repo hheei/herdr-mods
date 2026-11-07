@@ -12,7 +12,9 @@ Initial choice is **VS Code**. The icon is 15 px inside a 22 px button integrate
 
 ### Agent UI demo control in the same renderer
 
-The **`agent-ui-demo`** Layout shows a **single SVG button** (15px icon inside a 22px target) next to the Commands hint. When Terminal is visible, its conversation icon switches to the Agent UI; when UI is visible, its Terminal icon switches back. The old two-button segmented control has been removed. In ordinary Layouts, the demo icon is hidden and Project Open works normally.
+Any Layout that puts `agent-ui` in a Stack of its own shows a **single SVG button** (15px icon inside a 22px target) next to the Commands hint. When Terminal is visible, its conversation icon switches to the Agent UI; when UI is visible, its Terminal icon switches back. The old two-button segmented control has been removed.
+
+The button is found by what the Layout holds, not by its name: this Mod walks the tree for a Stack with an `agent-ui` child and switches that Stack, so `agent-ui-demo` is one example rather than a requirement — your own Layout gets the button by putting `agent-ui` in a Stack. Layouts without it hide the icon and Project Open works normally.
 
 This is still a **Tab-display chrome-stack preview**, not a per-model split-Pane switch. It does not start or stop Pi. See [Agent UI limitations](../agent-ui/README.md).
 
@@ -63,7 +65,7 @@ The installer backs up the personal Layout to a single `*.bak` file, then **chan
 herdr-app do layout.clone '{"name":"main","as":"my-project-layout"}'
 ~~~
 
-There is no need to modify JSON by hand. The installer performs the Status Bar patch and maintains just one `.bak` backup per file/directory, overwriting earlier `.bak` versions.
+There is no need to modify JSON by hand. The installer performs the Status Bar patch and keeps just one backup per asset, overwriting the earlier one: the Layout keeps a `*.bak` beside itself, a replaced Mod goes to `~/.config/herdr-app/backups/<mod>/` — never inside `mods/`, where Herdr would read the backup as another Mod and report it as broken.
 
 Do **not** edit Herdr's shipped layouts. Shipped files are rewritten on app startup and update.
 
@@ -96,7 +98,7 @@ The test suite checks simulated behavior, but actual Herdr App GUI rendering and
 
 ## Update/uninstall
 
-Update by running the same install command again. An existing Mod is backed up to `project-open.bak` and replaced, and the shared layout is updated only when needed, including migrating the old Sidebar or split-row placement. To uninstall, switch to another layout and remove the Mod directory; to keep your shared personal layout while removing its button, restore a pre-install Layout backup or edit the personal Layout. This does not affect running herdr-core sessions.
+Update by running the same install command again. An existing Mod is moved to `~/.config/herdr-app/backups/project-open/` and replaced, and the shared layout is updated only when needed, including migrating the old Sidebar or split-row placement. To uninstall, switch to another layout and remove the Mod directory; to keep your shared personal layout while removing its button, restore a pre-install Layout backup or edit the personal Layout. This does not affect running herdr-core sessions.
 
 ## Upstream documentation
 

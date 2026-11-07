@@ -40,7 +40,10 @@ const state = {
   spaces: [{ id: "s1", folder: "/home/user", machine: null, active: true }],
   platform: "linux",
   props: {},
-  layout: { id: "root", children: [{ id: "agent-ui-demo-surface", type: "stack", active: "agent-ui-demo-terminal", children: [] }] },
+  layout: { id: "root", children: [{ id: "some-stack", type: "stack", active: "some-terminal", children: [
+    { id: "some-ui", type: "block", content: { mod: "agent-ui" } },
+    { id: "some-terminal", type: "block", content: { tab: "active" } },
+  ] }] },
 };
 const box = {
   View: class {},
@@ -140,7 +143,6 @@ async function main() {
 
   // One canonical Agent UI demo, one SVG button, no segmented legacy toggle.
   calls.length = 0;
-  preferences.layout = "agent-ui-demo";
   const previewStatus = mod.render(cx);
   assert.ok(findButton(previewStatus), "Project Open remains available");
   assert.equal(findById(previewStatus, "agent-ui-demo-toggle"), null,
@@ -151,18 +153,20 @@ async function main() {
   assert.equal(switcher.kids[0].icon, "mods/project-open/agent-ui.svg");
   switcher.handlers.on_click(null, cx);
   assert.ok(calls.some(x => x[0] === "run" && x[1] === "layout.select"
-    && x[2].stack === "agent-ui-demo-surface" && x[2].child === "agent-ui-demo-ui"));
-  state.layout.children[0].active = "agent-ui-demo-ui";
+    && x[2].stack === "some-stack" && x[2].child === "some-ui"));
+  state.layout.children[0].active = "some-ui";
   switcher = findById(mod.render(cx), "agent-ui-mode");
   assert.equal(switcher.kids[0].icon, "mods/project-open/agent-terminal.svg");
   calls.length = 0;
   switcher.handlers.on_click(null, cx);
   assert.ok(calls.some(x => x[0] === "run" && x[1] === "layout.select"
-    && x[2].child === "agent-ui-demo-terminal"));
+    && x[2].child === "some-terminal"));
   assert.equal(calls.some(x => x[0] === "terminal.kill" || x[0] === "pane.close"), false);
-  preferences.layout = "herdr-mods";
+  const kept = state.layout;
+  state.layout = { id: "root", children: [{ id: "work", type: "row", children: [] }] };
   assert.equal(findById(mod.render(cx), "agent-ui-mode"), null,
-    "demo icon must not appear in normal layouts");
+    "no agent-ui block in the Layout means no switch to offer");
+  state.layout = kept;
   // svg() has no intrinsic size of its own: an asset without width/height draws
   // nothing at any .size(), and a stroke that is not currentColor ignores the
   // theme. The status-bar icons are the ones this Mod owns, so check them here.

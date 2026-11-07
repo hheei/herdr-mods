@@ -14,26 +14,34 @@ const ICON = {
   finder: "mods/project-open/finder.svg",
 };
 
-// Demo only: the opt-in agent-ui-demo layout has a *chrome stack*, not a
-// model-pane replacement API. Never modify the current pane or running PTY.
-const DEMO_STACK = "agent-ui-demo-surface";
-function findNode(tree, id) {
-  if (!tree || typeof tree !== "object") return null;
-  if (tree.id === id) return tree;
-  for (const child of tree.children ?? []) {
-    const found = findNode(child, id);
-    if (found) return found;
-  }
-  return null;
+// Demo only: a Layout that holds agent-ui in a Stack of its own has a *chrome
+// stack*, not a model-pane replacement API, so switching means picking the other
+// child of that Stack. Never modify the current pane or the PTY inside it.
+// Any Layout qualifies, and none of its ids are assumed: the Stack is the one
+// holding agent-ui, whatever the file calls it.
+function demoStack() {
+  const visit = (tree) => {
+    if (!tree || typeof tree !== "object") return null;
+    if (tree.type === "stack") {
+      const children = tree.children ?? [];
+      const modOf = (child) => child.content?.mod ?? child.mod;
+      const ui = children.find((child) => modOf(child) === "agent-ui");
+      const other = children.find((child) => child !== ui);
+      if (ui && other) return { stack: tree, ui: ui.id, other: other.id };
+    }
+    for (const child of tree.children ?? []) {
+      const found = visit(child);
+      if (found) return found;
+    }
+    return null;
+  };
+  return visit(layout());
 }
 
 function demoMode() {
-  if (shared("layout") !== "agent-ui-demo") return null;
-  const stack = findNode(layout(), DEMO_STACK);
-  if (stack?.type !== "stack") return null;
-  if (stack.active === "agent-ui-demo-ui") return "ui";
-  if (stack.active === "agent-ui-demo-terminal") return "terminal";
-  return null;
+  const split = demoStack();
+  if (!split) return null;
+  return split.stack.active === split.ui ? "ui" : "terminal";
 }
 
 function lastAction() {
@@ -135,11 +143,11 @@ export default class ProjectOpen extends View {
         // One icon like project-open, no hover tooltip or extra Status Bar slot.
         .on_click((_e, context) => {
           context.stop_propagation();
-          const fresh = demoMode();
-          if (!fresh) return;
+          const split = demoStack();
+          if (!split) return;
           run("layout.select", {
-            stack: DEMO_STACK,
-            child: fresh === "terminal" ? "agent-ui-demo-ui" : "agent-ui-demo-terminal",
+            stack: split.stack.id,
+            child: split.stack.active === split.ui ? split.other : split.ui,
           });
         })
         .child(svg(mode === "terminal"

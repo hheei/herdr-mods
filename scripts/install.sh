@@ -34,13 +34,19 @@ fi
 home_dir=$(app_home)
 printf '\n  %sherdr-mods%s %s·%s%s\n\n' "$bold" "$off" "$dim" "$off" "$mods"
 mkdir -p "$home_dir/mods"
+# A backup inside mods/ becomes a Mod to Herdr, which then fails to load it, so
+# replaced mods go to backups/ instead. Layout .bak files stay beside the layout
+# they replace: Herdr only reads *.json there.
+backup_dir="$home_dir/backups"
 for mod in $mods; do
   src="$repo_dir/mods/$mod"
   [ -f "$src/main.js" ] || { printf '  %s✗%s unknown mod: %s\n' "$bad" "$off" "$mod" >&2; exit 1; }
   dst="$home_dir/mods/$mod"
   if [ -e "$dst" ]; then
     verb=updated
-    keep_bak "$dst"
+    mkdir -p "$backup_dir"
+    rm -rf "$backup_dir/$mod"
+    mv "$dst" "$backup_dir/$mod"
   else
     verb=installed
   fi

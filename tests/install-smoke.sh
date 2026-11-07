@@ -33,13 +33,15 @@ install
 [ -f "$layout.bak" ]
 [ -f "$tmp/pihome/extensions/herdr-agent-ui.js" ]
 
-# Re-running is idempotent and keeps exactly one backup per asset.
+# Re-running is idempotent: one backup per asset, and no backup in mods/, where
+# Herdr would read it as a Mod.
 install
 [ "$(grep -c '"mod": "project-open"' "$layout")" -eq 1 ]
 [ "$(grep -c '"id":"another-mod"' "$layout")" -eq 1 ]
 [ "$(find "$HERDR_APP_HOME/layouts" -maxdepth 1 -name 'herdr-mods.json.bak*' | wc -l | tr -d ' ')" -eq 1 ]
-[ "$(find "$HERDR_APP_HOME/mods" -maxdepth 1 -name 'project-open.bak*' | wc -l | tr -d ' ')" -eq 1 ]
-[ "$(find "$HERDR_APP_HOME/mods" -maxdepth 1 -name 'another-mod.bak*' | wc -l | tr -d ' ')" -eq 1 ]
+[ -f "$HERDR_APP_HOME/backups/project-open/main.js" ]
+[ -f "$HERDR_APP_HOME/backups/another-mod/main.js" ]
+[ "$(find "$HERDR_APP_HOME/mods" -maxdepth 1 -name '*.bak*' | wc -l | tr -d ' ')" -eq 0 ]
 if command -v jq >/dev/null 2>&1; then
   jq -e '.children[]|select(.id=="work")|.children[]|select(.id=="status")|.type=="block" and .content.mod=="project-open"' "$layout" >/dev/null
   jq empty "$layout"
