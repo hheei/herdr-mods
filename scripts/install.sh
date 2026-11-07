@@ -82,7 +82,8 @@ wire_personal() {
       # Which Mods sit in the bar is each Mod's own layout.json decision, so this
       # runs even when nothing needed patching: a Mod that asks for the bar joins
       # on its own, and adding one never means editing a Layout by hand.
-      awk -v mods="$home_dir/mods" -f "$script_dir/compose-layout.awk" "$tmp" > "$tmp.slot" || patched=no
+      awk -v mods="$home_dir/mods" -v config="$home_dir/herdr-mods.config.json" \
+        -f "$script_dir/compose-layout.awk" "$tmp" > "$tmp.slot" || patched=no
       mv "$tmp.slot" "$tmp"
       ;;
     sidebar) awk -v name="$mod" -f "$script_dir/patch-sidebar.awk" "$layout_dst" > "$tmp" 2>/dev/null || { patched=no; cp "$layout_dst" "$tmp"; } ;;

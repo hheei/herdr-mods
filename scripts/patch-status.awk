@@ -1,11 +1,16 @@
 # Patch the status area so Mods can share it without adding layout space.
-# Handles the stock status block, the old split-row implementation and the slot
-# form written by an earlier version; also removes the old sidebar button. When the
-# status area is customized the layout is printed unchanged and the exit status is
-# 3, so existing layouts are safe.
+# Handles the stock status block, the old split-row implementation and a bar with
+# its own children; also removes the old sidebar button. Other people's Mods are
+# nobody's business here: anything already sitting in that corner is carried over,
+# and a bar this script does not recognise is printed unchanged with exit status 3.
 function brace_delta(line, x, a, b) {
   x=line; a=gsub(/\{/, "", x)
   x=line; b=gsub(/\}/, "", x)
+  return a-b
+}
+function bracket_delta(line, x, a, b) {
+  x=line; a=gsub(/\[/, "", x)
+  x=line; b=gsub(/\]/, "", x)
   return a-b
 }
 function skip(message) {
@@ -51,13 +56,8 @@ END {
   }
   if (skipped) bail()
 
-  # A bar that already holds only status-bar-* blocks is the current form: leave the
-  # node alone (compose-layout.sh fills in whatever is missing).
-  isRow=isBlock=hasWorkspace=hasProject=foreign=0
+  isRow=isBlock=hasWorkspace=hasProject=0
   for (i=start; i<=stop; i++) {
-    if (lines[i] ~ /"id"[ \t]*:[ \t]*"status-bar-/) continue
-    if (lines[i] ~ /"id"[ \t]*:[ \t]*"status"[ \t]*,?[ \t]*$/) continue
-    if (lines[i] ~ /"id"[ \t]*:[ \t]*"[^"]*"/) foreign=1
     if (lines[i] ~ /"type"[ \t]*:[ \t]*"row"/) isRow=1
     if (lines[i] ~ /"type"[ \t]*:[ \t]*"block"/) isBlock=1
     if (lines[i] ~ /"mod"[ \t]*:[ \t]*"workspace-status"/) hasWorkspace=1
@@ -65,21 +65,65 @@ END {
   }
   if (!isRow && (!isBlock || (!hasWorkspace && !hasProject))) skip("status bar is customized; leaving it unchanged")
   if (skipped) bail()
-  migrate = !isRow || foreign
 
+  # Whatever already lives in the bar belongs to somebody else: carry it over.
+  arrStart=arrEnd=0
+  for (i=start; i<=stop; i++) {
+    if (!arrStart && lines[i] ~ /"children"[ \t]*:[ \t]*\[/) arrStart=i
+  }
+  kept=0; items=0
+  if (arrStart) {
+    depth=0
+    for (i=arrStart; i<=stop; i++) {
+      depth+=bracket_delta(lines[i])
+      if (depth==0) {arrEnd=i; break}
+    }
+    itemStart=0; depth=0
+    for (i=arrStart+1; i<arrEnd; i++) {
+      if (!itemStart && lines[i] ~ /^[ \t]*\{/) {itemStart=i; depth=0}
+      if (!itemStart) continue
+      depth+=brace_delta(lines[i])
+      if (depth!=0) continue
+      items++
+      item=""
+      for (j=itemStart; j<=i; j++) item = item lines[j] "\n"
+      if (item !~ /"mod"[ \t]*:[ \t]*"workspace-status"/ \
+          && item !~ /"id"[ \t]*:[ \t]*"(status-original|project-open)"/) {
+        kept++
+        keepFrom[kept]=itemStart
+        keepTo[kept]=i
+      }
+      itemStart=0
+    }
+  }
+  migrate = !isRow || kept < items
+  if (!migrate) { for (i=1; i<=NR; i++) print lines[i]; exit 0 }
+
+  pad=indent(lines[start])
+  suffix=(lines[stop] ~ /,[ \t]*$/ ? "," : "")
   for (i=1; i<=NR; i++) {
     if (oldSidebarStart && i>=oldSidebarStart && i<=oldSidebarEnd) continue
-    if (i==start && migrate) {
-      pad=indent(lines[start])
-      suffix=(lines[stop] ~ /,[ \t]*$/ ? "," : "")
-      print pad "{"
-      print pad "  \"id\": \"status\","
-      print pad "  \"type\": \"row\","
+    if (i!=start) { print lines[i]; continue }
+    print pad "{"
+    print pad "  \"id\": \"status\","
+    print pad "  \"type\": \"row\","
+    if (kept) {
+      print pad "  \"size\": {\"px\": 28},"
+      print pad "  \"children\": ["
+      for (k=1; k<=kept; k++) {
+        for (j=keepFrom[k]; j<=keepTo[k]; j++) {
+          if (j!=keepTo[k]) { print lines[j]; continue }
+          line=lines[j]
+          if (k<kept) { if (line !~ /,[ \t]*$/) line=line "," }
+          else sub(/,[ \t]*$/, "", line)
+          print line
+        }
+      }
+      print pad "  ]"
+    } else {
       print pad "  \"size\": {\"px\": 28}"
-      print pad "}" suffix
-      i=stop
-      continue
     }
-    print lines[i]
+    print pad "}" suffix
+    i=stop
   }
 }

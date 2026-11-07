@@ -1,6 +1,6 @@
 # Project Open
 
-Minimal one-icon launcher for Herdr App, **embedded directly inside the bottom Status Bar renderer** after the Commands hint. It uses the original Status Bar background, border, machine/branch details, agent count and palette hint, without allocating a separate layout block.
+Minimal one-icon launcher for Herdr App that sits in the bottom Status Bar next to whatever else lives there. It renders the whole Status Bar row — the original background, border, machine/branch details, agent count and palette hint — so the row keeps looking like the stock bar.
 
 | Gesture | Action |
 | --- | --- |
@@ -43,7 +43,7 @@ Add `--no-layout` to copy the Mod files only, then wire it into your own layout 
 sh scripts/install.sh --no-layout
 ~~~
 
-The Mod **replaces** the status bar renderer, so change the existing `status` node instead of adding a second block. In **~/.config/herdr-app/layouts/your-layout.json**, inside the `work` column, the node looks like this:
+The Status Bar is a row, and this Mod takes a share of it. In **~/.config/herdr-app/layouts/your-layout.json**, inside the `work` column, the stock node looks like this:
 
 ~~~json
 {
@@ -54,15 +54,25 @@ The Mod **replaces** the status bar renderer, so change the existing `status` no
 }
 ~~~
 
-Change one line:
+Give it children and put this Mod in:
 
 ~~~json
-  "content": { "mod": "project-open" }
+{
+  "id": "status",
+  "type": "row",
+  "size": { "px": 28 },
+  "children": [
+    { "id": "status-bar-project-open", "type": "block", "weight": 1,
+      "content": { "mod": "project-open" } }
+  ]
+}
 ~~~
 
-Keep a copy of the file first, switch to that layout in Herdr App, then validate with `herdr-app check "$HOME/.config/herdr-app/mods/project-open"`. These `herdr-app` commands need the App running on this machine; they are not a separate CLI. Machine, branch, agent count and the Commands hint stay because the Mod renders them itself. A sidebar entry also works, but the whole status row then renders inside the sidebar.
+That `status-bar-` id prefix is the only thing the installer relies on: it recognises the row, and appends a Mod that is missing without moving or removing anything already in it. Any other Mod can join the same row the same way.
 
-The installer backs up the personal Layout to a single `*.bak` file, then **changes the `status` block to use the Project Open status renderer**, which includes the original status content plus the icon. To keep a different personal layout, install with `--no-layout` and see the manual section below. Older Sidebar entries and split-row status versions are migrated automatically. The original shipped `workspace-status` mod is not modified. Clone a shipped layout first if needed:
+Keep a copy of the file first, switch to that layout in Herdr App, then validate with `herdr-app check "$HOME/.config/herdr-app/mods/project-open"`. These `herdr-app` commands need the App running on this machine; they are not a separate CLI. Machine, branch, agent count and the Commands hint stay because the Mod renders them itself. A sidebar entry also works, but the whole status row then renders inside the sidebar. Two Mods with `weight: 1` split the row; give one a `px` size to pin it.
+
+The installer backs up the personal Layout to a single `*.bak` file, then **turns the `status` block into a row and adds Project Open to it**, keeping whatever else that row already held. To keep a different personal layout, install with `--no-layout` and see the manual section below. Older Sidebar entries and split-row status versions are migrated automatically. The original shipped `workspace-status` mod is not modified. Clone a shipped layout first if needed:
 
 ~~~sh
 herdr-app do layout.clone '{"name":"main","as":"my-project-layout"}'

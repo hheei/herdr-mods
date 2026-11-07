@@ -1,4 +1,5 @@
-# Fills the status bar with one block per Mod whose own layout.json asks for it:
+# Fills the status bar with one block per Mod whose own layout.json asks for it,
+# minus any Mod the user named under "exclude" in herdr-mods.config.json:
 #   { "status-bar": { "order": 20, "size": { "px": 64 }, "props": { "mode": "bar" } } }
 # Mods stay independent: no Mod is named here, and nothing already in the bar is
 # removed or reordered -- a missing Mod is appended in order, so a bar somebody
@@ -31,6 +32,18 @@ function object(src, key,   at, i, depth, c, len) {
   }
   return ""
 }
+# Names listed under "exclude" in the user's own herdr-mods.config.json, as " a b ".
+function list(src, key,   seg, out, s) {
+  out = " "
+  if (!match(src, "\"" key "\"[ \t]*:[ \t]*\\[[^]]*\\]")) return out
+  seg = substr(src, RSTART, RLENGTH)
+  while (match(seg, /"[^"]*"/)) {
+    s = substr(seg, RSTART + 1, RLENGTH - 2)
+    seg = substr(seg, RSTART + RLENGTH)
+    out = out s " "
+  }
+  return out
+}
 function indent_of(src,   s) { s = src; sub(/[^ \t].*$/, "", s); return s }
 function brace_delta(line, x, a, b) {
   x=line; a=gsub(/\{/, "", x)
@@ -38,6 +51,12 @@ function brace_delta(line, x, a, b) {
   return a-b
 }
 BEGIN {
+  if (config != "") {
+    settings = ""
+    while ((getline l < config) > 0) settings = settings l "\n"
+    close(config)
+    skip_mod = list(settings, "exclude")
+  }
   cmd = "ls -1 \"" mods "\" 2>/dev/null"
   while ((cmd | getline name) > 0) {
     file = mods "/" name "/layout.json"
@@ -45,6 +64,7 @@ BEGIN {
     while ((getline l < file) > 0) content = content l "\n"
     close(file)
     if (content == "" || content !~ /"status-bar"/) continue
+    if (index(skip_mod, " " name " ")) continue
     entry = object(content, "status-bar")
     if (entry == "") continue
     total++

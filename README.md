@@ -39,7 +39,7 @@ With no mod name it installs **every** mod under `mods/` and applies the layout 
 
 To install the Mod files without touching any layout, add `--no-layout` and wire it into your own layout by hand; see the [Project Open notes](mods/project-open/README.md#install-without-touching-any-layout) for the exact JSON.
 
-No Python, Node, jq, sudo, or additional dependency required for installation. The installer copies the mods and **patches a shared personal layout** named `herdr-mods`; a mod that declares a derived layout (the Agent UI preview) also writes that extra file. **Project Open is embedded inside the bottom Status Bar renderer**, immediately after the Commands hint, with the same background and border (not a separate 32px layout block). It preserves machine, agent count, and Commands information. On first install, the installer copies the official `main` layout (or the bundled template) to a personal copy; each subsequent Mod is added to the **same layout**, with a single fixed backup per changed asset (the previous one is replaced on each update): a Layout keeps a `*.bak` beside itself, and a replaced Mod goes to `~/.config/herdr-app/backups/<mod>/`, outside `mods/` where Herdr would read a backup as a Mod of its own. Shipped layouts are never modified. In a terminal the installer asks `? patch layout herdr-mods [Y/n]` before writing and leaves the layout (even a copy it just created) alone if you answer `n`; non-interactive runs take the default.
+No Python, Node, jq, sudo, or additional dependency required for installation. The installer copies the mods and **patches a shared personal layout** named `herdr-mods`; a mod that declares a derived layout (the Agent UI preview) also writes that extra file. **The bottom Status Bar is a row of Mods.** The installer turns the stock single-Mod status block into a plain `row` and fills it from each Mod's own `layout.json`, naming what it adds `status-bar-<mod>`; nothing else in that row is moved or removed, so a bar you edited by hand keeps your blocks and only gains the missing Mod. Project Open renders the whole row, so machine, branch, agent count and the Commands hint stay as they were. On first install, the installer copies the official `main` layout (or the bundled template) to a personal copy; each subsequent Mod is added to the **same layout**, with a single fixed backup per changed asset (the previous one is replaced on each update): a Layout keeps a `*.bak` beside itself, and a replaced Mod goes to `~/.config/herdr-app/backups/<mod>/`, outside `mods/` where Herdr would read a backup as a Mod of its own. Shipped layouts are never modified. In a terminal the installer asks `? patch layout herdr-mods [Y/n]` before writing and leaves the layout (even a copy it just created) alone if you answer `n`; non-interactive runs take the default.
 
 **Next:** in Herdr App switch to layout **herdr-mods** (from the layout picker or command palette); alternatively:
 
@@ -48,6 +48,24 @@ herdr-app do layout.switch '{"name":"herdr-mods"}'
 ~~~
 
 The source is available at **https://github.com/hheei/herdr-mods**. Direct-install commands always use the repository's `main` branch; inspect the script first or use a pinned release archive when you need a reproducible build.
+
+### Other people's Mods
+
+Any Mod can sit in the Status Bar next to these, whoever wrote it: put a `layout.json` in its folder
+
+~~~json
+{ "status-bar": { "order": 30, "size": { "px": 60 }, "props": { "mode": "bar" } } }
+~~~
+
+and the next run adds it — appended in `order`, never touching what is already in the row, and never writing to somebody else's `mod.json`. `size` is optional (no `size` takes a share), `props` is passed to the Mod as its props.
+
+To keep one out while leaving it installed, name it in `~/.config/herdr-app/herdr-mods.config.json`:
+
+~~~json
+{ "exclude": ["project-open"] }
+~~~
+
+A Mod you exclude is never added. Excluding does not delete a block that is already there — remove that line from the layout once, and it stays removed.
 
 ### Update
 

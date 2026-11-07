@@ -21,8 +21,11 @@ function mods(declarations) {
   }
   return dir;
 }
-function fill(source, dir) {
-  const result = spawnSync("awk", ["-v", `mods=${dir}`, "-f", compose], { input: source, encoding: "utf8" });
+function fill(source, dir, config) {
+  const args = ["-v", `mods=${dir}`];
+  if (config) args.push("-v", `config=${config}`);
+  args.push("-f", compose);
+  const result = spawnSync("awk", args, { input: source, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   const filled = result.stdout;
   fs.rmSync(dir, { recursive: true, force: true });
@@ -86,6 +89,24 @@ const refilled = statusOf(fill(JSON.stringify(edited, null, 2) + "\n", mods({ "p
 assert.deepEqual(refilled.children.map((x) => x.id), ["my-clock", "status-bar-project-open"],
   "the user's own block stays first, the missing Mod comes back after it");
 
+// Other people's Mods in the same row survive a patch, and the excluding settings
+// file never removes one that is already there.
+const foreign = JSON.parse(template);
+{
+  const work = foreign.children.find((x) => x.id === "work");
+  const index = work.children.findIndex((x) => x.id === "status");
+  work.children[index] = {
+    id: "status", type: "row", size: { px: 28 }, children: [
+      { id: "status-bar-my-clock", type: "block", size: { px: 60 }, content: { mod: "my-clock" } },
+      { id: "status-bar-project-open", type: "block", weight: 1, content: { mod: "project-open" } },
+    ],
+  };
+}
+const foreignText = JSON.stringify(foreign, null, 2) + "\n";
+assert.equal(patch(foreignText).status, 0);
+assert.equal(patch(foreignText).stdout, foreignText,
+  "a bar that already holds somebody else's block is left alone");
+
 // The previous installer's split status row collapses the same way.
 const oldSplit = JSON.parse(template);
 const splitWork = oldSplit.children.find((x) => x.id === "work");
@@ -119,4 +140,26 @@ assert.equal(customResult.status, 3, customResult.stderr);
 assert.equal(customResult.stdout, custom, "custom status layout must be untouched");
 assert.equal(fill(customResult.stdout, mods({ "project-open": bar(10) })), custom, "no status row means nothing to fill");
 
-console.log("PASS: status row, Mod-declared bar, append-only fill, idempotence, old split-row/sidebar migration, custom layout untouched.");
+// The user names what stays out in herdr-mods.config.json, and their choice holds.
+const settings = fs.mkdtempSync(path.join(os.tmpdir(), "cfg-"));
+const config = path.join(settings, "herdr-mods.config.json");
+fs.writeFileSync(config, '{ "exclude": ["project-open"] }\n');
+const declared = mods({ "project-open": bar(10), "agent-ui": bar(20) });
+const excludedRun = spawnSync("awk", ["-v", `mods=${declared}`, "-v", `config=${config}`, "-f", compose],
+  { input: patched.stdout, encoding: "utf8" });
+assert.equal(excludedRun.status, 0, excludedRun.stderr);
+assert.deepEqual(statusOf(excludedRun.stdout).status.children.map((x) => x.content.mod), ["agent-ui"],
+  "an excluded Mod is not added; the others still are");
+fs.rmSync(settings, { recursive: true, force: true });
+fs.rmSync(declared, { recursive: true, force: true });
+
+// Nothing at all is filled when the user wants to own the bar themselves.
+const empty = fill(patched.stdout, mods({ "project-open": bar(10) }), (() => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cfg-"));
+  const file = path.join(dir, "herdr-mods.config.json");
+  fs.writeFileSync(file, '{ "exclude": ["project-open"] }\n');
+  return file;
+})());
+assert.deepEqual(statusOf(empty).status.children, undefined, "an empty bar stays an empty row");
+
+console.log("PASS: status row, Mod-declared bar, append-only fill, idempotence, exclusion, old split-row/sidebar migration, custom layout untouched.");
