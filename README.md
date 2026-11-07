@@ -7,6 +7,7 @@ Small independent mods for [Herdr App](https://github.com/herdrdev/herdr-app). C
 | Mod | Function |
 | --- | --- |
 | [Project Open](mods/project-open/README.md) | Single status icon, left click opens the selected tool, right click changes preference. |
+| [Agent Manager](mods/agent-manager/README.md) | Toggleable Files/Changes panel: bidirectional macOS↔Linux CC Switch Skills library sync with conflict dialog, plus Project Skills deployment (Claude, Codex, Pi, Common), four-agent Global Skills, and four-agent MCP deployment. Missing Linux MCP commands are stored disabled in the remote CC Switch database when available. |
 | [Agent UI](mods/agent-ui/README.md) | Native GPUI fixture conversation with **Markdown, collapsed tool activity, minimal Message Rail and one SVG mode switch**. Not yet connected to live Pi or a single split Pane. |
 
 ### Agent UI demo (local checkout)
