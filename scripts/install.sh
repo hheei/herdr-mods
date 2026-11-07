@@ -1,6 +1,6 @@
 #!/bin/sh
 # Install, refresh or scope Herdr mods. Each mod declares its own layout wiring in
-# layout.json ("status-bar" | "sidebar" | "derive": "<layout>" | "pi": "<file>"), so this script
+# layout.json ("status" | "tabs" | "panel" | "sidebar" | "pi": "<file>"), so this script
 # only applies the wiring shapes it knows and no mod by name.
 # Checkout: sh scripts/install.sh [mod...] [--all] [--no-layout] [--yes]
 # Piped:    curl -fsSL .../install.sh | sh -s -- --all
@@ -84,7 +84,6 @@ install_kind() {
   sed -n 's/.*"tabs"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/tabs:\1/p' "$decl"
   grep -q '"sidebar"' "$decl" && printf 'sidebar '
   grep -q '"panel"' "$decl" && printf 'panel '
-  sed -n 's/.*"derive"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/derive:\1/p' "$decl"
   sed -n 's/.*"pi"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/pi:\1/p' "$decl"
   return 0
 }
@@ -185,29 +184,6 @@ wire_personal() {
     warn "layout left unchanged; wire $mod by hand (mods/$mod/README.md)"
   fi
 }
-wire_derive() {
-  mod=$1 name=$2
-  mkdir -p "$home_dir/layouts"
-  base="$home_dir/layouts/$layout.json"
-  [ -f "$base" ] || base="$repo_dir/layouts/$layout.json"
-  target="$home_dir/layouts/$name.json"
-  tmp="$target.tmp.$$"
-  trap 'rm -f "$tmp"' EXIT HUP INT TERM
-  if awk -v prefix="$name" -v mod="$mod" -f "$script_dir/demo-layout.awk" "$base" > "$tmp"; then
-    if cmp -s "$target" "$tmp"; then
-      rm -f "$tmp"
-      step "layout $name unchanged ${dim}→ $target${off}"
-      return 0
-    fi
-    keep_bak "$target"
-    mv "$tmp" "$target"
-    step "layout $name ${dim}→ $target${off}"
-    printf '  %s→%s switch Herdr App to layout %s%s%s  %s·  preview only: hides the active tab view, never stops the process%s\n\n' \
-      "$dim" "$off" "$bold" "$name" "$off" "$dim" "$off"
-  else
-    warn "layout $name left unchanged: $base has a customized work-body"
-  fi
-}
 wire_pi() {
   mod=$1 file=$2
   src="$repo_dir/mods/$mod/bridge/$file"
@@ -228,20 +204,11 @@ done
 if [ "$no_layout" = yes ]; then
   warn "layout untouched (--no-layout); wire the mods by hand"
 else
-  # Every status/sidebar patch lands before any derived layout is copied: a
-  # derived layout must inherit the already-wired base, not the shipped one.
   wired=no
   for mod in $mods; do
     for kind in $(install_kind "$mod"); do
       case "$kind" in
         status:*|tabs:*|sidebar|panel) wire_personal "$mod" "$kind"; wired=yes ;;
-      esac
-    done
-  done
-  for mod in $mods; do
-    for kind in $(install_kind "$mod"); do
-      case "$kind" in
-        derive:*) wire_derive "$mod" "${kind#derive:}"; wired=yes ;;
       esac
     done
   done

@@ -103,11 +103,13 @@ export default class AgentUi extends View {
     this.attachBridge(cx);
   }
 
-  // The bridge is opt-in: a layout asks for it with shared("agent-ui-source").
-  // A Mod has neither env nor readdir, so discovery is one `ls -1t` and the
-  // waiting is watchFolder -- never a timer poll.
+  // The bridge attaches by itself: opening the view should show the live Pi session
+  // when there is one, and the synthetic history when there is not. shared() can
+  // still force it either way ("bridge" even with nothing running, "demo" never).
+  // A Mod has neither env nor readdir, so discovery is one `ls -1t` and the waiting
+  // is watchFolder -- never a timer poll.
   attachBridge(cx) {
-    if (typeof shared !== "function" || shared(SOURCE_KEY) !== "bridge") return;
+    if (typeof shared === "function" && shared(SOURCE_KEY) === "demo") return;
     const root = () => `${appHome()}/agent-ui/bridge`;
     const host = {
       async find() {
@@ -140,12 +142,22 @@ export default class AgentUi extends View {
         return watchFolder(dir);
       },
     };
-    this.bridge = createBridgeSource(host);
-    this.source = this.bridge;
+    const forced = typeof shared === "function" && shared(SOURCE_KEY) === "bridge";
+    const attach = () => {
+      this.bridge = createBridgeSource(host);
+      this.source = this.bridge;
+    };
+    // An explicit "bridge" takes effect now, so the very first render is the bridge's.
+    if (forced) attach();
     cx.spawn(async (context) => {
       try {
         this.bridgeInstalled = await readTextFile(
           `${home()}/.pi/agent/extensions/herdr-agent-ui.js`) !== null;
+        // Nothing running and nobody insisting: keep the demo rather than an empty view.
+        if (!this.bridge) {
+          if ((await host.find()) === null) return;
+          attach();
+        }
         for (;;) {
           if (await this.bridge.refresh()) this.pump(context);
           this.bridgeHealth = this.bridge.health;
@@ -532,6 +544,13 @@ export default class AgentUi extends View {
   send(cx) {
     const draft = String(this.composer.value() ?? "").trim();
     if (!draft) return;
+    // A Mod has no handle on the agent's terminal: the bridge is read-only except
+    // for ask-user answers, so a typed prompt can only be previewed.
+    if (this.source === this.bridge) {
+      this.notice = "The bridge is read-only · send prompts from the Pi pane";
+      cx.notify();
+      return;
+    }
     if (this.demo !== "demo") {
       this.notice = this.demo === "offline"
         ? "Bridge offline · nothing was sent or queued"

@@ -896,10 +896,33 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
   const missing = bridged.render(context);
   assert.ok(find(missing, "agent-ui-bridge-missing"), "an uninstalled extension says so");
 
+  // The bridge is the default: with a producer on disk, no flag is needed.
   box.shared = () => null;
+  const autoBridged = new box.AgentUi();
+  const autoContext = { ...context, spawn(task) { autoContext.task = task; } };
+  autoBridged.init({}, autoContext);
+  assert.equal(autoBridged.bridge, null, "the probe is asynchronous, so render is never blocked");
+  assert.equal(autoBridged.turns.length, 60, "the demo shows until the probe answers");
+  await autoContext.task(autoContext);
+  assert.ok(autoBridged.bridge, "a live Pi session is picked up without being asked");
+  assert.equal(autoBridged.source, autoBridged.bridge);
+
+  // shared("demo") is the opt-out, for someone who wants the fixture history.
+  box.shared = (key) => (key === box.SOURCE_KEY ? "demo" : null);
   const demoOnly = new box.AgentUi();
   demoOnly.init({}, context);
-  assert.equal(demoOnly.bridge, null, "without the shared flag the demo source stays");
+  assert.equal(demoOnly.bridge, null, "opting out of the bridge keeps the demo source");
+
+  // No producer and no flag: the demo stays, not an empty transcript.
+  box.shared = () => null;
+  const noProducer = new box.AgentUi();
+  const emptyContext = { ...context, spawn(task) { emptyContext.task = task; } };
+  const listing = box.exec;
+  box.exec = async () => ({ code: 0, stdout: "", stderr: "" });
+  noProducer.init({}, emptyContext);
+  await emptyContext.task(emptyContext);
+  box.exec = listing;
+  assert.equal(noProducer.bridge, null, "nothing running means the demo, not a blank view");
 
   // Herdr's bundled mods draw Lucide SVGs and tint them with text_color. A font
 // glyph would depend on the reader having that font, so nothing in this view may

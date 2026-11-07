@@ -2,7 +2,7 @@
 
 This is a **standalone, installable native-GPUI fixture demo**. It does not use WebView, does not read Pi's Session JSONL and does not send commands to Pi. There is **one canonical Agent UI Mod** at `mods/agent-ui/`, with the updated demo design.
 
-## Try the demo
+## Install and open
 
 From this repository checkout, **on the machine where the Herdr App GUI is running**:
 
@@ -10,15 +10,15 @@ From this repository checkout, **on the machine where the Herdr App GUI is runni
 sh scripts/install.sh agent-ui hheei-status
 ```
 
-Select the **`agent-ui-demo`** layout in Herdr's Layout picker, or, if the CLI is installed:
+Nothing in your Layout changes: agent-ui declares a **Pi extension**, not a Layout slot, and the installer backs up what it replaces. The Status Bar (rendered by `hheei-status`) then shows **one icon beside the launcher**: a conversation icon while a pane with a recognised agent is focused. Click it and the view opens **over that pane as a dialog** — dimmed background, closable from the ✕ in its header or by clicking the icon again. There is no demo Layout to switch to, and no second control in the Status Bar.
 
-```sh
-herdr-app do layout.switch '{"name":"agent-ui-demo"}'
-```
+The installer may ask for confirmation in an interactive terminal; `--yes` skips it.
 
-The usual Status Bar (rendered by `hheei-status`) shows **one small icon**. On the Terminal view, it is a conversation icon to switch to the Agent UI. In the Agent UI, it becomes a terminal icon to switch back. No tooltip, no extra status-bar slot, no two-part control. The old two-button segmented control has been removed.
+## Live or demo
 
-The installer derives `agent-ui-demo.json` from your own `herdr-mods.json` if available, otherwise the repo template. It does not replace `main` or the user's normal `herdr-mods` layout with the demo; it creates or refreshes `agent-ui-demo` with one `.bak` backup. However, installing `hheei-status` also points the `herdr-mods` Status Bar at it if the bar is still the standard one (with its normal single `.bak`). Modified demo files and replaced Mods are backed up to one `.bak`. The installer may ask you to confirm a change in an interactive terminal.
+The view shows **a live Pi session when one is running** and falls back to the synthetic history (what this page describes below) when none is. The bridge is a directory per Pi process under `~/.config/herdr-app/agent-ui/bridge/`, written by the extension this Mod installs; `main.js` picks up the newest live one at open time. A session that starts after the view is already open shows up the next time you open it.
+
+Reading is one way **except for questions**: when `@hheei/pi-ask-user` is waiting on you, its options arrive as a card in the composer slot, and what you pick is written back as `answer.json` and delivered to the plugin. Free-text prompts typed here are **not** sent to Pi — a Mod has no handle on the agent's terminal.
 
 ## What you can interact with
 
@@ -71,7 +71,7 @@ character appears in `main.js`.
 ```sh
 node tests/agent-ui.test.cjs
 node tests/hheei-status.test.cjs
-sh tests/agent-ui-demo-install.test.sh
+sh tests/agent-ui-install.test.sh
 ```
 
 On a computer with Herdr App installed, additionally verify the actual runtime:

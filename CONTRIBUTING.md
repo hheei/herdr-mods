@@ -12,7 +12,6 @@ Add independent mods under `mods/<name>/`, each with `main.js`, `mod.json`, asse
 | `{ "tabs": "tabs" }` | Same, for the tab bar |
 | `{ "panel": true }` | Append a block to `panel-body` (`scripts/patch-panel.awk`) |
 | `{ "sidebar": true }` | Append a sidebar footer button (`scripts/patch-sidebar.awk`) |
-| `{ "derive": "<layout>" }` | Copy a demo layout from the personal one (`scripts/demo-layout.awk`) |
 | `{ "pi": "<file>" }` | Install a Pi extension into `~/.pi/extensions` |
 
 Patchers do two things and nothing else: **append a node** or **point a value at another Mod**. They are byte-idempotent and print the layout back unchanged when they cannot apply, so nobody's layout is ever rewritten or reordered. A new shape belongs in one awk patcher, never in ad-hoc JSON editing.
@@ -40,7 +39,7 @@ sh tests/syntax-check.sh              # every Mod file, ESM-parsed
 tsc -p jsconfig.json
 for file in tests/*.test.cjs; do node "$file"; done
 sh tests/install-smoke.sh             # installs into a throwaway HERDR_APP_HOME
-sh tests/agent-ui-demo-install.test.sh
+sh tests/agent-ui-install.test.sh
 herdr-app check ~/.config/herdr-app/mods/hheei-status
 ~~~
 

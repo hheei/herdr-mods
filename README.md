@@ -19,9 +19,9 @@ Run on the computer hosting the Herdr App GUI:
 sh scripts/install.sh agent-ui hheei-status
 ```
 
-Select **`agent-ui-demo`** in the Layout picker. The **single SVG icon** in the existing Status Bar switches between your Terminal Tab display and the synthetic Agent UI. The conversation is a **60-turn synthetic history** (7 scripted turns plus 53 generated follow-ups), with grouped tool details, native Markdown and **a Message Rail that itself functions as the scrollbar**. An 18px strip holds one column of dots—right-aligned 3px from the edge, 3px apart, 4px to 9px wide at 70% opacity, never taller than 40% of the view—and **no track or thumb**. Dot size follows a Gaussian packet around the reading position, so the focus reads as a single spot; hover shows a short question, tapping a dot jumps to its turn, dragging vertically scrubs, and ↑/↓/Home/End/Enter/Esc do the same from the keyboard. Narrow panes swap the strip for a **Turns** list, and `▶ stream` replays a turn in chunks to show how the rail and the reading anchor behave mid-stream, the header chip cycles the demo through **offline** and **empty** states — a turn arriving while you read above shows a `↓ N new` counter instead of yanking the transcript. Dense histories merge turns into one dot each (`+N` on hover) instead of shrinking or overflowing.
+Click the **Agent UI icon** in the Status Bar: it opens the view over the focused agent pane, as a dialog, and clicking it again (or the ✕ inside) closes it. No Layout is created or switched. The conversation is a **60-turn synthetic history** (7 scripted turns plus 53 generated follow-ups), with grouped tool details, native Markdown and **a Message Rail that itself functions as the scrollbar**. An 18px strip holds one column of dots—right-aligned 3px from the edge, 3px apart, 4px to 9px wide at 70% opacity, never taller than 40% of the view—and **no track or thumb**. Dot size follows a Gaussian packet around the reading position, so the focus reads as a single spot; hover shows a short question, tapping a dot jumps to its turn, dragging vertically scrubs, and ↑/↓/Home/End/Enter/Esc do the same from the keyboard. Narrow panes swap the strip for a **Turns** list, and `▶ stream` replays a turn in chunks to show how the rail and the reading anchor behave mid-stream, the header chip cycles the demo through **offline** and **empty** states — a turn arriving while you read above shows a `↓ N new` counter instead of yanking the transcript. Dense histories merge turns into one dot each (`+N` on hover) instead of shrinking or overflowing.
 
-This is an **opt-in Tab-display chrome-stack preview**, not a live Pi client or per-model split-Pane switch. It does not start, stop or send commands to Pi. [Installation and limitations](mods/agent-ui/README.md) · [implementation status](docs/agent-ui/11-agent-ui-demo-implementation.md).
+It reads a live Pi session when the extension is installed and one is running (see [installation](mods/agent-ui/README.md)); otherwise it shows the synthetic history. It does not start, stop or send prompts to Pi. [Installation and limitations](mods/agent-ui/README.md) · [implementation status](docs/agent-ui/11-agent-ui-demo-implementation.md).
 
 ## Quick install
 
@@ -63,7 +63,7 @@ Each Mod says what it needs in its own `layout.json`; the Mod itself knows nothi
 | `{ "tabs": "tabs" }` | Same, for the tab bar |
 | `{ "panel": true }` | Append me to `panel-body`, beside Files and Changes |
 | `{ "sidebar": true }` | Append me to the Sidebar |
-| `{ "derive": "<layout>" }`, `{ "pi": "<file>" }` | Copy a demo Layout, install a Pi extension |
+| `{ "pi": "<file>" }` | Install a Pi extension |
 
 A shipped Herdr Mod is read-only — replaced whole on every start, an edit moves aside to `<name>-edited` — so replacing one is a value change in the Layout, and the renderer it replaces is cloned under our own name. `hheei-status` and `hheei-tabs` are exactly that.
 
@@ -112,7 +112,7 @@ node --check mods/agent-ui/main.js
 node --check mods/agent-ui/model.js
 sh -n scripts/install.sh
 sh tests/install-smoke.sh
-sh tests/agent-ui-demo-install.test.sh
+sh tests/agent-ui-install.test.sh
 ~~~
 
 Node is for **developer tests only**. If Herdr App is installed, additionally validate with its official command:

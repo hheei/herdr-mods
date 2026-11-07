@@ -20,7 +20,6 @@ jobs:
           awk -v from=workspace-status -v to=hheei-status -f scripts/patch-mod.awk layouts/herdr-mods.json > /dev/null
           awk -v name=probe -f scripts/patch-sidebar.awk layouts/herdr-mods.json > /dev/null
           awk -v mod=probe -f scripts/patch-panel.awk layouts/herdr-mods.json > /dev/null
-          awk -f scripts/demo-layout.awk layouts/herdr-mods.json > /dev/null
       - name: Types
         run: |
           [ -f types/gpui-kit.d.ts ] || sh scripts/host-types-stub.sh > types/gpui-kit.d.ts
@@ -29,4 +28,4 @@ jobs:
         run: |
           for file in tests/*.test.cjs; do node "$file"; done
           sh tests/install-smoke.sh
-          sh tests/agent-ui-demo-install.test.sh
+          sh tests/agent-ui-install.test.sh
