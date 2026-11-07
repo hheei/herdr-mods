@@ -842,51 +842,58 @@ export default class AgentUi extends View {
     const rows = [];
     let flat = 0;
     for (const [index, question] of asked.entries()) {
-      const numbered = asked.length > 1;
-      rows.push(h_flex().id(`agent-ui-ask-head-${index}`).h(18).gap(6).items_center()
-        .pt(index ? 5 : 0)
-        .child(div().flex_none().text_size(11.5)
-          .text_color(numbered ? t.dim : t.blocked)
-          .child(numbered ? `${index + 1}/${asked.length}` : "?"))
-        .child(div().flex_1().min_w(0).text_size(11.5).text_color(t.foreground)
-          .child(question.question)));
+      const multi = asked.length > 1;
+      rows.push(h_flex().id(`agent-ui-ask-head-${index}`).gap(8).items_center()
+        .pt(index ? 6 : 0)
+        .child(h_flex().flex_none().h(19).min_w(19).px(6).rounded(5)
+          .items_center().bg(t.background)
+          .child(div().text_size(10.5).text_color(t.blocked)
+            .child(multi ? `${index + 1}/${asked.length}` : "?")))
+        .child(div().flex_1().min_w(0).text_size(13).font_semibold()
+          .text_color(t.foreground).child(question.question)));
       if (question.context)
-        rows.push(div().id(`agent-ui-ask-context-${index}`).pl(16).text_size(10.5)
+        rows.push(div().id(`agent-ui-ask-context-${index}`).pl(27).text_size(11.5)
           .text_color(t.dim).child(question.context));
+      const list = [];
       for (const [slot, option] of (question.options ?? []).entries()) {
         const on = picks(index).includes(option.title);
-        const cursor = flat++;
-        const focus = this.askCursor === cursor;
-        const style = focus || on ? t.accent : t.foreground;
-        rows.push(h_flex().id(`agent-ui-ask-${index}-${slot}`).h(17).pl(1).gap(6)
-          .items_center().cursor_pointer()
-          .when(focus, (el) => el.bg(t.raised))
+        const focus = this.askCursor === flat++;
+        list.push(h_flex().id(`agent-ui-ask-${index}-${slot}`).h(34).px(10).gap(10)
+          .items_center().rounded(8).cursor_pointer()
+          .bg(focus || on ? t.popover : t.background)
+          .border_1().border_color(focus ? t.accent : t.border)
           .on_click((_event, context) => this.pickAnswer(index, option.title, context))
-          .child(div().w(9).flex_none().text_size(11)
-            .text_color(t.accent).child(focus ? "▸" : ""))
-          .child(div().w(17).flex_none().text_size(11).text_color(t.dim)
-            .child(question.allowMultiple ? (on ? "[x]" : "[ ]") : `${slot + 1}.`))
-          .child(div().flex_none().text_size(11.5).text_color(style).child(option.title)));
-        if (option.description)
-          rows.push(div().id(`agent-ui-ask-desc-${index}-${slot}`).pl(33)
-            .text_size(10.5).text_color(t.dim).child(option.description));
+          .child(question.allowMultiple
+            ? h_flex().flex_none().h(15).w(15).rounded(4).items_center()
+              .border_1().border_color(on ? t.accent : t.border)
+              .when(on, (el) => el.bg(t.accent))
+            : div().flex_none().text_size(11).text_color(focus ? t.accent : t.dim)
+              .child(`${slot + 1}`))
+          .child(div().flex_none().text_size(12.5)
+            .text_color(on ? t.accent : t.foreground).child(option.title))
+          .when(Boolean(option.description), (el) => el.child(div().flex_1().min_w(0)
+            .truncate().text_size(11).text_color(t.dim).child(option.description)))
+          .when(on && !question.allowMultiple, (el) => el.child(div().flex_none()
+            .text_size(12).text_color(t.accent).child("✓"))));
       }
-      if (!question.allowFreeform) continue;
-      const typing = this.askTyping === index;
-      const onFree = this.askCursor === flat;
-      rows.push(typing
-        ? Textarea.new(this.answer).id(`agent-ui-ask-input-${index}`).w_full()
-          .h(compact ? 44 : 50).p(7).bg(t.background)
-          .text_color(t.foreground).text_size(11.5)
-        : h_flex().id(`agent-ui-ask-free-${index}`).h(17).pl(1).gap(6).items_center()
-          .cursor_pointer()
-          .when(onFree, (el) => el.bg(t.raised))
-          .on_click((_event, context) => this.typeAnswer(index, context))
-          .child(div().w(9).flex_none().text_size(11).text_color(t.accent)
-            .child(onFree ? "▸" : ""))
-          .child(div().w(17).flex_none())
-          .child(div().text_size(11.5).text_color(t.dim).child("type your own answer")));
-      flat += 1;
+      if (question.allowFreeform) {
+        const focus = this.askCursor === flat++;
+        list.push(this.askTyping === index
+          ? Textarea.new(this.answer).id(`agent-ui-ask-input-${index}`).w_full()
+            .h(compact ? 48 : 54).p(9).rounded(8).border_1().border_color(t.input)
+            .bg(t.background).text_color(t.foreground).text_size(12)
+          : h_flex().id(`agent-ui-ask-free-${index}`).h(34).px(10).gap(10).items_center()
+            .rounded(8).cursor_pointer()
+            .bg(focus ? t.popover : t.background)
+            .border_1().border_color(focus ? t.accent : t.border)
+            .on_click((_event, context) => this.typeAnswer(index, context))
+            .child(div().flex_none().text_size(11).text_color(t.dim).child("✎"))
+            .child(div().text_size(12.5).text_color(t.dim)
+              .child("Type your own answer")));
+      }
+      if (list.length)
+        rows.push(v_flex().id(`agent-ui-ask-list-${index}`).w_full().gap(3).pt(2)
+          .children(list));
     }
 
     const one = asked.length === 1 ? asked[0] : null;
@@ -895,27 +902,33 @@ export default class AgentUi extends View {
       picks(index).length > 0 || (this.askTyping === index
         && String(this.answer.value() ?? "").trim() !== ""));
     return v_flex().id("agent-ui-composer").flex_none().px(compact ? 13 : 21)
-      .pt(10).pb(12).gap(7).border_t(1).border_color(t.border).bg(t.chrome)
-      .child(v_flex().id("agent-ui-ask").w_full().gap(1).pl(8)
-        .border_l(2).border_color(t.blocked)
+      .pt(10).pb(12).gap(8).border_t(1).border_color(t.border).bg(t.chrome)
+      .child(v_flex().id("agent-ui-ask").w_full().gap(3).p(11).rounded(10)
+        .border_1().border_color(t.blocked).bg(t.raised)
         .children(rows))
-      .child(h_flex().items_center().gap(12).pl(10)
-        .child(div().flex_1().text_size(10).text_color(t.dim)
+      .child(h_flex().items_center().gap(9)
+        .child(div().flex_1().text_size(10.5).text_color(t.dim)
           .child(this.asking.heading && asked.length > 1 ? this.asking.heading
-            : instant ? "1-9 · click · esc declines"
-            : one?.allowMultiple ? "space ticks · ⏎ sends" : "↑↓ · ⏎ · esc"))
-        .when(!instant, (el) => el.child(this.keyCap(t, "agent-ui-ask-send", "[ send ]",
-          (context) => this.sendAnswer(context), ready))));
+            : instant ? "Pick one · or type your own answer"
+            : one?.allowMultiple ? "Pick any · then send" : "Answer each one · then send"))
+        .when(!instant, (el) => el.child(this.pill(t, "agent-ui-ask-cancel", "Cancel",
+          (context) => this.cancelAsk(context), true, false)))
+        .when(!instant, (el) => el.child(this.pill(t, "agent-ui-ask-send", "Send",
+          (context) => this.sendAnswer(context), ready, true))));
   }
 
-  // A key cap, not a button: TUI affordances are text, and a rounded widget in the
-  // middle of a list reads as a web form.
-  keyCap(t, id, label, onClick, enabled) {
-    return h_flex().id(id).h(17).px(4).items_center()
-      .when(enabled, (el) => el.cursor_pointer().bg(t.raised)
+  // Two weights, the same shape as the rest of the view: a flat pill for a
+  // secondary action, a filled one for the action that finishes the prompt.
+  pill(t, id, label, onClick, enabled, primary) {
+    return h_flex().id(id).h(27).px(12).rounded(7).items_center()
+      .bg(!enabled ? t.raised : primary ? t.accent : t.popover)
+      .border_1().border_color(enabled ? (primary ? t.accent : t.border) : t.border)
+      .text_size(11.5)
+      .when(enabled, (el) => el.cursor_pointer()
         .on_click((_event, context) => onClick(context)))
-      .child(div().text_size(10.5)
-        .text_color(enabled ? t.accent : t.dim).child(label));
+      .child(div().text_size(11.5)
+        .text_color(!enabled ? t.dim : primary ? t.background : t.foreground)
+        .child(label));
   }
 
   // A click is the answer. For one single-choice question it goes out at once; a
