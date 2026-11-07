@@ -8,11 +8,13 @@
 //   done.json   {version, epoch, revision, turns}   settled turns, capped like the view
 //   live.json   {version, epoch, revision, turn, asking}  the turn in flight, or null
 //
-// `asking` is the question @hheei/pi-ask-user is waiting on, taken from the
-// `pi-ask-user:blocked` event it already emits. Pi has no structured "the agent
-// is waiting for you" event of its own, so we adapt to the plugin that does
-// rather than guessing from punctuation. Without that plugin the field is null
-// and no turn claims to need an answer.
+// `asking` is the question @hheei/pi-ask-user is waiting on: its id, heading, and
+// the questions with their options, taken from the `pi-ask-user:question` event it
+// emits. Pi has no "the agent is waiting for you" event of its own, so we adapt to
+// the plugin that does rather than guessing from punctuation. An answer comes back
+// as answer.json in this same directory and is handed to the plugin's
+// `pi-ask-user:answer` channel, which resolves the prompt exactly as a keystroke
+// would. Without that plugin the field is null and nothing claims to be waiting.
 //
 // The files are rewritten in place, so a reader's latest read simply wins: no
 // sequence numbers, no gap detection, no pruning. Read-only in both directions:
@@ -62,11 +64,18 @@ export function usageOf(message) {
   };
 }
 
-// The ask-user plugin reports both edges; anything else is not our question.
+// The plugin announces the open question and closes it with `questions: null`.
 export function askState(current, channel, data) {
-  if (channel === "pi-ask-user:blocked") return data?.active ? String(data.question ?? "") : null;
-  if (channel === "ask:answered" || channel === "ask:cancelled") return null;
-  return current;
+  if (channel !== "pi-ask-user:question") return current;
+  if (!data?.questions) return null;
+  return { id: data.id, heading: data.heading ?? null, questions: data.questions };
+}
+
+// Only an answer to the question actually on screen counts; anything else is a
+// stale file from a prompt that has already closed.
+export function answerFor(asking, data) {
+  if (!asking || !data || data.id !== asking.id) return null;
+  return data.response === undefined ? null : { id: data.id, response: data.response };
 }
 
 export function clip(value, max) {
@@ -193,6 +202,7 @@ export default function (pi) {
   let done = [];
   let turn = null;
   let asking = null;
+  let ticker = null;
   let count = 0;
 
   const guard = (fn) => {
@@ -239,7 +249,10 @@ export default function (pi) {
     box.live(null, true);
   }));
 
-  pi.on("session_shutdown", async () => guard(() => box?.close()));
+  pi.on("session_shutdown", async () => guard(() => {
+    stopTicker();
+    box?.close();
+  }));
 
   pi.on("message_start", async (event) => {
     const role = event.message?.role;
@@ -286,17 +299,47 @@ export default function (pi) {
 
   pi.on("agent_settled", async () => settle());
 
-  // Adapting to @hheei/pi-ask-user rather than inventing a signal Pi lacks: it
-  // emits blocked(true) while the prompt is on screen and blocked(false) plus
-  // ask:answered|ask:cancelled when it closes.
-  const onAsk = (channel) => (data) => guard(() => {
-    const next = askState(asking, channel, data);
+  // A file is the only way back from a Mod, which is not an extension and cannot
+  // emit. The plugin owns the prompt, so it is also the one that decides when the
+  // file wins: it resolves that same await a keystroke would.
+  const stopTicker = () => {
+    if (ticker) clearInterval(ticker);
+    ticker = null;
+  };
+  const pollAnswer = () => {
+    if (!box) return;
+    const file = path.join(box.dir, "answer.json");
+    let text;
+    try {
+      text = fs.readFileSync(file, "utf8");
+    } catch {
+      return;
+    }
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return;
+    }
+    guard(() => fs.rmSync(file, { force: true })); // one answer, one use
+    const answer = answerFor(asking, data);
+    if (answer) guard(() => pi.events.emit("pi-ask-user:answer", answer));
+  };
+  const startTicker = () => {
+    if (ticker || !box) return;
+    ticker = setInterval(pollAnswer, 250);
+  };
+
+  pi.events?.on?.("pi-ask-user:question", (data) => guard(() => {
+    const next = askState(asking, "pi-ask-user:question", data);
     if (next === asking) return;
     asking = next;
-    if (asking !== null && turn) turn.asked = true;
+    if (asking) {
+      if (turn) turn.asked = true;
+      startTicker();
+    } else {
+      stopTicker();
+    }
     flush(true);
-  });
-  for (const channel of ["pi-ask-user:blocked", "ask:answered", "ask:cancelled"]) {
-    pi.events?.on?.(channel, onAsk(channel));
-  }
+  }));
 }

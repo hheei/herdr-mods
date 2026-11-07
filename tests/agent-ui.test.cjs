@@ -69,6 +69,8 @@ const box = {
   appHome: () => "/tmp/apphome",
   exec: async () => ({ code: 0, stdout: "", stderr: "" }),
   readTextFile: async () => null,
+  writeTextFile: async (file, text) => { box.written.push([file, text]); return null; },
+  written: [],
   shared: () => null,
   watchFolder: async () => [],
   home: () => "/tmp/home",
@@ -727,15 +729,33 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
 
   box.notes.length = 0;
   bridged.turns = [];
-  bridged.apply({ type: "asking", question: "which db?" });
+  const openAsk = { id: "q-1", heading: null, questions: [{ index: 0, total: 1,
+    question: "which db?", allowMultiple: false, allowFreeform: true,
+    options: [{ title: "postgres" }, { title: "sqlite" }] }] };
+  bridged.apply({ type: "asking", asking: openAsk });
   assert.deepEqual(box.notes.map((note) => note.title), ["Pi is asking"],
-    "the ask-user plugin's blocked edge is what raises a notification");
+    "the plugin's open question is what raises a notification");
   assert.ok(find(bridged.render(context), "agent-ui-asking"), "and it shows above the transcript");
-  bridged.apply({ type: "asking", question: "which db?" });
+  bridged.apply({ type: "asking", asking: openAsk });
   assert.equal(box.notes.length, 1, "the same question is not announced twice");
-  bridged.apply({ type: "asking", question: null });
+
+  bridged.bridge = { dir: "/bridge/9" };
+  const asking = bridged.render(context);
+  bridged.answerOption({ title: "sqlite" }, context);
+  await context.task();
+  assert.equal(bridged.asking, null, "answering closes the banner at once");
+  assert.deepEqual(box.written.at(-1), ["/bridge/9/answer.json",
+    JSON.stringify({ id: "q-1", response: { kind: "selection", selections: ["sqlite"] } })],
+    "the click becomes the one file the bridge hands back to the plugin");
+  assert.equal(find(bridged.render(context), "agent-ui-asking"), null, "and it goes away");
+
+  bridged.apply({ type: "asking", asking: { id: "q-2", heading: null,
+    questions: [{ index: 0, total: 1, question: "type a name", allowMultiple: false,
+      allowFreeform: true, options: [] }] } });
+  const freeform = bridged.render(context);
+  assert.ok(find(freeform, "agent-ui-asking"), "a question without options still shows");
+  bridged.apply({ type: "asking", asking: null });
   assert.equal(bridged.asking, null);
-  assert.equal(find(bridged.render(context), "agent-ui-asking"), null, "answering takes the banner away");
 
   bridged.bridgeInstalled = false;
   const missing = bridged.render(context);

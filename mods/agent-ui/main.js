@@ -1,7 +1,7 @@
 // Agent UI · standalone synthetic GPUI demo. NEVER starts or controls Pi.
 import { View, div } from "gpui-kit";
 import { h_flex, v_flex, TextView, TextareaState, Textarea } from "gpui-base";
-import { theme, appHome, exec, home, notify, readTextFile, shared, watchFolder } from "herdr";
+import { theme, appHome, exec, home, notify, readTextFile, shared, watchFolder, writeTextFile } from "herdr";
 import { DEMO_TURNS, fixtureSource } from "./fixtures.js";
 import { SOURCE_KEY, createBridgeSource } from "./bridge-source.js";
 import { applyEvent, createTranscript } from "./state.js";
@@ -179,24 +179,41 @@ export default class AgentUi extends View {
     return event.type === "turn.start" && this.turns.length >= this.transcript.limit;
   }
 
-  // The question comes from @hheei/pi-ask-user, which reports both edges. Pi
-  // itself has no "waiting for you" event, so nothing here is guessed.
-  ask(question) {
-    const asked = this.asking === null && question !== null;
-    this.asking = question;
-    if (!asked) return;
+  // The question comes from @hheei/pi-ask-user, which announces the open prompt
+  // and closes it. Pi itself has no "waiting for you" event, so nothing here is
+  // guessed.
+  ask(asking) {
+    const opened = this.asking === null && asking !== null;
+    this.asking = asking;
+    if (!opened) return;
     try {
-      notify({ title: "Pi is asking", body: shortPrompt(question), level: "warning" });
+      notify({ title: "Pi is asking",
+        body: shortPrompt(asking.questions?.[0]?.question ?? asking.heading ?? ""),
+        level: "warning" });
     } catch {
       // A host without notifications still shows the banner.
     }
   }
 
+  // Clicking an option writes the one file the bridge is polling; the plugin
+  // resolves its own prompt with it, so there is no second code path to keep.
+  answerOption(option, cx) {
+    const dir = this.bridge?.dir;
+    if (!dir || !this.asking) return;
+    const text = JSON.stringify({ id: this.asking.id,
+      response: { kind: "selection", selections: [option.title] } });
+    this.asking = null;
+    cx.spawn(async () => {
+      await writeTextFile(`${dir}/answer.json`, text, null);
+      cx.notify();
+    });
+  }
+
   apply(event) {
     if (event.type === "asking") {
-      const before = this.asking;
-      this.ask(event.question ?? null);
-      return this.asking !== before;
+      const before = JSON.stringify(this.asking);
+      this.ask(event.asking ?? null);
+      return JSON.stringify(this.asking) !== before;
     }
     const top = this.atLimit(event)
       ? visibleTurnIds(turnGeometry(this.turns, this.turnHeights).ranges,
@@ -755,12 +772,22 @@ export default class AgentUi extends View {
         .bg(t.raised).border_b(1).border_color(t.border)
         .child(div().flex_1().truncate().text_size(11).text_color(t.blocked)
           .child("! Pi GUI integration is not enabled · copy bridge/herdr-agent-ui.js into ~/.pi/agent/extensions/ and restart Pi"))))
-      .when(this.asking !== null, (el) => el.child(h_flex().id("agent-ui-asking")
-        .h(27).flex_none().px(12).gap(9).items_center().bg(t.raised)
-        .border_b(1).border_color(t.blocked)
-        .child(div().text_size(11).flex_none().text_color(t.blocked).child("?"))
-        .child(div().flex_1().truncate().text_size(11).text_color(t.dim).child(this.asking))
-        .child(div().text_size(10).flex_none().text_color(t.dim).child("answer in the Terminal"))))
+      .when(this.asking !== null, (el) => {
+        const asked = this.asking.questions ?? [];
+        const one = asked.length === 1 ? asked[0] : null;
+        const choices = one && !one.allowMultiple ? (one.options ?? []) : [];
+        return el.child(h_flex().id("agent-ui-asking")
+          .h(31).flex_none().px(12).gap(9).items_center().bg(t.raised)
+          .border_b(1).border_color(t.blocked)
+          .child(div().text_size(11).flex_none().text_color(t.blocked).child("?"))
+          .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim)
+            .child(one?.question ?? this.asking.heading ?? ""))
+          .when(choices.length > 0, (bar) => choices.reduce(
+            (row, option) => row.child(control(t, `agent-ui-answer-${option.title}`,
+              option.title, (context) => this.answerOption(option, context), true)), bar))
+          .when(choices.length === 0, (bar) => bar.child(
+            div().text_size(10).flex_none().text_color(t.dim).child("answer in the Terminal"))));
+      })
       .when(this.demo === "offline", (el) => el.child(h_flex().id("agent-ui-offline")
         .h(27).flex_none().px(12).gap(9).items_center().bg(t.raised)
         .border_b(1).border_color(t.border)

@@ -77,16 +77,25 @@ function messageEntry(id, message) {
     cost: { input: 0.001, output: 0.002, cacheRead: 0, cacheWrite: 0, total: 0.003 } } });
   assert.deepEqual({ ...usage }, { input: 10, output: 5, cacheRead: 100, total: 115, cost: 0.003 });
   assert.equal(project.usageOf({ role: "assistant" }), null, "no usage is null, not zeroes");
-  assert.equal(project.askState(null, "pi-ask-user:blocked", { active: true, question: "which db?" }), "which db?",
-    "the plugin's blocked edge is the question");
-  assert.equal(project.askState("which db?", "pi-ask-user:blocked", { active: false }), null,
-    "and its unblocked edge closes it");
-  assert.equal(project.askState("which db?", "ask:answered", { question: "which db?" }), null);
-  assert.equal(project.askState("which db?", "ask:cancelled", {}), null);
-  assert.equal(project.askState("which db?", "tool_execution_end", {}), "which db?",
-    "an unrelated channel cannot clear a question");
-  assert.equal(project.askState(null, "pi-ask-user:blocked", { active: true }), "",
-    "a batch heading is still a question");
+  const openQuestion = { id: "q-1", heading: "Pick one",
+    questions: [{ index: 0, total: 1, question: "which db?", options: [{ title: "postgres" }],
+      allowMultiple: false, allowFreeform: true }] };
+  assert.deepEqual(project.askState(null, "pi-ask-user:question", openQuestion), {
+    id: "q-1", heading: "Pick one", questions: openQuestion.questions },
+    "the plugin announces the question, its options and an id");
+  assert.equal(project.askState({ id: "q-1" }, "pi-ask-user:question", { id: "q-1", questions: null }),
+    null, "and closes it with null questions");
+  assert.deepEqual(project.askState({ id: "q-1" }, "pi-ask-user:blocked", { active: true }),
+    { id: "q-1" }, "an unrelated channel cannot clear a question");
+
+  assert.deepEqual(project.answerFor({ id: "q-1" },
+    { id: "q-1", response: { kind: "selection", selections: ["postgres"] } }),
+    { id: "q-1", response: { kind: "selection", selections: ["postgres"] } },
+    "an answer for the open prompt is passed through");
+  assert.equal(project.answerFor({ id: "q-1" }, { id: "q-0", response: { kind: "freeform", text: "x" } }),
+    null, "a stale answer for a closed prompt is dropped");
+  assert.equal(project.answerFor(null, { id: "q-1", response: {} }), null,
+    "and nothing is answered when no prompt is open");
 
   const long = project.entriesToTurns([
     messageEntry("u9", { role: "user", content: "big", timestamp: 0 }),

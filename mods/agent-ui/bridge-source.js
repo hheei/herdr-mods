@@ -22,7 +22,8 @@ export function readBridge(previous, payload) {
   // The question ask-user is waiting on is its own event: it changes while the
   // turn itself is untouched, and it must arrive even if nothing else moved.
   const asking = live?.asking ?? null;
-  if (previous?.asking !== asking) events.push({ type: "asking", question: asking });
+  if (JSON.stringify(previous?.asking ?? null) !== JSON.stringify(asking))
+    events.push({ type: "asking", asking });
 
   const sameEpoch = previous?.epoch === meta.epoch;
   const state = {

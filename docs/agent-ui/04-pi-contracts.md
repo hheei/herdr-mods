@@ -179,7 +179,7 @@ Herdr Mod 端的 `exec` **不能被假設**可帶任意私有 stdin stream。需
 - 節流：`live.json` 串流時最多每 200 ms 寫一次（`LIVE_MS`），輪結束、工具開始／結束則立刻 flush。一次 60 秒的回答約 300 次小檔覆寫，而不是數千個 delta 檔。
 - 界：`done` 上限 200 輪＝view 的上限；單欄位截斷（文字 20k、工具輸出 2k），確保 `readTextFile` 的 1 MiB 不會把 JSON 截斷成非法內容。
 - 用量與邊界：assistant message 一定帶 `usage`（`input`／`output`／`cacheRead`／`totalTokens`／`cost.total`），投影時原樣帶出去，UI 每輪加總顯示；branch 上的 `compaction` entry 變成可見分隔列，因為壓縮邊界是歷史的一部分，不是缺口。
-- 等待回答：Pi 本身沒有「代理正在等使用者」的事件，所以不自造啟發式（例如句尾問號）。改成只適配 `@hheei/pi-ask-user` 已對外廣播的事件：`pi-ask-user:blocked`（`active` + `question`）為開、`ask:answered`／`ask:cancelled` 為關，狀態寫進 `live.json` 的 `asking`，讀者以 `asking` 事件送進 UI。沒安裝該插件時 `asking` 永遠是 `null`，不會有任何輪被標成等待回答。
+- 等待回答：Pi 本身沒有「代理正在等使用者」的事件，所以不自造啟發式（例如句尾問號）。適配的是 `@hheei/pi-ask-user` 的 `pi-ask-user:question`（`id` + `heading` + `questions[]`，每題帶 `options`／`allowMultiple`／`allowFreeform`／`index`／`total`），關閉時 `questions: null`；狀態寫進 `live.json` 的 `asking`，讀者以 `asking` 事件送進 UI。因為仲裁權在插件手上（它持有那個 `await`），回答也是它定義的：Mod 寫 `<bridge>/<pid>/answer.json`，橋接擴充輪詢到後 emit `pi-ask-user:answer`（`{id, response}`），插件以 `id` 過濾並 resolve 自己的 prompt —— 跟終端按鍵走同一條路，沒有第二套流程。單題且有選項時 UI 直接給按鈕；多選、freeform、batch 需要文字框或多步，仍提示回 Terminal。沒安裝該插件時 `asking` 永遠是 `null`，不會有任何輪被標成等待回答。
 - 歷史：`session_start`（startup／reload／new／resume／fork）都用 `getBranch()` 重建全部已結束的輪。`getBranch()` 是文件指定的重建來源：它保留 compaction 之前的訊息（`buildContextEntries()` 才是給模型的裁剪版），並刻意排除被放棄的分支——那些是替代歷史，不是這段對話。
 - 殭屍：Pi 退出後資料夾會留著；新啟動的 Pi 會掃 `bridge/` 並刪掉 pid 已死（`kill -0` 失敗）的目錄，活著的（含 EPERM 的別使用者）不動。
 - 身分：`meta.json` 帶 `sessionId`／`name`／`cwd`／`pid`。P2 只讀，挑錯也只看到別的 session，UI header 顯示 sessionId 與 cwd。
