@@ -65,25 +65,23 @@ END {
   }
   if (skipped) bail()
 
+  # The status area becomes a slot, not a Mod: which Mods fill it is decided by
+  # their own mod.json declarations (compose-layout.sh). Works the same whether the
+  # Layout had the stock block or the old split row, and leaves a customized one be.
   for (i=1; i<=NR; i++) {
     if (oldSidebarStart && i>=oldSidebarStart && i<=oldSidebarEnd) continue
-
-    if (i==start && isRow) {
-      # We only collapse the known old status row into the original block.
+    if (i==start) {
       pad=indent(lines[start])
       suffix=(lines[stop] ~ /,[ \t]*$/ ? "," : "")
       print pad "{"
       print pad "  \"id\": \"status\","
-      print pad "  \"type\": \"block\","
+      print pad "  \"type\": \"row\","
       print pad "  \"size\": {\"px\": 28},"
-      print pad "  \"content\": {\"mod\": \"project-open\"}"
+      print pad "  \"slot\": \"status-bar\""
       print pad "}" suffix
       i=stop
       continue
     }
-    line=lines[i]
-    if (i>=start && i<=stop && hasWorkspace && line ~ /"mod"[ \t]*:[ \t]*"workspace-status"/)
-      sub(/"workspace-status"/, "\"project-open\"", line)
-    print line
+    print lines[i]
   }
 }

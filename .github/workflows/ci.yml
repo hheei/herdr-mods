@@ -28,7 +28,9 @@ jobs:
           node -e "const f=require('fs'); for(const p of ['mods/project-open/mod.json','mods/agent-ui/mod.json','layouts/herdr-mods.json']) JSON.parse(f.readFileSync(p))"
           sh -n scripts/install.sh
           sh -n scripts/tui.sh
-          awk -f scripts/patch-status.awk layouts/herdr-mods.json > /dev/null
+          sh -n scripts/compose-layout.sh
+          awk -v mods=mods -f scripts/compose-layout.awk layouts/herdr-mods.json > /dev/null
+          awk -f scripts/patch-status.awk layouts/herdr-mods.json > /dev/null || [ $? -eq 3 ]
           awk -v name=probe -f scripts/patch-sidebar.awk layouts/herdr-mods.json > /dev/null
           awk -f scripts/demo-layout.awk layouts/herdr-mods.json > /dev/null
       - name: Behavior and layout tests

@@ -69,13 +69,21 @@ wire_personal() {
   fi
   tmp="$layout_dst.tmp.$$"
   trap 'rm -f "$tmp"' EXIT HUP INT TERM
+  patched=yes
   case "$kind" in
-    status) awk -f "$script_dir/patch-status.awk" "$layout_dst" > "$tmp" 2>/dev/null || patched=no ;;
-    sidebar) awk -v name="$mod" -f "$script_dir/patch-sidebar.awk" "$layout_dst" > "$tmp" 2>/dev/null || patched=no ;;
+    status)
+      awk -f "$script_dir/patch-status.awk" "$layout_dst" > "$tmp" 2>/dev/null || cp "$layout_dst" "$tmp"
+      # The status area is a slot, filled from every Mod's own mod.json. This also
+      # runs when nothing needed patching: a Mod that declares the slot joins on
+      # its own, so adding one never means editing a Layout by hand.
+      HERDR_MODS_MODS_DIR="$home_dir/mods" sh "$script_dir/compose-layout.sh" "$tmp" || patched=no
+      rm -f "$tmp.bak"
+      ;;
+    sidebar) awk -v name="$mod" -f "$script_dir/patch-sidebar.awk" "$layout_dst" > "$tmp" 2>/dev/null || { patched=no; cp "$layout_dst" "$tmp"; } ;;
   esac
-  if [ "${patched:-yes}" = no ] || cmp -s "$layout_dst" "$tmp"; then
+  if cmp -s "$layout_dst" "$tmp"; then
     rm -f "$tmp"
-    [ "${patched:-yes}" = no ] && warn "layout left unchanged; wire $mod by hand (mods/$mod/README.md)"
+    [ "$patched" = yes ] || warn "layout left unchanged; wire $mod by hand (mods/$mod/README.md)"
     return 0
   fi
   if confirm "patch layout $layout"; then

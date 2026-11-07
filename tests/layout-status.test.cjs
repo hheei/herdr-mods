@@ -1,68 +1,102 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const os = require("node:os");
 const { spawnSync } = require("node:child_process");
 
 const root = path.resolve(__dirname, "..");
-const base = fs.readFileSync(path.join(root, "layouts/herdr-mods.json"), "utf8");
+const template = fs.readFileSync(path.join(root, "layouts/herdr-mods.json"), "utf8");
 const awk = path.join(root, "scripts/patch-status.awk");
+const compose = path.join(root, "scripts/compose-layout.sh");
+const mods = path.join(root, "mods");
 
 function patch(source) {
-  const result = spawnSync("awk", ["-f", awk], { input: source, encoding: "utf8" });
-  assert.equal(result.status, 0, result.stderr);
-  return result.stdout;
+  return spawnSync("awk", ["-f", awk], { input: source, encoding: "utf8" });
 }
-function checkStatus(source) {
+function fillSlots(source) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "slot-"));
+  const file = path.join(dir, "layout.json");
+  fs.writeFileSync(file, source);
+  const result = spawnSync("sh", [compose, file], {
+    encoding: "utf8",
+    env: { ...process.env, HERDR_MODS_MODS_DIR: mods },
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const filled = fs.readFileSync(file, "utf8");
+  fs.rmSync(dir, { recursive: true, force: true });
+  return filled;
+}
+function statusOf(source) {
   const json = JSON.parse(source);
-  const work = json.children.find(x => x.id === "work");
-  const status = work.children.find(x => x.id === "status");
-  assert.equal(status.type, "block");
-  assert.equal(status.size.px, 28);
-  assert.equal(status.content.mod, "project-open");
-  assert.equal(status.children, undefined, "no separate status child/slot");
-  const sidebar = json.children.find(x => x.id === "sidebar");
-  assert.equal(sidebar.children.some(x => x.id === "project-open"), false);
+  const work = json.children.find((x) => x.id === "work");
+  return { json, work, status: work.children.find((x) => x.id === "status") };
 }
-const first = patch(base);
-checkStatus(first);
-assert.equal(patch(first), first, "repeating the patch must be idempotent");
+// The Layout the previous installer produced: one block, owned by one Mod.
+function legacy() {
+  const json = JSON.parse(template);
+  const work = json.children.find((x) => x.id === "work");
+  const index = work.children.findIndex((x) => x.id === "status");
+  work.children[index] = {
+    id: "status", type: "block", size: { px: 28 }, content: { mod: "workspace-status" },
+  };
+  return JSON.stringify(json, null, 2) + "\n";
+}
 
-// The previous installer put a compact project-open node just before sidebar-footer.
-const legacy = base.replace(
-  '        {\n          "id": "sidebar-footer",',
-  '        {"id":"project-open","type":"block","size":{"px":38},"content":{"mod":"project-open"}},\n        {\n          "id": "sidebar-footer",'
-);
-assert.notEqual(legacy, base);
-checkStatus(patch(legacy));
+// The status area becomes a slot, and the Mods that declare the slot fill it.
+const patched = patch(legacy());
+assert.equal(patched.status, 0, patched.stderr);
+const slot = statusOf(patched.stdout).status;
+assert.equal(slot.type, "row");
+assert.equal(slot.size.px, 28);
+assert.equal(slot.slot, "status-bar", "the slot is what survives, not a Mod name");
+assert.equal(slot.content, undefined, "no Mod owns the status area any more");
 
-// Preserve any other installed sidebar mods.
-const withOtherMod = legacy.replace(
-  '        {\n          "id": "sidebar-footer",',
-  '        {"id":"another-mod","type":"block","size":{"px":38},"content":{"mod":"another-mod"}},\n        {\n          "id": "sidebar-footer",'
-);
-const migrated = JSON.parse(patch(withOtherMod));
+const filled = fillSlots(patched.stdout);
+const filledStatus = statusOf(filled).status;
+assert.equal(filledStatus.type, "row");
+assert.equal(filledStatus.slot, "status-bar", "the slot stays, so the next install can refill it");
+const ids = filledStatus.children.map((x) => x.content.mod);
+assert.ok(ids.includes("project-open"), "a Mod declaring the slot lands in it");
+assert.equal(filledStatus.children.find((x) => x.content.mod === "project-open").weight, 1,
+  "a Mod without a size takes a share");
 assert.equal(
-  migrated.children.find(x => x.id === "sidebar").children.some(x => x.id === "another-mod"),
-  true
+  filledStatus.children.every((x) => x.id === `status-bar-${x.content.mod}`),
+  true,
+  "block ids come from the slot and the Mod"
 );
+assert.equal(fillSlots(filled), filled, "filling twice changes nothing");
 
-const oldSplit = JSON.parse(base);
-const work = oldSplit.children.find(x => x.id === "work");
-const idx = work.children.findIndex(x => x.id === "status");
-work.children[idx] = {
+// The previous installer's split status row collapses into the same slot.
+const oldSplit = JSON.parse(template);
+const splitWork = oldSplit.children.find((x) => x.id === "work");
+splitWork.children[splitWork.children.findIndex((x) => x.id === "status")] = {
   id: "status", type: "row", size: { px: 28 }, children: [
     { id: "status-original", type: "block", size: { weight: 1 }, content: { mod: "workspace-status" } },
     { id: "project-open", type: "block", size: { px: 32 }, content: { mod: "project-open" } },
   ],
 };
-checkStatus(patch(JSON.stringify(oldSplit, null, 2) + "\n"));
-// A customized status bar is left byte-identical instead of being rewritten.
-const custom = JSON.parse(base);
-const customWork = custom.children.find(x => x.id === "work");
-customWork.children.find(x => x.id === "status").content.mod = "my-own-status";
-const customText = JSON.stringify(custom, null, 2) + "\n";
-const customResult = spawnSync("awk", ["-f", awk], { input: customText, encoding: "utf8" });
-assert.equal(customResult.status, 3, customResult.stderr);
-assert.equal(customResult.stdout, customText, "custom status layout must be untouched");
+const collapsed = patch(JSON.stringify(oldSplit, null, 2) + "\n");
+assert.equal(collapsed.status, 0, collapsed.stderr);
+assert.equal(statusOf(collapsed.stdout).status.slot, "status-bar");
 
-console.log("PASS: single status block, old split-row/sidebar migration, idempotence, other mods, custom layout untouched.");
+// The old sidebar button goes, and other Mods placed in the sidebar stay.
+const withSidebar = legacy().replace(
+  '        {\n          "id": "sidebar-footer",',
+  '        {"id":"project-open","type":"block","size":{"px":38},"content":{"mod":"project-open"}},\n'
+    + '        {"id":"another-mod","type":"block","size":{"px":38},"content":{"mod":"another-mod"}},\n'
+    + '        {\n          "id": "sidebar-footer",'
+);
+const migrated = statusOf(patch(withSidebar).stdout).json;
+assert.equal(migrated.children.find((x) => x.id === "sidebar").children.some((x) => x.id === "project-open"), false,
+  "the old sidebar button is removed");
+assert.equal(migrated.children.find((x) => x.id === "sidebar").children.some((x) => x.id === "another-mod"), true,
+  "other Mods are left alone");
+
+// A status area somebody customized is left byte-identical, and filling finds no slot.
+const custom = legacy().replace('"mod": "workspace-status"', '"mod": "my-own-status"');
+const customResult = patch(custom);
+assert.equal(customResult.status, 3, customResult.stderr);
+assert.equal(customResult.stdout, custom, "custom status layout must be untouched");
+assert.equal(fillSlots(customResult.stdout), custom, "no slot means nothing to fill");
+
+console.log("PASS: status slot, Mod-declared fill, old split-row/sidebar migration, other mods, custom layout untouched.");

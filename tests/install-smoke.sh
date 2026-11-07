@@ -13,6 +13,8 @@ cp "$repo/scripts/tui.sh" "$tmp/repo/scripts/tui.sh"
 cp "$repo/scripts/patch-status.awk" "$tmp/repo/scripts/patch-status.awk"
 cp "$repo/scripts/patch-sidebar.awk" "$tmp/repo/scripts/patch-sidebar.awk"
 cp "$repo/scripts/demo-layout.awk" "$tmp/repo/scripts/demo-layout.awk"
+cp "$repo/scripts/compose-layout.sh" "$tmp/repo/scripts/compose-layout.sh"
+cp "$repo/scripts/compose-layout.awk" "$tmp/repo/scripts/compose-layout.awk"
 cp "$repo/layouts/herdr-mods.json" "$tmp/repo/layouts/herdr-mods.json"
 cp -R "$repo/mods/project-open" "$tmp/repo/mods/"
 mkdir -p "$tmp/repo/mods/pi-mod/bridge"
@@ -43,7 +45,8 @@ install
 [ -f "$HERDR_APP_HOME/backups/another-mod/main.js" ]
 [ "$(find "$HERDR_APP_HOME/mods" -maxdepth 1 -name '*.bak*' | wc -l | tr -d ' ')" -eq 0 ]
 if command -v jq >/dev/null 2>&1; then
-  jq -e '.children[]|select(.id=="work")|.children[]|select(.id=="status")|.type=="block" and .content.mod=="project-open"' "$layout" >/dev/null
+  jq -e '.children[]|select(.id=="work")|.children[]|select(.id=="status")
+    | .type=="row" and .slot=="status-bar" and ([.children[].content.mod]|index("project-open")!=null)' "$layout" >/dev/null
   jq empty "$layout"
 fi
 
@@ -61,7 +64,14 @@ install another-mod
 
 # A customized status bar is left alone; the mods still install.
 mkdir -p "$HERDR_APP_HOME/layouts"
-sed 's/"mod": "workspace-status"/"mod": "my-status"/' "$repo/layouts/herdr-mods.json" > "$layout"
+node -e '
+const fs = require("node:fs");
+const json = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+const work = json.children.find((node) => node.id === "work");
+const index = work.children.findIndex((node) => node.id === "status");
+work.children[index] = { id: "status", type: "block", size: { px: 28 }, content: { mod: "my-status" } };
+fs.writeFileSync(process.argv[2], JSON.stringify(json, null, 2) + "\n");
+' "$repo/layouts/herdr-mods.json" "$layout"
 install
 grep -q '"mod": "my-status"' "$layout"
 [ "$(grep -c '"mod": "project-open"' "$layout")" -eq 0 ]

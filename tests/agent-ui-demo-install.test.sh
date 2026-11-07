@@ -16,7 +16,7 @@ sh "$root/scripts/install.sh" agent-ui project-open >/dev/null
 [ -f "$HERDR_APP_HOME/mods/agent-ui/main.js" ]
 [ -f "$HERDR_APP_HOME/mods/agent-ui/model.js" ]
 [ -f "$HERDR_APP_HOME/mods/agent-ui/fixtures.js" ]
-[ -f "$HERDR_APP_HOME/mods/agent-ui.bak/OLD" ]
+[ -f "$HERDR_APP_HOME/backups/agent-ui/OLD" ]
 [ -f "$HERDR_APP_HOME/mods/project-open/agent-ui.svg" ]
 [ -f "$HERDR_APP_HOME/layouts/agent-ui-demo.json" ]
 [ ! -d "$HERDR_APP_HOME/mods/agent-ui-v2" ]
@@ -34,14 +34,16 @@ assert.equal(stack.type, "stack");
 assert.equal(stack.active, "agent-ui-demo-terminal");
 assert.equal(stack.children.find(x => x.id === "agent-ui-demo-ui").content.mod, "agent-ui");
 assert.equal(stack.children.find(x => x.id === "agent-ui-demo-terminal").content.tab, "active");
-assert.equal(work.children.find(x => x.id === "status").content.mod, "project-open");
+const status = work.children.find(x => x.id === "status");
+assert.equal(status.slot, "status-bar", "the demo Layout keeps the status slot");
+assert.equal(status.children.some(x => x.content.mod === "project-open"), true);
 NODE
 
 printf '{"id":"custom-demo"}\n' > "$HERDR_APP_HOME/layouts/agent-ui-demo.json"
 sh "$root/scripts/install.sh" agent-ui project-open >/dev/null
 grep -q custom-demo "$HERDR_APP_HOME/layouts/agent-ui-demo.json.bak"
 [ "$(find "$HERDR_APP_HOME/layouts" -name 'agent-ui-demo.json.bak*' | wc -l | tr -d ' ')" -eq 1 ]
-[ "$(find "$HERDR_APP_HOME/mods" -maxdepth 1 -name 'agent-ui.bak*' | wc -l | tr -d ' ')" -eq 1 ]
+[ "$(find "$HERDR_APP_HOME/mods" -maxdepth 1 -name 'agent-ui.bak*' | wc -l | tr -d ' ')" -eq 0 ]
 grep -q untouched-personal-layout "$HERDR_APP_HOME/layouts/personal.json"
 
 # Customized work-body must not be guessed/replaced.
