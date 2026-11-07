@@ -21,6 +21,8 @@ herdr-mods：Herdr App 的 Mod 合集（hheei-status、hheei-tabs、agent-ui、a
 
 两边的源码就放在 `vendor/herdr-core/`、`vendor/herdr-app/`（`git clone --recurse-submodules`，**不进仓库**，只在本地参考）。想确认某个 API 是否存在、某个字段到底什么意思，先读这两个目录，别猜；更新用 `git -C vendor/<name> pull`。
 
+怎么在这两个仓库里找东西，看 `.agents/skills/herdr-source-index/SKILL.md`：按「文件 + 符号名」索引到具体实现（host API 在 `mods.rs` 的 `.function(...)`、动作与参数在 `commands.rs` 的 `COMMANDS`、终端写入在 core 的 `input.rs`）。
+
 ## 现在是什么阶段
 
 开发中，实际上只有作者一人在用。**不写兼容代码。**
