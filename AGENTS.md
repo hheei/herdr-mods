@@ -19,6 +19,8 @@ herdr-mods：Herdr App 的 Mod 合集（hheei-status、hheei-tabs、agent-ui、a
 - 终端地址是精确的：hc 启动的每个终端带 `HC_TERMINAL_ID`，进程里读 `process.env.HC_TERMINAL_ID` 就是自己的地址（本机 `pi` 进程实测有此变量）；`hc get <addr> --json` 还能反向拿 `foreground.pid`。
 - 文档里的命令名也别混：`herdr-app do <action>` 是 app 侧动作（要求 app 在运行），`hc ...` 是 core，`herdr ...` 是旧那套。
 
+两边的源码就放在 `vendor/herdr-core/`、`vendor/herdr-app/`（`git clone --recurse-submodules`，**不进仓库**，只在本地参考）。想确认某个 API 是否存在、某个字段到底什么意思，先读这两个目录，别猜；更新用 `git -C vendor/<name> pull`。
+
 ## 现在是什么阶段
 
 开发中，实际上只有作者一人在用。**不写兼容代码。**
