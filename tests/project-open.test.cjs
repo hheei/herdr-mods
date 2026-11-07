@@ -155,7 +155,9 @@ async function main() {
   switcher.handlers.on_click(null, cx);
   const opened = calls.find((x) => x[0] === "overlay" && x[1].mod === "agent-ui");
   assert.ok(opened, "the button opens the Agent UI as an overlay");
-  assert.equal(opened[1].kind, "window", "a window over the pane, not a dialog");
+  assert.equal(opened[1].kind, "dialog", "a dialog dims what is behind it");
+  assert.equal(opened[1].modal, true, "a click beside it must not close the Agent UI");
+  assert.equal(opened[1].frame, "none", "the Mod draws its own frame");
   assert.equal(opened[1].width, 0.62);
   assert.equal(preferences["project-open.agent-ui-overlay"], "overlay-1");
   assert.equal(calls.some((x) => x[0] === "run" && x[1] === "layout.select"), false,
@@ -184,7 +186,7 @@ async function main() {
     assert.match(svg, /height="\d+"/, `${file} needs a height`);
     assert.match(svg, /currentColor/, `${file} must take its colour from the theme`);
   }
-  console.log("PASS: default click; popup; preference+icon; local opener; remote guard; remote VS Code; Agent UI window.");
+  console.log("PASS: default click; popup; preference+icon; local opener; remote guard; remote VS Code; Agent UI dialog.");
 }
 
 main().catch((err) => { console.error(err); process.exitCode = 1; });

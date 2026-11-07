@@ -15,10 +15,11 @@ const ICON = {
 };
 
 // The Agent UI is a view of what an agent is doing in the focused pane, so the
-// Status Bar offers it only while such a pane is focused, and shows it as a window
-// over that pane. Herdr has no way to swap a pane's terminal for a mod in place
+// Status Bar offers it only while such a pane is focused, and shows it over that
+// pane: a dialog, which dims what is behind it, rather than a window, which by
+// design does not. Herdr has no way to swap a pane's terminal for a mod in place
 // (`pane.split {mod}` makes a new pane), and a Layout's Stack would tie the button
-// to one layout, so this stays a window: no layout is touched, no PTY is replaced.
+// to one layout, so no layout is touched and no PTY is replaced.
 const UI_OVERLAY_KEY = "project-open.agent-ui-overlay";
 function agentPane() {
   return agents().find((agent) => agent.focused) ?? null;
@@ -136,7 +137,7 @@ export default class ProjectOpen extends View {
           }
           if (!agentPane()) return;
           setShared(UI_OVERLAY_KEY, openOverlay({
-            mod: "agent-ui", kind: "window", key: "agent-ui-view",
+            mod: "agent-ui", kind: "dialog", modal: true, frame: "none",
             width: 0.62, height: 0.8,
           }));
         })
