@@ -42,6 +42,13 @@ for mod in $mods; do
   src="$repo_dir/mods/$mod"
   [ -f "$src/main.js" ] || { printf '  %s✗%s unknown mod: %s\n' "$bad" "$off" "$mod" >&2; exit 1; }
   dst="$home_dir/mods/$mod"
+  # layout.json is the user's answer to "does this Mod belong in the bar": keep the
+  # one already there instead of overwriting it with this checkout's default.
+  keep=""
+  if [ -f "$dst/layout.json" ]; then
+    keep="$(dirname -- "$src")/.layout.$$.json"
+    cp "$dst/layout.json" "$keep"
+  fi
   if [ -e "$dst" ]; then
     verb=updated
     mkdir -p "$backup_dir"
@@ -51,6 +58,10 @@ for mod in $mods; do
     verb=installed
   fi
   cp -R "$src" "$dst"
+  if [ -n "$keep" ]; then
+    cp "$keep" "$dst/layout.json"
+    rm -f "$keep"
+  fi
   step "mod $verb ${dim}→ $dst${off}"
 done
 install_kind() {
@@ -82,8 +93,7 @@ wire_personal() {
       # Which Mods sit in the bar is each Mod's own layout.json decision, so this
       # runs even when nothing needed patching: a Mod that asks for the bar joins
       # on its own, and adding one never means editing a Layout by hand.
-      awk -v mods="$home_dir/mods" -v config="$home_dir/herdr-mods.config.json" \
-        -f "$script_dir/compose-layout.awk" "$tmp" > "$tmp.slot" || patched=no
+      awk -v mods="$home_dir/mods" -f "$script_dir/compose-layout.awk" "$tmp" > "$tmp.slot" || patched=no
       mv "$tmp.slot" "$tmp"
       ;;
     sidebar) awk -v name="$mod" -f "$script_dir/patch-sidebar.awk" "$layout_dst" > "$tmp" 2>/dev/null || { patched=no; cp "$layout_dst" "$tmp"; } ;;

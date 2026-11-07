@@ -59,13 +59,7 @@ Any Mod can sit in the Status Bar next to these, whoever wrote it: put a `layout
 
 and the next run adds it — appended in `order`, never touching what is already in the row, and never writing to somebody else's `mod.json`. `size` is optional (no `size` takes a share), `props` is passed to the Mod as its props.
 
-To keep one out while leaving it installed, name it in `~/.config/herdr-app/herdr-mods.config.json`:
-
-~~~json
-{ "exclude": ["project-open"] }
-~~~
-
-A Mod you exclude is never added. Excluding does not delete a block that is already there — remove that line from the layout once, and it stays removed.
+To keep one out, edit that Mod's own `layout.json` in `~/.config/herdr-app/mods/<mod>/` and drop its `status-bar` key: it stops asking to be in the bar. The installer keeps the `layout.json` already installed rather than overwriting it with the checkout's default, so your answer survives reinstalls. It does not remove a block that is already in the row — delete that line from the layout once.
 
 ### Update
 

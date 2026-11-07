@@ -63,6 +63,16 @@ install another-mod
 [ ! -e "$HERDR_APP_HOME/mods/project-open" ]
 [ -f "$layout" ]
 
+# layout.json is the user's call: what they edited survives a reinstall, so taking a
+# Mod out of the bar sticks instead of coming back with the checkout's default.
+install project-open
+printf '%s\n' '{ "status-bar": { "order": 99 } }' > "$HERDR_APP_HOME/mods/project-open/layout.json"
+install project-open
+[ "$(cat "$HERDR_APP_HOME/mods/project-open/layout.json")" = '{ "status-bar": { "order": 99 } }' ]
+printf '%s\n' '{ }' > "$HERDR_APP_HOME/mods/project-open/layout.json"
+install project-open
+[ "$(cat "$HERDR_APP_HOME/mods/project-open/layout.json")" = '{ }' ]
+
 # A customized status bar is left alone; the mods still install.
 mkdir -p "$HERDR_APP_HOME/layouts"
 node -e '
