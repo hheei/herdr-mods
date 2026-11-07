@@ -63,7 +63,9 @@ To keep one out, edit that Mod's own `layout.json` in `~/.config/herdr-app/mods/
 
 ### Update
 
-The same command, no flags: every Mod in `~/.config/herdr-app/mods/` is replaced from `main` (the old copy goes to `~/.config/herdr-app/backups/<mod>/`), and a layout is only touched when it actually changes. A Mod you removed stays removed, and one we added later does not appear on its own — say `--all` or name it.
+The same command, no flags. A Mod whose files already match is reported as `unchanged` and left alone; only what actually differs is replaced from `main`, with the previous copy going to `~/.config/herdr-app/backups/<mod>/`. Before anything is written it asks once — `? apply N change(s) [Y/n]` — and `--yes` answers that up front for scripts. A non-interactive run (piped, CI) answers yes on its own. `--no-layout` takes the Mods without the Layout wiring.
+
+A Mod you removed stays removed, and one we added later does not appear on its own — say `--all` or name it.
 
 ~~~sh
 curl -fsSL https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/install.sh | sh

@@ -12,6 +12,7 @@ app_home() { printf '%s\n' "${HERDR_APP_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/
 step() { printf '  %s✓%s %s\n' "$good" "$off" "$*"; }
 warn() { printf '  %s!%s %s\n' "$hot" "$off" "$*" >&2; }
 confirm() {
+  [ "${assume_yes:-no}" = yes ] && return 0
   [ "$interactive" = yes ] || return 0
   printf '  %s?%s %s [Y/n] ' "$hot" "$off" "$1"
   answer=''

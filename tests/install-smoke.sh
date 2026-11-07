@@ -60,12 +60,14 @@ grep -q refreshed "$HERDR_APP_HOME/mods/project-open/main.js"
 
 # Re-running is idempotent: one backup per asset, and no backup in mods/, where
 # Herdr would read it as a Mod.
+out=$(sh "$tmp/repo/scripts/install.sh" 2>&1)
+case "$out" in *"mod updated"*) echo "FAIL: second run reported an update"; exit 1 ;; esac
+case "$out" in *"mod unchanged"*) ;; *) echo "FAIL: second run did not report unchanged"; exit 1 ;; esac
 install
 [ "$(grep -c '"mod": "project-open"' "$layout")" -eq 1 ]
 [ "$(grep -c '"id":"another-mod"' "$layout")" -eq 1 ]
 [ "$(find "$HERDR_APP_HOME/layouts" -maxdepth 1 -name 'herdr-mods.json.bak*' | wc -l | tr -d ' ')" -eq 1 ]
 [ -f "$HERDR_APP_HOME/backups/project-open/main.js" ]
-[ -f "$HERDR_APP_HOME/backups/another-mod/main.js" ]
 [ "$(find "$HERDR_APP_HOME/mods" -maxdepth 1 -name '*.bak*' | wc -l | tr -d ' ')" -eq 0 ]
 if command -v jq >/dev/null 2>&1; then
   jq -e '.children[]|select(.id=="work")|.children[]|select(.id=="status")
@@ -75,8 +77,7 @@ fi
 
 # Re-running the extension is one update with one backup, not a second copy.
 install
-[ "$(find "$tmp/pihome/extensions" -maxdepth 1 -name 'herdr-agent-ui.js*' | wc -l | tr -d ' ')" -eq 2 ]
-[ -f "$tmp/pihome/extensions/herdr-agent-ui.js.bak" ]
+[ "$(find "$tmp/pihome/extensions" -maxdepth 1 -name 'herdr-agent-ui.js*' | wc -l | tr -d ' ')" -eq 1 ]
 
 # A single mod installs only that mod.
 rm -rf "$HERDR_APP_HOME/mods" "$HERDR_APP_HOME/layouts"
@@ -137,4 +138,4 @@ HERDR_APP_HOME="$tmp/pipehome" HERDR_MODS_ARCHIVE_URL="file://$tmp/src.tgz" \
 [ -f "$tmp/pipehome/mods/project-open/main.js" ]
 [ -f "$tmp/pipehome/layouts/herdr-mods.json" ]
 
-echo "PASS: refresh default, --all, named scope, declared wiring, idempotence, one .bak each, customized status untouched, no-layout, env fallback, piped one-liner."
+echo "PASS: refresh default, --all, named scope, declared wiring, unchanged is not rewritten, customized status untouched, no-layout, env fallback, piped one-liner."

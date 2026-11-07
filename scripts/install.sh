@@ -2,17 +2,19 @@
 # Install, refresh or scope Herdr mods. Each mod declares its own layout wiring in
 # layout.json ("status-bar" | "sidebar" | "derive": "<layout>" | "pi": "<file>"), so this script
 # only applies the wiring shapes it knows and no mod by name.
-# Checkout: sh scripts/install.sh [mod...] [--all] [--no-layout]
+# Checkout: sh scripts/install.sh [mod...] [--all] [--no-layout] [--yes]
 # Piped:    curl -fsSL .../install.sh | sh -s -- --all
 set -eu
 no_layout=no
 install_all=no
+assume_yes=no
 named=''
 for arg do
   case "$arg" in
     --all) install_all=yes ;;
     --no-layout) no_layout=yes ;;
-    -h|--help) echo 'usage: install.sh [mod...] [--all] [--no-layout]'; exit 0 ;;
+    -y|--yes) assume_yes=yes ;;
+    -h|--help) echo 'usage: install.sh [mod...] [--all] [--no-layout] [--yes]'; exit 0 ;;
     -*) echo "install: unknown option: $arg" >&2; exit 2 ;;
     *) named="$named $arg" ;;
   esac
@@ -58,34 +60,24 @@ mkdir -p "$home_dir/mods"
 # replaced mods go to backups/ instead. Layout .bak files stay beside the layout
 # they replace: Herdr only reads *.json there.
 backup_dir="$home_dir/backups"
-for mod in $mods; do
-  src="$repo_dir/mods/$mod"
-  [ -f "$src/main.js" ] || { printf '  %s✗%s unknown mod: %s\n' "$bad" "$off" "$mod" >&2; exit 1; }
-  dst="$home_dir/mods/$mod"
-  # layout.json is the user's answer to "does this Mod belong in the bar": keep the
-  # one already there instead of overwriting it with this checkout's default.
-  keep=""
-  if [ -f "$dst/layout.json" ]; then
-    keep="$(dirname -- "$src")/.layout.$$.json"
-    cp "$dst/layout.json" "$keep"
-  fi
-  if [ -e "$dst" ]; then
-    verb=updated
-    mkdir -p "$backup_dir"
-    rm -rf "$backup_dir/$mod"
-    mv "$dst" "$backup_dir/$mod"
-  else
-    verb=installed
-  fi
-  cp -R "$src" "$dst"
-  if [ -n "$keep" ]; then
-    cp "$keep" "$dst/layout.json"
-    rm -f "$keep"
-  fi
-  step "mod $verb ${dim}→ $dst${off}"
-done
+# layout.json is the user's answer to "does this Mod belong in the bar": whatever is
+# installed stays, instead of being overwritten with this checkout's default. Only
+# the rest of the folder is compared, so that answer is not mistaken for a change.
+layout_kept=""
+grab_layout() {
+  layout_kept=""
+  [ -f "$1/layout.json" ] || return 0
+  layout_kept="$(mktemp "${TMPDIR:-/tmp}/herdr-mods-layout.XXXXXX")"
+  cp "$1/layout.json" "$layout_kept"
+}
+restore_layout() {
+  [ -z "$layout_kept" ] || { cp "$layout_kept" "$1/layout.json"; rm -f "$layout_kept"; }
+}
 install_kind() {
+  # The installed layout.json wins, because that is the user's answer to what this
+  # Mod wires; before the first install there is only this checkout's copy.
   decl="$home_dir/mods/$1/layout.json"
+  [ -f "$decl" ] || decl="$repo_dir/mods/$1/layout.json"
   [ -f "$decl" ] || return 0
   grep -q '"status-bar"' "$decl" && printf 'status '
   grep -q '"sidebar"' "$decl" && printf 'sidebar '
@@ -93,6 +85,62 @@ install_kind() {
   sed -n 's/.*"pi"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/pi:\1/p' "$decl"
   return 0
 }
+mods_todo=''
+for mod in $mods; do
+  src="$repo_dir/mods/$mod"
+  [ -f "$src/main.js" ] || { printf '  %s✗%s unknown mod: %s\n' "$bad" "$off" "$mod" >&2; exit 1; }
+  dst="$home_dir/mods/$mod"
+  if [ -e "$dst" ] && diff -r -q -x layout.json "$src" "$dst" >/dev/null 2>&1; then
+    step "mod unchanged ${dim}→ $dst${off}"
+  else
+    mods_todo="$mods_todo $mod"
+  fi
+done
+# Extensions are compared byte for byte: a re-run after an upstream change is a
+# change, a re-run with nothing new is not.
+pi_todo=''
+for mod in $mods; do
+  for kind in $(install_kind "$mod"); do
+    case "$kind" in
+      pi:*)
+        file="${kind#pi:}"
+        src="$repo_dir/mods/$mod/bridge/$file"
+        dst="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/extensions/$file"
+        if [ -e "$dst" ] && cmp -s "$src" "$dst"; then
+          step "extension unchanged ${dim}→ $dst${off}"
+        else
+          pi_todo="$pi_todo $mod:$file"
+        fi
+        ;;
+    esac
+  done
+done
+changes=$(printf '%s %s' "$mods_todo" "$pi_todo" | wc -w | tr -d ' ')
+if [ "$changes" -gt 0 ]; then
+  if ! confirm "apply $changes change(s)"; then
+    warn "nothing changed; ${changes} pending (--yes to skip this prompt)"
+    exit 0
+  fi
+  # Already said yes to this run: the layout follows without a second prompt, and
+  # --no-layout is how you take the Mods without the wiring.
+  assume_yes=yes
+fi
+for mod in $mods_todo; do
+  src="$repo_dir/mods/$mod"
+  dst="$home_dir/mods/$mod"
+  if [ -e "$dst" ]; then
+    verb=updated
+    mkdir -p "$backup_dir"
+    rm -rf "$backup_dir/$mod"
+    grab_layout "$dst" "$src"
+    mv "$dst" "$backup_dir/$mod"
+  else
+    verb=installed
+  fi
+  cp -R "$src" "$dst"
+  restore_layout "$dst"
+  step "mod $verb ${dim}→ $dst${off}"
+done
 wire_personal() {
   mod=$1 kind=$2
   mkdir -p "$home_dir/layouts"
@@ -142,6 +190,11 @@ wire_derive() {
   tmp="$target.tmp.$$"
   trap 'rm -f "$tmp"' EXIT HUP INT TERM
   if awk -v prefix="$name" -v mod="$mod" -f "$script_dir/demo-layout.awk" "$base" > "$tmp"; then
+    if cmp -s "$target" "$tmp"; then
+      rm -f "$tmp"
+      step "layout $name unchanged ${dim}→ $target${off}"
+      return 0
+    fi
     keep_bak "$target"
     mv "$tmp" "$target"
     step "layout $name ${dim}→ $target${off}"
@@ -165,12 +218,8 @@ wire_pi() {
   cp "$src" "$dst"
   step "extension $verb ${dim}→ $dst${off}"
 }
-for mod in $mods; do
-  for kind in $(install_kind "$mod"); do
-    case "$kind" in
-      pi:*) wire_pi "$mod" "${kind#pi:}" ;;
-    esac
-  done
+for item in $pi_todo; do
+  wire_pi "${item%%:*}" "${item#*:}"
 done
 if [ "$no_layout" = yes ]; then
   warn "layout untouched (--no-layout); wire the mods by hand"
