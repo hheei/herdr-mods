@@ -2,6 +2,23 @@
 
 herdr-mods：Herdr App 的 Mod 合集（hheei-status、hheei-tabs、agent-ui、agent-manager）。
 
+## 三个命令，两套东西，别搞混
+
+| 命令 / 程序 | 是什么 | 仓库 |
+|---|---|---|
+| `herdr` | **旧的**终端多路复用器 CLI（本机 0.9.5）。TUI，一套独立产品，**和下面两个没有任何关系**，本仓库不针对它开发 | <https://github.com/herdrdev/herdr> |
+| `hc`（`herdr-core`） | **服务端**（本机 0.1.18）。真正跑每个终端和 agent 的那个进程，`hc` 是它的 CLI | <https://github.com/herdrdev/herdr-core> |
+| `herdr-app`（`herdr-gpui`） | **新的桌面程序**（GPUI）。core 的前端，通过 socket 控制 core；本仓库的 Mod 跑在它里面 | <https://github.com/herdrdev/herdr-app> |
+
+`herdr-core` + `herdr-app` 是**同一套**：app 负责“你看到什么”（layout、mod、窗口），core 负责“跑什么”（终端、PTY、agent）。老的 `herdr` CLI 是前一代产品，跟这套没有任何代码或协议关系 —— 文档里看到 `herdr` 和 `herdr-app` 混着写，先问一句是哪个。
+
+由此带来的分工，直接影响能做什么：
+
+- **改界面**走 app 侧：Mod + `layout.json` + host API（`props`、`layout()`、`run("layout.select")`、`openOverlay` …）。
+- **往终端里写字**只能走 core 侧：app 的 host API 里没有任何写入接口（`run()` 的 `terminal.*` 只有 `open/kill/keep/park/peek/show/copy/paste/right_click/scroll`，而 `terminal.paste` 粘的是系统剪贴板，Mod 没有写剪贴板的 API）。要发就得 `exec("hc", ["send", "<addr>", text])` / `["keys", "<addr>", "enter"]`。
+- 终端地址是精确的：hc 启动的每个终端带 `HC_TERMINAL_ID`，进程里读 `process.env.HC_TERMINAL_ID` 就是自己的地址（本机 `pi` 进程实测有此变量）；`hc get <addr> --json` 还能反向拿 `foreground.pid`。
+- 文档里的命令名也别混：`herdr-app do <action>` 是 app 侧动作（要求 app 在运行），`hc ...` 是 core，`herdr ...` 是旧那套。
+
 ## 现在是什么阶段
 
 开发中，实际上只有作者一人在用。**不写兼容代码。**
