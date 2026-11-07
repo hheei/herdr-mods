@@ -1,0 +1,40 @@
+# AGENTS.md
+
+herdr-mods：Herdr App 的 Mod 合集（project-open、agent-ui、agent-manager、hheei-tabs）。
+
+## 现在是什么阶段
+
+开发中，实际上只有作者一人在用。**不写兼容代码。**
+
+- 不写迁移分支：旧 Mod 名、旧 Layout 结构、旧状态文件，一律不管。要换就直接换掉，重装或删了重来。
+- 不留 `legacy` / `old` / `backward compat` 这类分支和注释；该删的代码直接删。
+- 等真有第二个人装着旧版要升级时，再照真实数据写兼容 —— 不按猜想写。
+
+## Herdr 的硬规矩
+
+Herdr 自带的 Layout 和 Mod 是只读的：每次启动原样覆盖，改过的会被挪成 `<name>-edited`。
+所以改内置东西的唯一办法是**克隆成自己的名字**，再让 Layout 的 `content.mod` 指过去：
+
+```sh
+herdr-app do mod.clone '{"name":"tabs","as":"hheei-tabs"}'
+```
+
+`hheei-tabs` 就是这么来的：内置 `tabs` + 一个 panel 按钮。上游更新时 diff 手动合。
+
+## 仓库约定
+
+- `mod.json` 只放 Herdr 自己的契约（`place`、`size`、`title`、`overlay`）。installer 私有的声明放同目录的 `layout.json`，例如 `{ "status-bar": {...} }`、`{ "tabs": true }`、`{ "panel": true }`。
+- installer 对 Layout 只做两件事：**追加节点、改名**。幂等到字节级；找不到对应节点就原样吐出并说明原因，绝不重排或重写别人的布局。
+- 一个 Mod 只干自己的事：`agent-manager` 不知道 tab 栏长什么样，`hheei-tabs` 里那一个按钮是硬编码的例外，别的 Mod 要按钮就去克隆自己的 tab 栏。
+
+## 测试
+
+`tests/*.test.cjs` 是单文件 assert 脚本，没有框架；`tests/*.test.sh` 跑端到端安装。
+改了 installer 或 `scripts/*.awk`，就同时跑：
+
+```sh
+node tests/agent-manager-panel.test.cjs
+sh tests/install-smoke.sh
+```
+
+"ok 但没断言" 不算测试。新逻辑至少留一条能跑的检查。

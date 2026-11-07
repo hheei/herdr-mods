@@ -6,10 +6,10 @@
 
 ```sh
 cp ~/.config/herdr-app/layouts/herdr-mods.json ~/.config/herdr-app/layouts/herdr-agent-manager.json
-sh scripts/install.sh agent-manager tabs-agent-manager --layout=herdr-agent-manager
+sh scripts/install.sh agent-manager hheei-tabs --layout=herdr-agent-manager
 ```
 
-这条命令装两个 Mod，并按各自的 `layout.json` 改**指定的个人布局**：`{"tabs": true}` 把 `tabs` 换成保持 Herdr 原有行为的 `tabs-agent-manager`，`{"panel": true}` 把面板块追加到 `panel-body`（旧的根级常驻侧栏一并移入）。先 `cp` 一份是为了留住原布局 —— 不指定 `--layout` 时改的是 `herdr-mods.json` 本身。顶部 Files／Changes 旁会出现 **Manager** 按钮；点击显示或收起共用的右侧面板，并像原有面板一样按 Workspace 记住状态。已有其他布局组件保持不变；重复执行不产生额外改动。不修改 Herdr 内置的只读 `tabs` Mod；Herdr 内置 Tabs 更新时需同步审查这份派生版本。建议基于 `herdr-mods.json` 另存 `herdr-agent-manager.json`，保留原布局。切至该布局，选一个指向 Linux 的 Workspace，点击 **Refresh**。Project 优先使用 Workspace 的 `folder`；若为空，使用同一 Workspace 内当前聚焦终端的绝对 `cwd`。目标目录须在远端存在且不能是 home 或软链；缺少 Skill 目录或 MCP 文件时，首次启用对应资源才创建。Skills 与 MCP 列表独立滚动。Skills 主列表只显示远端资源库已有项；Mac 独有与远端 Agent 独有项进入底部 **Import** 弹窗。主列表的 Skill 左侧双端都有时显示同步图标，仅远端有时显示下载图标；点击可逐项同步。双端内容不同会打开冲突弹窗，必须明确选择 **Mac → 远端** 或 **远端 → Mac**，覆盖前保留旧版备份。Import 将 Mac 独有项上传至远端；远端 Agent 独有项先复制进远端 `~/.cc-switch/skills/` 再下载至 Mac；遇到同名已有项会拒绝覆盖，不改动 Agent 原文件，也不在 CC Switch 数据库登记 Skill。双向资源库同步仅改变两端的 `~/.cc-switch/skills/` 文件，**不启用任何 Agent**。Project Skills 四列分别部署到下表目录；Global Skills 和 MCP 保持各 Agent 独立。已运行的 Agent 通常需新会话或重新加载项目。
+这条命令装两个 Mod，并按各自的 `layout.json` 改**指定的个人布局**：`{"tabs": true}` 把只读的内置 `tabs` 换成 `hheei-tabs`（保持原有行为，只多一个 **Manager** 按钮），`{"panel": true}` 把面板块追加到 `panel-body` 末尾。两者都只追加或改名，别的节点一律不动。先 `cp` 一份是为了留住原布局 —— 不指定 `--layout` 时改的是 `herdr-mods.json` 本身。顶部 Files／Changes 旁会出现 **Manager** 按钮；点击显示或收起共用的右侧面板，并像原有面板一样按 Workspace 记住状态。已有其他布局组件保持不变；重复执行不产生额外改动。不修改 Herdr 内置的只读 `tabs` Mod；Herdr 内置 Tabs 更新时需同步审查这份派生版本。建议基于 `herdr-mods.json` 另存 `herdr-agent-manager.json`，保留原布局。切至该布局，选一个指向 Linux 的 Workspace，点击 **Refresh**。Project 优先使用 Workspace 的 `folder`；若为空，使用同一 Workspace 内当前聚焦终端的绝对 `cwd`。目标目录须在远端存在且不能是 home 或软链；缺少 Skill 目录或 MCP 文件时，首次启用对应资源才创建。Skills 与 MCP 列表独立滚动。Skills 主列表只显示远端资源库已有项；Mac 独有与远端 Agent 独有项进入底部 **Import** 弹窗。主列表的 Skill 左侧双端都有时显示同步图标，仅远端有时显示下载图标；点击可逐项同步。双端内容不同会打开冲突弹窗，必须明确选择 **Mac → 远端** 或 **远端 → Mac**，覆盖前保留旧版备份。Import 将 Mac 独有项上传至远端；远端 Agent 独有项先复制进远端 `~/.cc-switch/skills/` 再下载至 Mac；遇到同名已有项会拒绝覆盖，不改动 Agent 原文件，也不在 CC Switch 数据库登记 Skill。双向资源库同步仅改变两端的 `~/.cc-switch/skills/` 文件，**不启用任何 Agent**。Project Skills 四列分别部署到下表目录；Global Skills 和 MCP 保持各 Agent 独立。已运行的 Agent 通常需新会话或重新加载项目。
 
 | Agent | Project Skill | Project MCP | Global Skill | Global MCP |
 | --- | --- | --- | --- | --- |

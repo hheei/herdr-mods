@@ -1,5 +1,9 @@
-// Derived from Herdr's built-in tabs mod (Apache-2.0); adds the Manager panel button.
-// ponytail: Keep this clone until Herdr supports registering panel buttons.
+// Herdr's built-in tabs mod (Apache-2.0), cloned: this collection's tab bar.
+// A shipped Mod is read-only -- Herdr replaces mods/tabs/ whole on start -- so a
+// change has to live under its own name, and the Layout points here instead.
+// ponytail: Keep this clone until Herdr lets a Mod register its own panel button;
+// the one button below is hardcoded on purpose -- another Mod's button belongs in
+// that Mod author's own clone, not here.
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { spaces, panes, run, openOverlay, theme, window, shared, layout, settings } from "herdr";
@@ -98,6 +102,7 @@ export default class Tabs extends View {
       .child(button("tab-new", "+", () => openOverlay({ mod: "new-menu", kind: "popup", width: 250, height: 512 })))
       .when(enabled.includes("files"), el => el.child(panelButton("files", "Files", "mods/files/file.svg")))
       .when(enabled.includes("changes"), el => el.child(panelButton("changes", "Changes", "mods/changes/changes.svg")))
+      // The only local addition: one button, for this collection's panel.
       .child(panelButton("agent-manager", "Manager", "mods/workspace-chrome/layers.svg"))
       .when(w?.buttons, el => el.child(button("minimize", w.platform === "windows" ? svg("mods/tabs/win-min.svg").size(16) : "−", () => run("window.minimize")))
         .child(button("maximize", w.platform === "windows" ? svg(`mods/tabs/${w.maximized ? "win-restore" : "win-max"}.svg`).size(16) : "□", () => run("window.maximize")))

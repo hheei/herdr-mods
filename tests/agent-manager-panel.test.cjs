@@ -8,17 +8,13 @@ const get = (node, id) => node?.children?.find((item) => item.id === id);
 const patch = (script, text) => spawnSync("awk", ["-f", path.join(root, "scripts", script)],
   { input: text, encoding: "utf8" }).stdout;
 
-// The panel block is appended to panel-body and never reordered; a copy parked at
-// the Layout root -- the old always-on sidebar -- moves in with it.
+// The panel block is appended to panel-body and never reordered.
 const template = fs.readFileSync(path.join(root, "layouts/herdr-mods.json"), "utf8");
-const planted = JSON.parse(template);
-planted.children.push({ id: "agent-manager", type: "block", size: { px: 320 }, content: { mod: "agent-manager" } });
-const patched = patch("patch-panel.awk", JSON.stringify(planted, null, 2) + "\n");
+const patched = patch("patch-panel.awk", template);
 const changed = JSON.parse(patched);
 const work = get(changed, "work");
 const panel = get(get(work, "work-body"), "panel");
 const body = get(panel, "panel-body");
-assert.equal(get(changed, "agent-manager"), undefined, "remove the permanent root sidebar");
 assert.deepEqual(body.children.map((item) => item.id), ["files", "changes", "agent-manager"]);
 assert.equal(body.children[0].content.mod, "files", "the Files block is left exactly as it was");
 assert.equal(panel.hidden, true, "panel starts closed, opens only on click");
@@ -26,7 +22,7 @@ assert.equal(patch("patch-panel.awk", patched), patched, "a second pass changes 
 
 // The tab bar is renamed in the Layout, since Herdr re-owns mods/tabs/ on start.
 const retabbed = patch("patch-tabs.awk", patched);
-assert.equal(get(get(JSON.parse(retabbed), "work"), "tabs").content.mod, "tabs-agent-manager");
+assert.equal(get(get(JSON.parse(retabbed), "work"), "tabs").content.mod, "hheei-tabs");
 assert.equal(patch("patch-tabs.awk", retabbed), retabbed, "the tabs patch is idempotent");
 
 // A Layout without a panel belongs to its owner: printed back byte for byte.
@@ -66,7 +62,7 @@ assert.equal(patch("patch-panel.awk", bare), bare);
       if (name === "layout.hide") panel.hidden = true;
     },
   };
-  const source = fs.readFileSync(path.join(root, "mods/tabs-agent-manager/main.js"), "utf8")
+  const source = fs.readFileSync(path.join(root, "mods/hheei-tabs/main.js"), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export default class Tabs", "class Tabs");
   vm.runInNewContext(source + "\nthis.Tabs=Tabs;", box);
   const tabs = new box.Tabs(); tabs.init();

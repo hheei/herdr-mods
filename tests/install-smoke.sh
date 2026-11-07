@@ -120,7 +120,7 @@ def find(n, i):
         r = find(c, i)
         if r: return r
 w = find(d, 'work')
-assert find(w, 'tabs')['content']['mod'] == 'tabs-agent-manager'
+assert find(w, 'tabs')['content']['mod'] == 'hheei-tabs'
 assert [c['id'] for c in find(d, 'panel-body')['children']] == ['files', 'changes', 'agent-manager']
 " "$layout"
 install tab-mod

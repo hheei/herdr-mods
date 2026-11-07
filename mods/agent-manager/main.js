@@ -183,8 +183,8 @@ export default class AgentManager extends View {
     const key = identity(dst, this.scope);
     if (this.busy || !dst?.machine || this.key !== key || window()?.platform !== "macos") return;
     if (!(kind === "skills" && this.scope === "workspace" && agent === "shared") && !this.status?.agents?.[agent]) return;
-    if (["conflict", "cc-switch"].includes(current) || (["external", "library-link"].includes(current) && (kind !== "skills" || this.scope !== "global"))) return;
-    const mode = ["external", "library-link"].includes(current) ? "adopt" : current === "on" ? "disable" : "enable";
+    if (["conflict", "cc-switch", "external", "library-link"].includes(current)) return;
+    const mode = current === "on" ? "disable" : "enable";
     const project = this.scope === "workspace" ? dst.cwd : null;
     this.busy = true;
     cx.spawn(async (cx) => {
@@ -206,8 +206,28 @@ export default class AgentManager extends View {
   menu(data) {
     const dst = target();
     if (this.busy || !this.status || this.key !== identity(dst, this.scope) || !dst?.machine) return;
+    const adopters = !data.agent && this.scope === "global"
+      ? AGENTS.filter((agent) => ["external", "library-link"].includes(this.status.skills?.[agent.id]?.[data.id]))
+        .map((agent) => ({ id: agent.id, label: agent.label })) : [];
     openOverlay({ mod: "agent-manager", kind: "popup", at: "pointer", width: 200,
-      props: { skillMenu: { ...data, machine: dst.machine, cwd: dst.cwd, scope: this.scope } } });
+      props: { skillMenu: { ...data, adopters, machine: dst.machine, cwd: dst.cwd, scope: this.scope } } });
+  }
+
+  adoptSkill(cx, data, agent) {
+    const dst = target();
+    if (this.busy || data.scope !== "global" || !data.adopters?.some((a) => a.id === agent)
+      || identity(dst, data.scope) !== identity(data, data.scope) || window()?.platform !== "macos") return;
+    const overlay = props().overlay;
+    this.busy = true;
+    cx.spawn(async (cx) => {
+      try {
+        const result = await exec("sh", [MANAGE(), "apply", dst.machine, "skills", data.id, agent, "adopt"], { timeout: 120_000 });
+        if (result.code !== 0) throw new Error(result.stderr || `Adopt exited ${result.code}`);
+        closeOverlay(overlay);
+        setShared("agent-manager.sync-token", `${Date.now()}-${data.id}`);
+      } catch (error) { notify({ title: "Skill adoption failed", body: String(error), level: "error" }); }
+      finally { this.busy = false; cx.notify(); }
+    });
   }
 
   openSkill(data) {
@@ -320,7 +340,10 @@ export default class AgentManager extends View {
         .child(row("skill-menu-delete", "Delete", "x", () => this.confirmDelete(data))))
       .when(Boolean(data.agent), (el) => el
         .child(row("skill-menu-link", "Softlink", "layers", (cx) => this.setMethod(cx, data, "link"), data.method === "link"))
-        .child(row("skill-menu-copy", "Copy", "files", (cx) => this.setMethod(cx, data, "copy"), data.method === "copy")));
+        .child(row("skill-menu-copy", "Copy", "files", (cx) => this.setMethod(cx, data, "copy"), data.method === "copy")))
+      .when(Boolean(data.adopters?.length), (el) => el.children(data.adopters.map((agent) =>
+        row(`skill-menu-adopt-${agent.id}`, `Adopt · ${agent.label}`, "square-pen",
+          (cx) => this.adoptSkill(cx, data, agent.id)))));
   }
 
   renderSkillDelete(cx) {
@@ -385,7 +408,8 @@ export default class AgentManager extends View {
       const cellId = `${kind}-${index}-${agent}`;
       const method = kind === "skills" ? this.status?.skill_methods?.[agent]?.[item.id] : null;
       const locked = this.status?.skill_locked?.[agent]?.includes(item.id);
-      const mark = kind === "skills" ? method === "link" ? "~" : method === "copy" ? "✓" : "" : state === "on" ? "✓" : "";
+      const adoptable = kind === "skills" && this.scope === "global" && ["external", "library-link"].includes(state);
+      const mark = kind === "skills" ? adoptable ? "+" : method === "link" ? "~" : method === "copy" ? "✓" : "" : state === "on" ? "✓" : "";
       return div().id(cellId).w(width).h(28).flex_none().flex().items_center().justify_center()
         .rounded(6)
         .text_color(["on", "cc-switch"].includes(state) ? t.ansi2 : ["conflict", "external"].includes(state) ? t.blocked : state === "unknown" ? t.dim : t.muted)
@@ -426,8 +450,8 @@ export default class AgentManager extends View {
       return line.children(agents.map((a) => {
         const state = ready ? this.status[kind]?.[a.id]?.[item.id] || "off" : "unknown";
         const display = kind === "mcp" && state === "off" && this.status.mcp_library?.[item.id] ? "library" : state;
-        const enabled = ready && !this.busy && (a.id === "shared" || this.status.agents[a.id]) && state !== "conflict"
-          && state !== "cc-switch" && (!["external", "library-link"].includes(state) || kind === "skills" && this.scope === "global");
+        const enabled = ready && !this.busy && (a.id === "shared" || this.status.agents[a.id])
+          && !["conflict", "cc-switch", "external", "library-link"].includes(state);
         return statusCell(kind, item, index, a.id, display, enabled);
       }));
     };
