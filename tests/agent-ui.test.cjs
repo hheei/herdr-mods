@@ -60,6 +60,10 @@ function stateObj(spec) {
     set_value(value) { this.text = value; },
   };
 }
+function pathBuilder() {
+  return { move_to() { return this; }, line_to() { return this; },
+    close() { return this; }, build() { return {}; } };
+}
 const context = { notify() {}, stop_propagation() {}, focus_handle: () => ({ focus() {} }),
   timer: { every(ms, callback) { context.tick = callback; } },
   spawn(task) { context.task = task; } };
@@ -85,8 +89,14 @@ const box = {
   home: () => "/tmp/home",
   notify: (note) => { box.notes.push(note); },
   notes: [],
+  props: () => ({ overlay: { id: "agent-ui-view" } }),
+  closeOverlay: (overlay) => { box.closed.push(overlay); },
+  closed: [],
   Textarea: { new: () => node() },
   svg: (file) => { const n = node(); n.svg = file; return n; },
+  PathBuilder: { fill: pathBuilder },
+  Background: { linear_gradient: (angle, from, to) => ({ angle, from, to }) },
+  window: { paint_path: (_path, background) => { const n = node(); n.paint = background; return n; } },
 };
 const modelSrc = fs.readFileSync(path.join(root, "mods/agent-ui/model.js"), "utf8").replace(/^export /gm, "");
 const stateSrc = fs.readFileSync(path.join(root, "mods/agent-ui/state.js"), "utf8")
@@ -210,6 +220,13 @@ assert.ok(find(tree, "agent-ui-root").style.overflow_hidden,
   "rounded workspace clips child content");
 assert.equal(find(tree, "agent-ui-header").style.h[0], 38,
   "header is aligned with Herdr's 38px Terminal-style chrome");
+const closeView = find(tree, "agent-ui-close");
+assert.ok(closeView, "an overlay view offers a way out");
+assert.equal(svgOf(closeView.kids[0]), "mods/agent-ui/icons/x.svg",
+  "the close control is the x icon, not a glyph");
+closeView.handlers.on_click({}, context);
+assert.deepEqual(box.closed, [{ id: "agent-ui-view" }],
+  "the close control closes the overlay it was opened in");
 const inactiveDot = find(tree, "agent-ui-rail-marker-t-live").kids[0];
 assert.equal(inactiveDot.style.size[0], 4, "a dot away from the focus sits at the 4px floor");
 assert.equal(inactiveDot.style.opacity[0], 0.7, "dots are drawn at 70% opacity");
@@ -724,6 +741,24 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
   assert.equal(box.turnUsage({ messages: [{ usage: { total: 5 } }, { usage: null }] }).total, 5);
 
   const markerTree = ui.render(context);
+  const fade = find(markerTree, "agent-ui-bottom-fade");
+  assert.deepEqual([fade.paint.angle, fade.paint.from, fade.paint.to],
+    [180, "#18181800", "#18181888"], "transcript softens above the composer without hiding the last line");
+  assert.equal(find(markerTree, "agent-ui-composer-wrap").style.bg, undefined,
+    "the floating composer has no opaque full-width strip");
+  assert.equal(find(markerTree, "agent-ui-composer-wrap").style.border_t, undefined,
+    "the composer transition is not a horizontal rule");
+  assert.ok(find(markerTree, "agent-ui-composer").style.shadow_sm,
+    "the single rounded card has a native soft shadow");
+  const darkTheme = box.theme;
+  box.theme = () => ({ ...darkTheme(), background: "#ffffff", chrome: "#f8f8f8",
+    foreground: "#202020", border: "#e4e4e4" });
+  const lightTree = ui.render(context);
+  assert.deepEqual([find(lightTree, "agent-ui-bottom-fade").paint.from,
+    find(lightTree, "agent-ui-bottom-fade").paint.to],
+    ["#ffffff00", "#ffffff88"], "light themes fade into their own surface");
+  assert.equal(find(lightTree, "agent-ui-composer").style.bg[0], "#ffffff");
+  box.theme = darkTheme;
   ui.turns = [...ui.turns, { id: "m-1", kind: "marker", prompt: "Context compacted",
     status: "done", messages: [], tools: [] }];
   const withMarker = ui.render(context);
@@ -743,17 +778,31 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
   bridged.turns = [];
   const openAsk = { heading: null, questions: [{ index: 0, total: 1,
     question: "which db?", allowMultiple: false, allowFreeform: true,
-    options: [{ title: "postgres" }, { title: "sqlite" }] }] };
+    options: [{ title: "postgres", description: "Remote database" },
+      { title: "sqlite", description: "Local database" }] }] };
   bridged.apply({ type: "asking", asking: openAsk });
   assert.deepEqual(box.notes.map((note) => note.title), ["Pi is asking"],
     "the plugin's open question is what raises a notification");
   const panel = bridged.render(context);
   assert.ok(find(panel, "agent-ui-ask"), "the question takes the composer's slot");
   assert.ok(find(panel, "agent-ui-ask-0-1"), "each option is its own row");
+  assert.ok(textOf(find(panel, "agent-ui-ask-0-1")).includes("Local database"),
+    "the option description sits below its title, not in the footer");
+  assert.equal(find(panel, "agent-ui-ask-0-1").style.min_h[0], 68,
+    "descriptions get enough space without clipping longer wrapped text");
+  find(panel, "agent-ui-ask-0-1").handlers.on_hover(true, context);
+  assert.equal(find(bridged.render(context), "agent-ui-ask-0-1").style.bg[0], "#292929",
+    "a hovered row gets the same soft highlight as keyboard focus");
   const shell = find(bridged.render(context), "agent-ui-composer");
   assert.equal(shell.kids.length, 2, "the composer holds its input area and one footer");
   assert.equal(shell.kids[0].nodeId, "agent-ui-ask",
     "the question occupies the slot the textarea occupies, with no card around it");
+  assert.equal(shell.style.rounded[0], find(ui.render(context), "agent-ui-composer").style.rounded[0],
+    "asking and typing use the same rounded shell");
+  assert.equal(find(panel, "agent-ui-ask").style.border_1, undefined,
+    "do not nest another framed card inside the composer");
+  assert.equal(svgOf(find(panel, "agent-ui-ask-cancel")),
+    "mods/agent-ui/icons/x.svg", "a visible close action is in the question heading");
   bridged.apply({ type: "asking", asking: openAsk });
   assert.equal(box.notes.length, 1, "the same question is not announced twice");
 
@@ -774,7 +823,20 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
   assert.ok(find(freeform, "agent-ui-ask-free-0"), "and offers the freeform row");
   assert.equal(svgOf(find(freeform, "agent-ui-ask-free-0")),
     "mods/agent-ui/icons/pencil.svg", "freeform is an icon, not a glyph");
-  bridged.apply({ type: "asking", asking: null });
+  assert.ok(find(freeform, "agent-ui-ask-input-0"), "freeform input lives in the composer footer");
+  assert.equal(textOf(find(freeform, "agent-ui-ask-send")), "Skip");
+  bridged.answer.set_value("Use SQLite");
+  assert.equal(textOf(find(bridged.render(context), "agent-ui-ask-send")), "Send");
+  bridged.sendAnswer(context);
+  await context.task();
+  assert.deepEqual(JSON.parse(box.written.at(-1)[1]),
+    { response: { kind: "freeform", text: "Use SQLite" } });
+  bridged.apply({ type: "asking", asking: openAsk });
+  assert.equal(bridged.answer.value(), "", "new prompts never inherit the previous answer");
+  click(bridged.render(context), "agent-ui-ask-send");
+  await context.task();
+  assert.deepEqual(JSON.parse(box.written.at(-1)[1]), { cancel: true },
+    "Skip dismisses a single unanswered question");
   assert.equal(bridged.asking, null);
 
   // A single choice goes out on click; a multi-select collects, then sends.
@@ -847,11 +909,11 @@ const glyphs = [...fs.readFileSync(path.join(root, "mods/agent-ui/main.js"), "ut
     && !/[\u4e00-\u9fff]/.test(ch));
 assert.deepEqual(glyphs, [], "icons are svg files, never glyph characters");
 for (const name of ["check", "chevron-down", "chevron-right", "arrow-down", "play",
-  "square", "pencil"])
+  "square", "pencil", "x"])
   assert.ok(fs.existsSync(path.join(root, "mods/agent-ui/icons", `${name}.svg`)),
     `icons/${name}.svg ships with the mod`);
 
-console.log("PASS: dots-only scroll rail, scrubbing, dot jump, keyboard focus, narrow turn list, empty and offline states, sticky bottom, streaming replay, bounded hover, tool detail edges, Markdown and Stack view, bounded history, bridge reader.");
+console.log("PASS: dots-only scroll rail, scrubbing, dot jump, keyboard focus, narrow turn list, empty and offline states, sticky bottom, streaming replay, bounded hover, tool detail edges, Markdown and Stack view, overlay close, bounded history, bridge reader.");
 })().catch((error) => {
   console.error(error);
   process.exit(1);

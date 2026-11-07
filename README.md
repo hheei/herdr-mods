@@ -28,8 +28,10 @@ Install [Herdr App](https://github.com/herdrdev/herdr-app#install) first. Run **
 **macOS / Linux — one line:**
 
 ~~~sh
-curl -fsSL https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/install.sh | sh -s -- --yes
 ~~~
+
+`--yes` is there because a pipe has no terminal to answer the confirmation prompt: without it the installer prints what it would change and stops. Run it from a checkout (`sh scripts/install.sh`) and it asks.
 
 One command, one verb: bring what belongs in your Herdr up to date. Nothing installed yet means the whole checkout is the starting set; after that it refreshes exactly what is there. `--all` widens it to every mod under `mods/`, and naming mods (`| sh -s -- project-open`) narrows it — that is how a mod we shipped later gets added, since it never appears on its own. The same installer runs two ways: from a checkout it installs the local files, and when piped it downloads a temporary source archive, installs, and deletes the archive. It is [scripts/install.sh](scripts/install.sh); review any downloaded script before execution. Requires `sh`, curl and tar.
 
@@ -63,7 +65,7 @@ To keep one out, edit that Mod's own `layout.json` in `~/.config/herdr-app/mods/
 
 ### Update
 
-The same command, no flags. A Mod whose files already match is reported as `unchanged` and left alone; only what actually differs is replaced from `main`, with the previous copy going to `~/.config/herdr-app/backups/<mod>/`. Before anything is written it asks once — `? apply N change(s) [Y/n]` — and `--yes` answers that up front for scripts. A non-interactive run (piped, CI) answers yes on its own. `--no-layout` takes the Mods without the Layout wiring.
+The same command, no flags. A Mod whose files already match is reported as `unchanged` and left alone; only what actually differs is replaced from `main`, with the previous copy going to `~/.config/herdr-app/backups/<mod>/`. Before anything is written it asks once — `? apply N change(s) [Y/n]` — and `--yes` answers that up front. With no terminal to ask (piped, CI) it changes nothing, prints how many changes are pending and tells you to re-run with `--yes`, so nothing is ever installed on a guess. `--no-layout` takes the Mods without the Layout wiring.
 
 A Mod you removed stays removed, and one we added later does not appear on its own — say `--all` or name it.
 

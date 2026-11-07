@@ -1,7 +1,7 @@
 // Agent UI · standalone synthetic GPUI demo. NEVER starts or controls Pi.
-import { View, div, svg } from "gpui-kit";
+import { View, div, svg, PathBuilder, Background } from "gpui-kit";
 import { h_flex, v_flex, TextView, TextareaState, Textarea } from "gpui-base";
-import { theme, appHome, exec, home, notify, readTextFile, shared, watchFolder, writeTextFile } from "herdr";
+import { theme, appHome, closeOverlay, exec, home, notify, props, readTextFile, shared, watchFolder, writeTextFile } from "herdr";
 import { DEMO_TURNS, fixtureSource } from "./fixtures.js";
 import { SOURCE_KEY, createBridgeSource } from "./bridge-source.js";
 import { applyEvent, createTranscript } from "./state.js";
@@ -47,6 +47,9 @@ function toolLabel(tool) {
 
 const DETAIL_LINES = 18;
 const DETAIL_CHARS = 4000;
+const FADE_RECT = PathBuilder.fill().move_to("0%", "0%")
+  .line_to("100%", "0%").line_to("100%", "100%")
+  .line_to("0%", "100%").close().build();
 
 export default class AgentUi extends View {
   init(_props, cx) {
@@ -58,6 +61,7 @@ export default class AgentUi extends View {
     this.askPicks = {};
     this.askTyping = -1;
     this.askCursor = 0;
+    this.askHover = -1;
     this.answer = TextareaState.new({ value: "", rows: 2, placeholder: "Type your answer…" });
     this.answer.on("change", (_event, cx) => cx.notify());
     // null until the check runs: "unknown" is not "not installed".
@@ -195,6 +199,13 @@ export default class AgentUi extends View {
   // guessed.
   ask(asking) {
     const opened = this.asking === null && asking !== null;
+    if (JSON.stringify(this.asking) !== JSON.stringify(asking)) {
+      this.askPicks = {};
+      this.askTyping = -1;
+      this.askCursor = 0;
+      this.askHover = -1;
+      this.answer.set_value("");
+    }
     this.asking = asking;
     if (!opened) return;
     try {
@@ -727,6 +738,7 @@ export default class AgentUi extends View {
 
   render(cx) {
     const t = theme();
+    const fadeBase = /^#[0-9a-f]{6}$/i.test(t.background) ? t.background : "#000000";
     const compact = this.width < 520;
     // The strip needs both room and height; without them the list takes over.
     const railEnabled = this.viewportHeight >= 80 && this.width >= 240;
@@ -770,7 +782,12 @@ export default class AgentUi extends View {
           .on_click((_event, context) => this.cycleMode(context))
           .child(div().text_size(10)
             .text_color(this.demo === "demo" ? t.dim : t.blocked)
-            .child(this.demo.toUpperCase()))))
+            .child(this.demo.toUpperCase())))
+        .when(Boolean(props()?.overlay), (el) => el.child(h_flex().id("agent-ui-close")
+          .h(24).w(24).flex_none().items_center().justify_center().rounded(6)
+          .border_1().border_color(t.border).cursor_pointer()
+          .on_click(() => closeOverlay(props().overlay))
+          .child(icon("x", 13)))))
       .when(this.bridge && this.bridgeInstalled === false, (el) => el.child(h_flex()
         .id("agent-ui-bridge-missing").h(27).flex_none().px(12).gap(9).items_center()
         .bg(t.raised).border_b(1).border_color(t.border)
@@ -798,7 +815,11 @@ export default class AgentUi extends View {
             .absolute().left(0).right(0).top(-this.scrollY)
             .px(compact ? 13 : 23).py(18).gap(19)
             .children(this.turns.map((turn) => this.turn(t, turn)))))
-          .when(this.turns.length === 0, (el) => el.child(this.emptyState(t))))
+          .when(this.turns.length === 0, (el) => el.child(this.emptyState(t)))
+          .when(this.turns.length > 0 && this.viewportHeight >= 80, (el) => el.child(
+            window.paint_path(FADE_RECT, Background.linear_gradient(180,
+              `${fadeBase}00`, `${fadeBase}88`))
+              .id("agent-ui-bottom-fade").absolute().bottom(0).left(0).right(0).h(54))))
         .when(railEnabled, (el) =>
           el.child(this.navigationStrip(t, geometry, visible, true)))
         .when(railEnabled && Boolean(this.hoveredTurn ?? this.keyTurn),
@@ -820,117 +841,131 @@ export default class AgentUi extends View {
 
   composerArea(t, compact) {
     const draft = String(this.composer.value() ?? "").trim();
-    return v_flex().id("agent-ui-composer").flex_none().px(compact ? 13 : 21)
-      .pt(10).pb(12).gap(8).border_t(1).border_color(t.border).bg(t.chrome)
-      .child(Textarea.new(this.composer).id("agent-ui-textarea").w_full()
-        .h(compact ? 70 : 78).p(10).rounded(8)
-        .border_1().border_color(t.input)
-        .bg(t.background).text_color(t.foreground).text_size(12.5))
-      .child(h_flex().items_center().gap(9)
-        .child(div().flex_1().text_size(10.5).text_color(t.dim)
-          .child(this.notice || (this.demo === "demo"
-            ? "Synthetic data · no live Pi connection"
-            : "Read-only in this state · the draft is kept")))
-        .when(this.width >= 520 && this.demo === "demo", (el) => el.child(control(t,
-          "agent-ui-stream", h_flex().gap(5).items_center()
-            .child(icon(this.source.streaming() ? "square" : "play", 11))
-            .child(div().child(this.source.streaming() ? "finish" : "stream")),
-          (context) => {
-            if (this.source.streaming()) this.source.finish();
-            else this.source.replay();
-            this.pump(context);
-          }, true)))
-        .child(control(t, "agent-ui-send", "Try send · demo",
-          (context) => this.send(context), Boolean(draft) && this.demo === "demo")));
+    return v_flex().id("agent-ui-composer-wrap").flex_none().px(compact ? 10 : 20).pt(10).pb(14)
+      .child(v_flex().id("agent-ui-composer").w_full().p(compact ? 12 : 16).gap(10)
+        .rounded(18).border_1().border_color(t.border).bg(t.background).shadow_sm()
+        .child(Textarea.new(this.composer).id("agent-ui-textarea").w_full()
+          .h(compact ? 66 : 84).p(4).bg(t.background)
+          .text_color(t.foreground).text_size(13.5))
+        .child(h_flex().items_center().gap(9)
+          .child(div().flex_1().text_size(10.5).text_color(t.dim)
+            .child(this.notice || (this.demo === "demo"
+              ? "Synthetic data · no live Pi connection"
+              : "Read-only in this state · the draft is kept")))
+          .when(this.width >= 520 && this.demo === "demo", (el) => el.child(control(t,
+            "agent-ui-stream", h_flex().gap(5).items_center()
+              .child(icon(this.source.streaming() ? "square" : "play", 11))
+              .child(div().child(this.source.streaming() ? "finish" : "stream")),
+            (context) => {
+              if (this.source.streaming()) this.source.finish();
+              else this.source.replay();
+              this.pump(context);
+            }, true)))
+          .child(this.pill(t, "agent-ui-send", "Try send · demo",
+            (context) => this.send(context), Boolean(draft) && this.demo === "demo", true))));
   }
 
-  // The question takes the composer's slot rather than floating above it: answering
-  // is a reply, so it belongs where replies are typed, in the same shell and with
-  // nothing moving when the prompt opens. Row rhythm follows pi-ask-user's own
-  // list: option, its description, a helper line, then the keys.
+  // Questions and ordinary drafts share one rounded composer shell. Only real
+  // actions appear here: no attachment, voice or model controls without a host API.
   askPanel(t, compact) {
     const asked = this.asking.questions ?? [];
+    const one = asked.length === 1 ? asked[0] : null;
     const picks = (index) => this.askPicks[index] ?? [];
     const rows = [];
     let flat = 0;
     for (const [index, question] of asked.entries()) {
       const multi = asked.length > 1;
       rows.push(h_flex().id(`agent-ui-ask-head-${index}`).gap(8).items_center()
-        .pt(index ? 7 : 0)
-        .child(h_flex().flex_none().h(19).min_w(19).px(6).rounded(5)
+        .pt(index ? 10 : 2).pb(8)
+        .when(multi, (el) => el.child(h_flex().flex_none().h(22).px(7).rounded(6)
           .items_center().bg(t.raised)
-          .child(div().text_size(10.5).text_color(t.blocked)
-            .child(multi ? `${index + 1}/${asked.length}` : "?")))
-        .child(div().flex_1().min_w(0).text_size(13).font_semibold()
-          .text_color(t.foreground).child(question.question)));
+          .child(div().text_size(10.5).text_color(t.dim)
+            .child(`${index + 1}/${asked.length}`))))
+        .child(div().flex_1().min_w(0).text_size(compact ? 13 : 14).font_semibold()
+          .text_color(t.foreground).child(question.question))
+        .when(index === 0, (el) => el.child(h_flex().id("agent-ui-ask-cancel")
+          .w(27).h(27).flex_none().items_center().justify_center().rounded(7)
+          .cursor_pointer().on_click((_event, context) => this.cancelAsk(context))
+          .child(icon("x", 15).text_color(t.dim)))));
       if (question.context)
-        rows.push(div().id(`agent-ui-ask-context-${index}`).pl(27).text_size(11.5)
+        rows.push(div().id(`agent-ui-ask-context-${index}`).pl(multi ? 33 : 0).pb(7).text_size(11.5)
           .text_color(t.dim).child(question.context));
       const list = [];
       for (const [slot, option] of (question.options ?? []).entries()) {
         const on = picks(index).includes(option.title);
-        const focus = this.askCursor === flat++;
-        list.push(h_flex().id(`agent-ui-ask-${index}-${slot}`).h(32).px(9).gap(9)
-          .items_center().rounded(6).cursor_pointer()
-          .when(focus || on, (el) => el.bg(t.raised))
+        const at = flat++;
+        const focus = this.askCursor === at;
+        list.push(h_flex().id(`agent-ui-ask-${index}-${slot}`)
+          .min_h(option.description ? (compact ? 76 : 68) : 47).px(12).gap(12)
+          .items_center().rounded(11).cursor_pointer()
+          .when(focus || on || this.askHover === at, (el) => el.bg(t.raised))
+          .on_hover((hovered, context) => {
+            const next = hovered ? at : -1;
+            if (this.askHover !== next) { this.askHover = next; context.notify(); }
+          })
           .on_click((_event, context) => this.pickAnswer(index, option.title, context))
-          .child(question.allowMultiple
-            ? h_flex().flex_none().h(15).w(15).rounded(4).items_center()
-              .border_1().border_color(on ? t.accent : t.border)
-              .when(on, (el) => el.bg(t.accent))
-            : div().flex_none().w(12).text_size(11).text_color(focus ? t.accent : t.dim)
-              .child(`${slot + 1}`))
-          .child(div().flex_none().text_size(12.5)
-            .text_color(on ? t.accent : t.foreground).child(option.title))
-          .when(Boolean(option.description), (el) => el.child(div().flex_1().min_w(0)
-            .truncate().text_size(11).text_color(t.dim).child(option.description)))
-          .when(on && !question.allowMultiple, (el) =>
-            el.child(icon("check", 12).text_color(t.accent))));
+          .child(h_flex().flex_none().w(26).h(26).items_center().justify_center()
+            .rounded(7).border_1().border_color(focus || on ? t.foreground : t.border)
+            .bg(focus || on ? t.foreground : t.raised)
+            .child(div().text_size(11.5)
+              .text_color(focus || on ? t.background : t.dim).child(`${slot + 1}`)))
+          .child(v_flex().flex_1().min_w(0).gap(3)
+            .child(div().text_size(12.5).font_semibold()
+              .text_color(t.foreground).child(option.title))
+            .when(Boolean(option.description), (el) => el.child(div().text_size(11.5)
+              .text_color(t.dim).child(option.description))))
+          .child(icon(question.allowMultiple && on ? "check" : "chevron-right", 15)
+            .text_color(t.dim)));
       }
-      if (question.allowFreeform) {
+      if (question.allowFreeform && !one) {
         const focus = this.askCursor === flat++;
         list.push(this.askTyping === index
           ? Textarea.new(this.answer).id(`agent-ui-ask-input-${index}`).w_full()
             .h(compact ? 46 : 52).p(8).rounded(6).border_1().border_color(t.input)
             .bg(t.chrome).text_color(t.foreground).text_size(12)
-          : h_flex().id(`agent-ui-ask-free-${index}`).h(32).px(9).gap(9).items_center()
-            .rounded(6).cursor_pointer()
+          : h_flex().id(`agent-ui-ask-free-${index}`).h(44).px(12).gap(11).items_center()
+            .rounded(10).cursor_pointer()
             .when(focus, (el) => el.bg(t.raised))
             .on_click((_event, context) => this.typeAnswer(index, context))
-            .child(icon("pencil", 11).text_color(t.dim))
+            .child(icon("pencil", 14).text_color(t.dim))
             .child(div().text_size(12.5).text_color(t.dim)
               .child("Type your own answer")));
       }
       if (list.length) rows.push(...list);
     }
 
-    const one = asked.length === 1 ? asked[0] : null;
     const instant = Boolean(one) && !one.allowMultiple;
+    const typed = one?.allowFreeform ? String(this.answer.value() ?? "").trim() : "";
     const ready = asked.length > 0 && asked.every((question, index) =>
-      picks(index).length > 0 || (this.askTyping === index
-        && String(this.answer.value() ?? "").trim() !== ""));
-    return v_flex().id("agent-ui-composer").flex_none().px(compact ? 13 : 21)
-      .pt(10).pb(12).gap(8).border_t(1).border_color(t.border).bg(t.chrome)
-      .child(v_flex().id("agent-ui-ask").w_full().flex_none().gap(1).p(10)
-        .rounded(8).border_1().border_color(t.input).bg(t.background)
-        .children(rows))
-      .child(h_flex().items_center().gap(9)
-        .child(div().flex_1().text_size(10.5).text_color(t.dim)
-          .child(this.asking.heading && asked.length > 1 ? this.asking.heading
-            : instant ? "Pick one · or type your own answer"
-            : one?.allowMultiple ? "Pick any · then send" : "Answer each one · then send"))
-        .when(!instant, (el) => el.child(this.pill(t, "agent-ui-ask-cancel", "Cancel",
-          (context) => this.cancelAsk(context), true, false)))
-        .when(!instant, (el) => el.child(this.pill(t, "agent-ui-ask-send", "Send",
-          (context) => this.sendAnswer(context), ready, true))));
+      picks(index).length > 0 || (index === 0 && typed !== "")
+        || (this.askTyping === index && String(this.answer.value() ?? "").trim() !== ""));
+    return v_flex().id("agent-ui-composer-wrap").flex_none().px(compact ? 10 : 20).pt(10).pb(14)
+      .child(v_flex().id("agent-ui-composer").w_full().p(compact ? 12 : 16).gap(12)
+        .rounded(18).border_1().border_color(t.border).bg(t.background).shadow_sm()
+        .child(v_flex().id("agent-ui-ask").w_full().flex_none().gap(4).children(rows))
+        .child(one?.allowFreeform
+          ? h_flex().id("agent-ui-ask-free-0").h(43).items_center().gap(9)
+            .child(icon("pencil", 14).text_color(t.dim))
+            .child(Textarea.new(this.answer).id("agent-ui-ask-input-0")
+              .flex_1().min_w(0).h(40).p(6).bg(t.background)
+              .text_color(t.foreground).text_size(12.5))
+            .child(this.pill(t, "agent-ui-ask-send", ready ? "Send" : "Skip",
+              (context) => ready ? this.sendAnswer(context) : this.cancelAsk(context), true, ready))
+          : h_flex().items_center().gap(9)
+            .child(div().flex_1().text_size(10.5).text_color(t.dim)
+              .child(this.asking.heading && asked.length > 1 ? this.asking.heading
+                : instant ? "Choose an option · Esc to dismiss"
+                : one?.allowMultiple ? "Pick any · then send" : "Answer each one · then send"))
+            .when(!instant, (el) => el.child(this.pill(t, "agent-ui-ask-send", "Send",
+              (context) => this.sendAnswer(context), ready, true)))));
   }
 
   // Two weights, the same shape as the rest of the view: a flat pill for a
   // secondary action, a filled one for the action that finishes the prompt.
   pill(t, id, label, onClick, enabled, primary) {
-    return h_flex().id(id).h(27).px(12).rounded(7).items_center()
-      .bg(!enabled ? t.raised : primary ? t.accent : t.popover)
-      .border_1().border_color(enabled ? (primary ? t.accent : t.border) : t.border)
+    return h_flex().id(id).h(30).px(13).rounded(15).items_center()
+      .bg(!enabled ? t.raised : primary ? t.foreground : t.background)
+      .border_1().border_color(enabled && primary ? t.foreground : t.border)
       .text_size(11.5)
       .when(enabled, (el) => el.cursor_pointer()
         .on_click((_event, context) => onClick(context)))
@@ -961,12 +996,12 @@ export default class AgentUi extends View {
     const answers = [];
     for (const [index, question] of asked.entries()) {
       const picks = this.askPicks[index] ?? [];
-      const typed = this.askTyping === index ? String(this.answer.value() ?? "").trim() : "";
+      const typed = (asked.length === 1 && question.allowFreeform) || this.askTyping === index
+        ? String(this.answer.value() ?? "").trim() : "";
       if (!picks.length && !typed) return;
       answers.push({ status: "answered",
-        response: picks.length
-          ? { kind: "selection", selections: picks }
-          : { kind: "freeform", text: typed } });
+        response: typed ? { kind: "freeform", text: typed }
+          : { kind: "selection", selections: picks } });
     }
     if (!answers.length) return;
     // A batch is answered as a whole, which is the shape the plugin's own batch
@@ -987,6 +1022,7 @@ export default class AgentUi extends View {
     this.askPicks = {};
     this.askTyping = -1;
     this.askCursor = 0;
+    this.askHover = -1;
     this.answer.set_value("");
     cx.notify();
     if (!dir) return;
