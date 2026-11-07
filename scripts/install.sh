@@ -1,18 +1,20 @@
 #!/bin/sh
-# Install or refresh Herdr mods. Each mod declares its own layout wiring in
+# Install, refresh or scope Herdr mods. Each mod declares its own layout wiring in
 # layout.json ("status-bar" | "sidebar" | "derive": "<layout>" | "pi": "<file>"), so this script
 # only applies the wiring shapes it knows and no mod by name.
-# Checkout: sh scripts/install.sh [mod...] [--no-layout]
-# Piped:    curl -fsSL .../install.sh | sh
+# Checkout: sh scripts/install.sh [mod...] [--all] [--no-layout]
+# Piped:    curl -fsSL .../install.sh | sh -s -- --all
 set -eu
 no_layout=no
-mods=''
+install_all=no
+named=''
 for arg do
   case "$arg" in
+    --all) install_all=yes ;;
     --no-layout) no_layout=yes ;;
-    -h|--help) echo 'usage: install.sh [mod...] [--no-layout]'; exit 0 ;;
+    -h|--help) echo 'usage: install.sh [mod...] [--all] [--no-layout]'; exit 0 ;;
     -*) echo "install: unknown option: $arg" >&2; exit 2 ;;
-    *) mods="$mods $arg" ;;
+    *) named="$named $arg" ;;
   esac
 done
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
@@ -28,10 +30,27 @@ if [ ! -f "$script_dir/patch-status.awk" ]; then
   exit 0
 fi
 . "$script_dir/tui.sh"
-if [ -z "$mods" ]; then
-  for dir in "$repo_dir"/mods/*/; do mods="$mods $(basename "$dir")"; done
-fi
 home_dir=$(app_home)
+# What is installed is what sits in the App Home already: no bookkeeping of our own,
+# and nothing of ours in Herdr's folder. A named Mod always wins; --all means every
+# Mod in this checkout; otherwise this refreshes only what is already there.
+mods=''
+if [ -n "$named" ]; then
+  mods=$named
+elif [ "$install_all" = yes ]; then
+  for dir in "$repo_dir"/mods/*/; do mods="$mods $(basename "$dir")"; done
+else
+  for dir in "$home_dir"/mods/*/; do
+    [ -d "$dir" ] || continue
+    name=$(basename "$dir")
+    [ -f "$repo_dir/mods/$name/main.js" ] || continue
+    mods="$mods $name"
+  done
+fi
+if [ -z "$mods" ]; then
+  warn "nothing installed yet: name a mod, or pass --all"
+  exit 0
+fi
 printf '\n  %sherdr-mods%s %s·%s%s\n\n' "$bold" "$off" "$dim" "$off" "$mods"
 mkdir -p "$home_dir/mods"
 # A backup inside mods/ becomes a Mod to Herdr, which then fails to load it, so

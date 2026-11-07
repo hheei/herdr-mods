@@ -27,14 +27,33 @@ printf '%s\n' '{"sidebar": true}' > "$tmp/repo/mods/another-mod/layout.json"
 install() { sh "$tmp/repo/scripts/install.sh" "$@" >/dev/null; }
 layout="$HERDR_APP_HOME/layouts/herdr-mods.json"
 
-# No argument installs every mod folder and applies each declared wiring.
+# With nothing installed there is nothing to refresh: it says so and writes nothing.
 install
+[ ! -e "$HERDR_APP_HOME/mods/another-mod" ]
+
+# --all installs every Mod this checkout has.
+
+# No argument installs every mod folder and applies each declared wiring.
+install --all
 [ -f "$HERDR_APP_HOME/mods/project-open/main.js" ]
 [ -f "$HERDR_APP_HOME/mods/another-mod/main.js" ]
 [ "$(grep -c '"mod": "project-open"' "$layout")" -eq 1 ]
 [ "$(grep -c '"id":"another-mod"' "$layout")" -eq 1 ]
 [ -f "$layout.bak" ]
 [ -f "$tmp/pihome/extensions/herdr-agent-ui.js" ]
+
+# With no argument it refreshes what is installed and nothing else: a Mod added to
+# the checkout afterwards does not sneak in by itself.
+mkdir -p "$tmp/repo/mods/late-mod"
+printf '%s\n' 'export default class Late {}' > "$tmp/repo/mods/late-mod/main.js"
+printf '%s\n' '{ "place": "none" }' > "$tmp/repo/mods/late-mod/mod.json"
+install
+[ ! -e "$HERDR_APP_HOME/mods/late-mod" ]
+install late-mod
+[ -f "$HERDR_APP_HOME/mods/late-mod/main.js" ]
+printf '%s\n' '// refreshed' >> "$tmp/repo/mods/project-open/main.js"
+install
+grep -q refreshed "$HERDR_APP_HOME/mods/project-open/main.js"
 
 # Re-running is idempotent: one backup per asset, and no backup in mods/, where
 # Herdr would read it as a Mod.
@@ -94,7 +113,7 @@ HERDR_APP_HOME="$tmp/bare2" sh "$tmp/repo/scripts/install.sh" pi-mod --no-layout
 [ ! -e "$tmp/bare2/layouts" ]
 
 # --no-layout writes files and nothing else.
-HERDR_APP_HOME="$tmp/bare" sh "$tmp/repo/scripts/install.sh" --no-layout >/dev/null
+HERDR_APP_HOME="$tmp/bare" sh "$tmp/repo/scripts/install.sh" --all --no-layout >/dev/null
 [ -f "$tmp/bare/mods/project-open/main.js" ]
 [ ! -e "$tmp/bare/layouts" ]
 sh "$tmp/repo/scripts/install.sh" --help >/dev/null
@@ -103,7 +122,7 @@ sh "$tmp/repo/scripts/install.sh" --nope 2>/dev/null && exit 1 || true
 # An explicit XDG_CONFIG_HOME or HOME fallback still finds Herdr App Home.
 unset HERDR_APP_HOME XDG_CONFIG_HOME
 mkdir -p "$tmp/newhome"
-HOME="$tmp/newhome" sh "$tmp/repo/scripts/install.sh" >/dev/null
+HOME="$tmp/newhome" sh "$tmp/repo/scripts/install.sh" --all >/dev/null
 [ -f "$tmp/newhome/.config/herdr-app/layouts/herdr-mods.json" ]
 
 # The piped one-liner stages the archive it was given.
@@ -111,8 +130,8 @@ mkdir -p "$tmp/src/herdr-mods-main" "$tmp/pipehome"
 cp -R "$tmp/repo/." "$tmp/src/herdr-mods-main/"
 tar -czf "$tmp/src.tgz" -C "$tmp/src" herdr-mods-main
 HERDR_APP_HOME="$tmp/pipehome" HERDR_MODS_ARCHIVE_URL="file://$tmp/src.tgz" \
-  sh < "$tmp/repo/scripts/install.sh" >/dev/null 2>&1
+  sh -s -- --all < "$tmp/repo/scripts/install.sh" >/dev/null 2>&1
 [ -f "$tmp/pipehome/mods/project-open/main.js" ]
 [ -f "$tmp/pipehome/layouts/herdr-mods.json" ]
 
-echo "PASS: all-mods default, declared wiring, single mod, idempotence, one .bak each, customized status untouched, no-layout, env fallback, piped one-liner."
+echo "PASS: --all, update-only default, named scope, declared wiring, idempotence, one .bak each, customized status untouched, no-layout, env fallback, piped one-liner."

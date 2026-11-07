@@ -40,7 +40,7 @@ The installer looks before it writes and, in a terminal, asks `? patch layout he
 Add `--no-layout` to copy the Mod files only, then wire it into your own layout by hand.
 
 ~~~sh
-sh scripts/install.sh --no-layout
+sh scripts/install.sh project-open --no-layout
 ~~~
 
 The Status Bar is a row, and this Mod takes a share of it. In **~/.config/herdr-app/layouts/your-layout.json**, inside the `work` column, the stock node looks like this:

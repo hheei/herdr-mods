@@ -25,17 +25,17 @@ This is an **opt-in Tab-display chrome-stack preview**, not a live Pi client or 
 
 Install [Herdr App](https://github.com/herdrdev/herdr-app#install) first. Run **on the computer hosting the Herdr App GUI** (not just a remote herdr-core server). **No clone or Python required.**
 
-**macOS / Linux — one line:**
+**macOS / Linux — one line (first time):**
 
 ~~~sh
-curl -fsSL https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/install.sh | sh -s -- --all
 ~~~
 
-With no mod name it installs **every** mod under `mods/` and applies the layout wiring each mod's `layout.json` declares; name mods to install a subset. The same installer runs two ways: from a checkout it installs the local files, and when piped it downloads a temporary source archive, installs, and deletes the archive. It is [scripts/install.sh](scripts/install.sh); review any downloaded script before execution. Requires `sh`, curl and tar.
+`--all` installs every mod under `mods/`; name mods (`| sh -s -- project-open`) to install a subset. Without either, the installer only **refreshes what is already installed** — it never adds a mod you did not ask for. The same installer runs two ways: from a checkout it installs the local files, and when piped it downloads a temporary source archive, installs, and deletes the archive. It is [scripts/install.sh](scripts/install.sh); review any downloaded script before execution. Requires `sh`, curl and tar.
 
 **Windows:** there is no PowerShell installer. Run the same commands from **Git Bash** or **WSL** — the Mod files go to the same `~/.config/herdr-app` folder.
 
-**If you already downloaded the repository**, run `sh scripts/install.sh`.
+**If you already downloaded the repository**, run `sh scripts/install.sh --all` the first time, then `sh scripts/install.sh` to update.
 
 To install the Mod files without touching any layout, add `--no-layout` and wire it into your own layout by hand; see the [Project Open notes](mods/project-open/README.md#install-without-touching-any-layout) for the exact JSON.
 
@@ -63,7 +63,7 @@ To keep one out, edit that Mod's own `layout.json` in `~/.config/herdr-app/mods/
 
 ### Update
 
-Run the same command again: an existing Mod is moved to `~/.config/herdr-app/backups/<mod>/` and replaced, and a layout is only touched when it actually changes.
+Run it again with no arguments: every Mod already in `~/.config/herdr-app/mods/` is replaced from `main` (the old copy goes to `~/.config/herdr-app/backups/<mod>/`), and a layout is only touched when it actually changes. A Mod that is still installed is updated; one you removed stays removed, and one we added later does not appear on its own — say `--all` or name it when you want it.
 
 ~~~sh
 curl -fsSL https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/install.sh | sh
