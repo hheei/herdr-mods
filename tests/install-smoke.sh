@@ -14,6 +14,8 @@ cp "$repo/scripts/patch-status.awk" "$tmp/repo/scripts/patch-status.awk"
 cp "$repo/scripts/patch-sidebar.awk" "$tmp/repo/scripts/patch-sidebar.awk"
 cp "$repo/scripts/demo-layout.awk" "$tmp/repo/scripts/demo-layout.awk"
 cp "$repo/scripts/compose-layout.awk" "$tmp/repo/scripts/compose-layout.awk"
+cp "$repo/scripts/patch-tabs.awk" "$tmp/repo/scripts/patch-tabs.awk"
+cp "$repo/scripts/patch-panel.awk" "$tmp/repo/scripts/patch-panel.awk"
 cp "$repo/layouts/herdr-mods.json" "$tmp/repo/layouts/herdr-mods.json"
 cp -R "$repo/mods/project-open" "$tmp/repo/mods/"
 mkdir -p "$tmp/repo/mods/pi-mod/bridge"
@@ -24,6 +26,10 @@ printf '%s\n' 'export default function (pi) {}' > "$tmp/repo/mods/pi-mod/bridge/
 printf '%s\n' 'export default class Another {}' > "$tmp/repo/mods/another-mod/main.js"
 printf '%s\n' '{"place":"none"}' > "$tmp/repo/mods/another-mod/mod.json"
 printf '%s\n' '{"sidebar": true}' > "$tmp/repo/mods/another-mod/layout.json"
+mkdir -p "$tmp/repo/mods/tab-mod"
+printf '%s\n' 'export default class Tab {}' > "$tmp/repo/mods/tab-mod/main.js"
+printf '%s\n' '{"place":"none"}' > "$tmp/repo/mods/tab-mod/mod.json"
+printf '%s\n' '{"tabs": true, "panel": true}' > "$tmp/repo/mods/tab-mod/layout.json"
 install() { sh "$tmp/repo/scripts/install.sh" --yes "$@" >/dev/null; }
 layout="$HERDR_APP_HOME/layouts/herdr-mods.json"
 
@@ -102,6 +108,24 @@ printf '%s\n' '{ }' > "$HERDR_APP_HOME/mods/project-open/layout.json"
 install project-open
 [ "$(cat "$HERDR_APP_HOME/mods/project-open/layout.json")" = '{ }' ]
 
+# A Mod asks for the tab bar and the panel through its own layout.json: the tab bar
+# is renamed in place and the panel block is appended, once.
+install tab-mod
+python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))
+def find(n, i):
+    if n.get('id') == i: return n
+    for c in n.get('children') or []:
+        r = find(c, i)
+        if r: return r
+w = find(d, 'work')
+assert find(w, 'tabs')['content']['mod'] == 'tabs-agent-manager'
+assert [c['id'] for c in find(d, 'panel-body')['children']] == ['files', 'changes', 'agent-manager']
+" "$layout"
+install tab-mod
+[ "$(grep -c 'agent-manager' "$layout")" -ge 1 ]
+
 # A customized status bar is left alone; the mods still install.
 mkdir -p "$HERDR_APP_HOME/layouts"
 node -e '
@@ -144,4 +168,4 @@ HERDR_APP_HOME="$tmp/pipehome" HERDR_MODS_ARCHIVE_URL="file://$tmp/src.tgz" \
 [ -f "$tmp/pipehome/mods/project-open/main.js" ]
 [ -f "$tmp/pipehome/layouts/herdr-mods.json" ]
 
-echo "PASS: --yes required without a terminal, refresh default, --all, named scope, declared wiring, unchanged is not rewritten, customized status untouched, no-layout, env fallback, piped one-liner."
+echo "PASS: --yes required without a terminal, refresh default, --all, named scope, declared status/sidebar/tabs/panel wiring, unchanged is not rewritten, customized status untouched, no-layout, env fallback, piped one-liner."

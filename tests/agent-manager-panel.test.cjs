@@ -1,40 +1,39 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
+const { spawnSync } = require("node:child_process");
 const vm = require("node:vm");
 const root = path.join(__dirname, "..");
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "agent-manager-panel-"));
-const file = path.join(tmp, "personal.json");
 const get = (node, id) => node?.children?.find((item) => item.id === id);
-try {
-  const original = JSON.parse(fs.readFileSync(path.join(root, "layouts/herdr-mods.json"), "utf8"));
-  original.children.push({ id: "agent-manager", type: "block", size: { px: 320 }, content: { mod: "agent-manager" } });
-  get(get(original, "work"), "status").children = [{ id: "project-open", type: "block", content: { mod: "project-open" } }];
-  fs.writeFileSync(file, JSON.stringify(original));
-  const before = fs.readFileSync(file, "utf8");
-  const script = path.join(root, "scripts/agent-manager-panel.cjs");
-  const out = execFileSync(process.execPath, [script, file], { encoding: "utf8" });
-  const backup = out.trim().split("backup: ")[1];
-  assert.equal(fs.readFileSync(backup, "utf8"), before);
-  const changed = JSON.parse(fs.readFileSync(file, "utf8"));
-  const work = get(changed, "work");
-  const panel = get(get(work, "work-body"), "panel");
-  const body = get(panel, "panel-body");
-  assert.equal(get(changed, "agent-manager"), undefined, "remove permanent root sidebar");
-  assert.deepEqual(body.children.map((item) => item.id), ["files", "changes", "agent-manager"]);
-  assert.equal(panel.hidden, true, "panel starts closed, opens only on click");
-  assert.equal(get(work, "tabs").content.mod, "tabs-agent-manager");
-  assert.equal(get(get(work, "status"), "project-open").content.mod, "project-open", "preserve personalized status");
-  const once = fs.readFileSync(file, "utf8");
-  assert.match(execFileSync(process.execPath, [script, file], { encoding: "utf8" }), /already installed/);
-  assert.equal(fs.readFileSync(file, "utf8"), once, "idempotent");
-  const invalid = JSON.parse(before);
-  get(get(invalid, "work"), "tabs").content.mod = "custom-tabs";
-  fs.writeFileSync(file, JSON.stringify(invalid));
-  assert.throws(() => execFileSync(process.execPath, [script, file], { stdio: "pipe" }), /supported personal Herdr layout/);
-  assert.equal(fs.readFileSync(file, "utf8"), JSON.stringify(invalid), "reject custom tabs without touching layout");
+const patch = (script, text) => spawnSync("awk", ["-f", path.join(root, "scripts", script)],
+  { input: text, encoding: "utf8" }).stdout;
+
+// The panel block is appended to panel-body and never reordered; a copy parked at
+// the Layout root -- the old always-on sidebar -- moves in with it.
+const template = fs.readFileSync(path.join(root, "layouts/herdr-mods.json"), "utf8");
+const planted = JSON.parse(template);
+planted.children.push({ id: "agent-manager", type: "block", size: { px: 320 }, content: { mod: "agent-manager" } });
+const patched = patch("patch-panel.awk", JSON.stringify(planted, null, 2) + "\n");
+const changed = JSON.parse(patched);
+const work = get(changed, "work");
+const panel = get(get(work, "work-body"), "panel");
+const body = get(panel, "panel-body");
+assert.equal(get(changed, "agent-manager"), undefined, "remove the permanent root sidebar");
+assert.deepEqual(body.children.map((item) => item.id), ["files", "changes", "agent-manager"]);
+assert.equal(body.children[0].content.mod, "files", "the Files block is left exactly as it was");
+assert.equal(panel.hidden, true, "panel starts closed, opens only on click");
+assert.equal(patch("patch-panel.awk", patched), patched, "a second pass changes nothing");
+
+// The tab bar is renamed in the Layout, since Herdr re-owns mods/tabs/ on start.
+const retabbed = patch("patch-tabs.awk", patched);
+assert.equal(get(get(JSON.parse(retabbed), "work"), "tabs").content.mod, "tabs-agent-manager");
+assert.equal(patch("patch-tabs.awk", retabbed), retabbed, "the tabs patch is idempotent");
+
+// A Layout without a panel belongs to its owner: printed back byte for byte.
+const bare = JSON.stringify({ id: "root", type: "row", children: [{ id: "work", type: "column", children: [] }] }, null, 2) + "\n";
+assert.equal(patch("patch-panel.awk", bare), bare);
+
+{
   const stored = new Map();
   const calls = [];
   const spaces = [{ id: "a", active: true, tabs: [] }, { id: "b", active: false, tabs: [] }];
@@ -83,5 +82,5 @@ try {
   assert.equal(JSON.parse(stored.get("panels")).a, "agent-manager", "remember Manager per space");
   find(tabs.render(), "panel-agent-manager").handlers.click();
   assert.equal(panel.hidden, true, "same button closes panel");
-  console.log("PASS: Agent Manager is a toggleable Files/Changes panel; personal layout backed up, safe and idempotent");
-} finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  console.log("PASS: panel block appended beside Files and Changes, tab bar renamed in the Layout, both idempotent, a bare Layout untouched, Manager toggles per space");
+}

@@ -35,7 +35,12 @@ commit_layout() {
     rm -f "$1"
     return 1
   fi
-  keep_bak "$layout_dst"
+  # One .bak per run: the first change backs up what the user had, later changes in
+  # the same run must not overwrite that with a half-patched Layout.
+  if [ "${layout_bak_fresh:-yes}" = yes ]; then
+    keep_bak "$layout_dst"
+    layout_bak_fresh=no
+  fi
   mv "$1" "$layout_dst"
   [ -z "${2:-}" ] || step "$2"
   return 0

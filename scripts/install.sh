@@ -14,7 +14,8 @@ for arg do
     --all) install_all=yes ;;
     --no-layout) no_layout=yes ;;
     -y|--yes) assume_yes=yes ;;
-    -h|--help) echo 'usage: install.sh [mod...] [--all] [--no-layout] [--yes]'; exit 0 ;;
+    --layout=*) layout="${arg#--layout=}" ;;
+    -h|--help) echo 'usage: install.sh [mod...] [--all] [--layout=NAME] [--no-layout] [--yes]'; exit 0 ;;
     -*) echo "install: unknown option: $arg" >&2; exit 2 ;;
     *) named="$named $arg" ;;
   esac
@@ -83,6 +84,8 @@ install_kind() {
   grep -q '"sidebar"' "$decl" && printf 'sidebar '
   sed -n 's/.*"derive"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/derive:\1/p' "$decl"
   sed -n 's/.*"pi"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/pi:\1/p' "$decl"
+  grep -q '"tabs"' "$decl" && printf 'tabs '
+  grep -q '"panel"' "$decl" && printf 'panel '
   return 0
 }
 mods_todo=''
@@ -169,6 +172,9 @@ wire_personal() {
       mv "$tmp.slot" "$tmp"
       ;;
     sidebar) awk -v name="$mod" -f "$script_dir/patch-sidebar.awk" "$layout_dst" > "$tmp" 2>/dev/null || { patched=no; cp "$layout_dst" "$tmp"; } ;;
+    # The tab bar is a shipped Mod, so its replacement is a rename in the Layout.
+    tabs) awk -f "$script_dir/patch-tabs.awk" "$layout_dst" > "$tmp" ;;
+    panel) awk -f "$script_dir/patch-panel.awk" "$layout_dst" > "$tmp" || cp "$layout_dst" "$tmp" ;;
   esac
   if cmp -s "$layout_dst" "$tmp"; then
     rm -f "$tmp"
@@ -234,7 +240,7 @@ else
   for mod in $mods; do
     for kind in $(install_kind "$mod"); do
       case "$kind" in
-        status|sidebar) wire_personal "$mod" "$kind"; wired=yes ;;
+        status|sidebar|tabs|panel) wire_personal "$mod" "$kind"; wired=yes ;;
       esac
     done
   done
