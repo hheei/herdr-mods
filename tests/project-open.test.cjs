@@ -163,6 +163,16 @@ async function main() {
   preferences.layout = "herdr-mods";
   assert.equal(findById(mod.render(cx), "agent-ui-mode"), null,
     "demo icon must not appear in normal layouts");
+  // svg() has no intrinsic size of its own: an asset without width/height draws
+  // nothing at any .size(), and a stroke that is not currentColor ignores the
+  // theme. The status-bar icons are the ones this Mod owns, so check them here.
+  for (const file of ["vscode", "finder", "agent-ui", "agent-terminal"]
+    .map((name) => path.join(__dirname, "../mods/project-open", `${name}.svg`))) {
+    const svg = fs.readFileSync(file, "utf8");
+    assert.match(svg, /width="\d+"/, `${file} needs a width, or .size(15) has no basis`);
+    assert.match(svg, /height="\d+"/, `${file} needs a height`);
+    assert.match(svg, /currentColor/, `${file} must take its colour from the theme`);
+  }
   console.log("PASS: default click; popup; preference+icon; local opener; remote guard; remote VS Code.");
 }
 
