@@ -105,7 +105,11 @@ const fixtureSrc = fs.readFileSync(path.join(root, "mods/agent-ui/fixtures.js"),
   .replace(/^export (const|function) /gm, "$1 ");
 const bridgeSrc = fs.readFileSync(path.join(root, "mods/agent-ui/bridge-source.js"), "utf8")
   .replace(/^export /gm, "");
-vm.runInNewContext(modelSrc + "\n" + stateSrc + "\n" + bridgeSrc + "\n" + fixtureSrc
+// The view is split into modules; concat them the way Herdr resolves the imports.
+const viewSrc = ["ui", "transcript", "rail", "ask", "scroll"].map((name) =>
+  fs.readFileSync(path.join(root, `mods/agent-ui/${name}.js`), "utf8")
+    .replace(/^export /gm, "").replace(/^import[\s\S]*?;\s*$/gm, "")).join("\n");
+vm.runInNewContext(modelSrc + "\n" + stateSrc + "\n" + bridgeSrc + "\n" + fixtureSrc + "\n" + viewSrc
   + "\nthis.summarizeActivity=summarizeActivity;this.toRailNodes=toRailNodes;this.shortPrompt=shortPrompt;this.turnGeometry=turnGeometry;this.clampScroll=clampScroll;this.visibleTurnIds=visibleTurnIds;this.railLayout=railLayout;this.dotSize=dotSize;this.railHit=railHit;this.previewTop=previewTop;this.railScrubOffset=railScrubOffset;this.FIXTURE_TURNS=FIXTURE_TURNS;this.DEMO_TURNS=DEMO_TURNS;this.fixtureSource=fixtureSource;this.applyEvent=applyEvent;this.createTranscript=createTranscript;this.createBridgeSource=createBridgeSource;this.readBridge=readBridge;this.initialBridge=initialBridge;this.SOURCE_KEY=SOURCE_KEY;", box);
 
 assert.equal(box.FIXTURE_TURNS.length, 7);
@@ -261,9 +265,9 @@ assert.match(textOf(collapsed), /1 failed/);
 assert.doesNotMatch(textOf(collapsed), /Needs attention/);
 
 // Fake actual GPUI height reports; a scroll reflects ALL visible turns.
-ui.measureViewport({ height: 360 }, context);
+box.measureViewport(ui, { height: 360 }, context);
 const measured = [230, 235, 210, 260, 190, 245, 210];
-ui.turns.forEach((turn, i) => ui.measureTurn(turn.id, { height: measured[i] }, context));
+ui.turns.forEach((turn, i) => box.measureTurn(ui, turn.id, { height: measured[i] }, context));
 assert.equal(ui.turnHeights.size, 7);
 const oldTree = ui.render(context);
 assert.ok(find(oldTree, "agent-ui-user-t-intro"));
@@ -347,7 +351,7 @@ assert.equal(outsidePin.style.bg[0], "#777",
   "outside turns use neutral theme dim, never tool status");
 assert.ok(ui.scrollY > 0);
 
-ui.selectTurn("t-failure", context);
+box.selectTurn(ui, "t-failure", context);
 tree = ui.render(context);
 assert.ok(find(tree, "agent-ui-transcript"), "one permanent transcript scrolled by offset");
 assert.ok(find(tree, "agent-ui-user-t-inspect"), "jump must not delete preceding turns");
@@ -416,21 +420,21 @@ assert.equal(ui.hoveredTurn, null);
 assert.equal(find(ui.render(context), "agent-ui-scrollbar-thumb"), null,
   "dot click changes scrollY without drawing any thumb");
 const anchorBefore = ui.scrollY;
-ui.measureTurn("t-intro", { height: measured[0] + 55 }, context);
+box.measureTurn(ui, "t-intro", { height: measured[0] + 55 }, context);
 assert.equal(ui.scrollY, anchorBefore + 55,
   "expanding a prior turn preserves the user's current reading anchor");
-ui.measureViewport({ height: 48 }, context);
+box.measureViewport(ui, { height: 48 }, context);
 assert.equal(find(ui.render(context), "agent-ui-rail"), null,
   "very short view hides dots instead of exposing an invisible scrollbar");
-ui.measureViewport({ height: 360 }, context);
+box.measureViewport(ui, { height: 360 }, context);
 assert.ok(find(ui.render(context), "agent-ui-rail-marker-t-intro"),
   "dots return after resizing");
-ui.measureViewport({ height: 10000 }, context);
+box.measureViewport(ui, { height: 10000 }, context);
 assert.ok(find(ui.render(context), "agent-ui-rail-marker-t-intro"),
   "dots remain visible even when there is no content to scroll");
 assert.equal(find(ui.render(context), "agent-ui-scrollbar-thumb"), null);
 assert.equal(find(ui.render(context), "agent-ui-scrollbar-track"), null);
-ui.measureViewport({ height: 360 }, context);
+box.measureViewport(ui, { height: 360 }, context);
 
 ui.composer.set_value("本地測試訊息");
 click(ui.render(context), "agent-ui-send");
@@ -439,12 +443,12 @@ assert.equal(ui.composer.value(), "");
 assert.ok(find(ui.render(context), "agent-ui-user-t-local-1"));
 assert.match(find(ui.render(context), "agent-ui-message-a-local-1-md").markdown, /Local preview only/);
 
-ui.changeSize({ width: 420 }, context);
+box.changeSize(ui, { width: 420 }, context);
 assert.ok(find(ui.render(context), "agent-ui-rail"),
   "narrow mode uses the same dots-only scrollbar");
 assert.ok(find(ui.render(context), "agent-ui-rail-marker-t-intro"),
   "dots are still usable in a narrow pane");
-ui.changeSize({ width: 210 }, context);
+box.changeSize(ui, { width: 210 }, context);
 assert.equal(find(ui.render(context), "agent-ui-rail-preview"), null,
   "extremely narrow panes do not overflow with a hover preview");
 
@@ -454,8 +458,8 @@ ui.turns = box.DEMO_TURNS.map((turn) => ({
 }));
 ui.turnHeights = new Map();
 ui.scrollY = 0;
-ui.changeSize({ width: 800 }, context);
-ui.measureViewport({ height: 460 }, context);
+box.changeSize(ui, { width: 800 }, context);
+box.measureViewport(ui, { height: 460 }, context);
 const longGeometry = box.turnGeometry(ui.turns, ui.turnHeights);
 const longRail = box.railLayout(longGeometry.ranges, ui.viewportHeight,
   box.visibleTurnIds(longGeometry.ranges, ui.scrollY, ui.viewportHeight));
@@ -475,8 +479,8 @@ ui.turns = box.FIXTURE_TURNS.map((turn) => ({
   ...turn, messages: [...turn.messages], tools: [...turn.tools],
 }));
 ui.turnHeights = new Map();
-ui.changeSize({ width: 800 }, context);
-ui.measureViewport({ height: 460 }, context);
+box.changeSize(ui, { width: 800 }, context);
+box.measureViewport(ui, { height: 460 }, context);
 ui.scrollY = 0;
 ui.keyTurn = null;
 const keyEvent = (key) => ({ keystroke: { key } });
@@ -514,7 +518,7 @@ assert.equal(ui.keyTurn, null, "Escape clears the keyboard focus");
 assert.equal(find(ui.render(context), "agent-ui-rail-preview"), null);
 
 // A narrow pane swaps the strip for the same buckets as a short list.
-ui.changeSize({ width: 210 }, context);
+box.changeSize(ui, { width: 210 }, context);
 let narrow = ui.render(context);
 assert.equal(find(narrow, "agent-ui-rail"), null, "no strip in a narrow pane");
 assert.ok(find(narrow, "agent-ui-turn-list-toggle"), "a Turns control takes over");
@@ -530,7 +534,7 @@ const listScroll = ui.scrollY;
 find(narrow, `agent-ui-turn-list-${listRowId}`).handlers.on_click({}, context);
 assert.equal(ui.turnList, false, "picking a row closes the list");
 assert.notEqual(ui.scrollY, listScroll, "picking a row jumps");
-ui.changeSize({ width: 800 }, context);
+box.changeSize(ui, { width: 800 }, context);
 
 // Tool details: an unknown kind is shown as itself, truncated output says how
 // much it dropped, and a partial patch is not passed off as a full one.
@@ -593,13 +597,13 @@ assert.equal(ui.turns.length, offlineCount, "demo turns come back");
 assert.equal(find(ui.render(context), "agent-ui-empty"), null);
 
 // A turn that arrives while the reader is above does not move the transcript.
-ui.changeSize({ width: 800 }, context);
-ui.measureViewport({ height: 460 }, context);
+box.changeSize(ui, { width: 800 }, context);
+box.measureViewport(ui, { height: 460 }, context);
 ui.scrollY = 0;
 ui.render(context);
 assert.equal(ui.stick, false, "the top of a long transcript is not sticky");
 const readingY = ui.scrollY;
-ui.demoAppend(context);
+box.demoAppend(ui, context);
 assert.equal(ui.newTurns, 1, "an unnoticed turn is counted");
 assert.equal(ui.scrollY, readingY, "the reading anchor is preserved");
 const pill = find(ui.render(context), "agent-ui-new-turns-pill");
@@ -611,16 +615,16 @@ assert.equal(ui.scrollY, bottomY, "the pill lands at the bottom");
 assert.equal(ui.stick, true, "the bottom is sticky");
 
 // At the bottom, growth follows; that is the whole difference.
-ui.demoAppend(context);
+box.demoAppend(ui, context);
 ui.render(context);
 assert.equal(ui.newTurns, 0, "a following reader is not told about new turns");
 assert.ok(ui.scrollY > bottomY, "a following reader moves with the content");
 assert.equal(find(ui.render(context), "agent-ui-new-turns-pill"), null);
 
 // A stream arrives in pieces through the same appendTurn() path a bridge uses.
-ui.changeSize({ width: 800 }, context);
-ui.measureViewport({ height: 460 }, context);
-ui.jumpToBottom(context);
+box.changeSize(ui, { width: 800 }, context);
+box.measureViewport(ui, { height: 460 }, context);
+box.jumpToBottom(ui, context);
 ui.scrollY = 0;
 ui.render(context);
 assert.equal(typeof context.tick, "function", "init registers the only tick Mods have");
@@ -654,7 +658,7 @@ assert.equal(streamed().messages[0].text, finalText, "a finished stream ignores 
 assert.equal(ui.live, liveAfterFinish, "no tick after the end changes the counter");
 
 // At the bottom, the same stream follows instead of counting.
-ui.jumpToBottom(context);
+box.jumpToBottom(ui, context);
 assert.equal(ui.live, 0, "jumping clears the live counter");
 find(ui.render(context), "agent-ui-stream").handlers.on_click({}, context);
 context.tick(context);
@@ -679,7 +683,7 @@ bounded.transcript = box.createTranscript(Array.from({ length: 5 }, (_, i) =>
   ({ id: `b-${i}`, prompt: `${i}`, status: "done",
     messages: [{ id: `a-${i}`, role: "assistant", text: "x", open: false }], tools: [] })), 5);
 bounded.turnHeights = new Map(bounded.turns.map((turn) => [turn.id, 100]));
-bounded.measureViewport({ height: 200 }, context);
+box.measureViewport(bounded, { height: 200 }, context);
 bounded.scrollY = 120;
 bounded.stick = false;
 const topBefore = box.visibleTurnIds(
@@ -807,7 +811,7 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
   assert.equal(box.notes.length, 1, "the same question is not announced twice");
 
   bridged.bridge = { dir: "/bridge/9" };
-  bridged.pickAnswer(0, "sqlite", context);
+  box.pickAnswer(bridged, 0, "sqlite", context);
   await context.task();
   assert.equal(bridged.asking, null, "answering closes the panel at once");
   assert.deepEqual(box.written.at(-1), ["/bridge/9/answer.json",
@@ -827,7 +831,7 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
   assert.equal(textOf(find(freeform, "agent-ui-ask-send")), "Skip");
   bridged.answer.set_value("Use SQLite");
   assert.equal(textOf(find(bridged.render(context), "agent-ui-ask-send")), "Send");
-  bridged.sendAnswer(context);
+  box.sendAnswer(bridged, context);
   await context.task();
   assert.deepEqual(JSON.parse(box.written.at(-1)[1]),
     { response: { kind: "freeform", text: "Use SQLite" } });
@@ -843,35 +847,35 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
   const multiAsk = { heading: null, questions: [{ index: 0, total: 1, question: "pick some",
     allowMultiple: true, allowFreeform: false, options: [{ title: "a" }, { title: "b" }] }] };
   bridged.apply({ type: "asking", asking: multiAsk });
-  bridged.pickAnswer(0, "a", context);
+  box.pickAnswer(bridged, 0, "a", context);
   assert.ok(bridged.asking, "multi-select waits for the Send button");
-  bridged.pickAnswer(0, "b", context);
-  bridged.pickAnswer(0, "a", context);
-  bridged.sendAnswer(context);
+  box.pickAnswer(bridged, 0, "b", context);
+  box.pickAnswer(bridged, 0, "a", context);
+  box.sendAnswer(bridged, context);
   await context.task();
   assert.deepEqual(JSON.parse(box.written.at(-1)[1]),
     { response: { kind: "selection", selections: ["b"] } }, "a tick toggles off again");
 
   bridged.apply({ type: "asking", asking: openAsk });
-  bridged.askKey("2", context);
+  box.askKey(bridged, "2", context);
   await context.task();
   assert.deepEqual(JSON.parse(box.written.at(-1)[1]),
     { response: { kind: "selection", selections: ["sqlite"] } }, "1-9 picks the n-th option");
 
   bridged.apply({ type: "asking", asking: multiAsk });
-  bridged.askKey("space", context);
-  bridged.askKey("space", context);
+  box.askKey(bridged, "space", context);
+  box.askKey(bridged, "space", context);
   assert.equal((bridged.askPicks[0] ?? []).length, 0, "space ticks and unticks");
-  bridged.askKey("down", context);
+  box.askKey(bridged, "down", context);
   assert.equal(bridged.askCursor, 1, "the pointer follows the arrow keys");
-  bridged.askKey("space", context);
-  bridged.askKey("enter", context);
+  box.askKey(bridged, "space", context);
+  box.askKey(bridged, "enter", context);
   await context.task();
   assert.deepEqual(JSON.parse(box.written.at(-1)[1]),
     { response: { kind: "selection", selections: ["b"] } }, "enter sends what is ticked");
 
   bridged.apply({ type: "asking", asking: openAsk });
-  bridged.askKey("escape", context);
+  box.askKey(bridged, "escape", context);
   await context.task();
   assert.deepEqual(JSON.parse(box.written.at(-1)[1]), { cancel: true }, "escape declines");
 
@@ -884,9 +888,9 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
       options: [{ title: "redis" }] }] };
   bridged.apply({ type: "asking", asking: batchAsk });
   assert.ok(find(bridged.render(context), "agent-ui-ask-1-0"), "a batch shows every question");
-  bridged.pickAnswer(0, "pg", context);
-  bridged.pickAnswer(1, "redis", context);
-  bridged.sendAnswer(context);
+  box.pickAnswer(bridged, 0, "pg", context);
+  box.pickAnswer(bridged, 1, "redis", context);
+  box.sendAnswer(bridged, context);
   await context.task();
   assert.deepEqual(JSON.parse(box.written.at(-1)[1]), { response: [
     { status: "answered", response: { kind: "selection", selections: ["pg"] } },
@@ -927,7 +931,8 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
   // Herdr's bundled mods draw Lucide SVGs and tint them with text_color. A font
 // glyph would depend on the reader having that font, so nothing in this view may
 // be a picture character.
-const glyphs = [...fs.readFileSync(path.join(root, "mods/agent-ui/main.js"), "utf8")]
+const glyphs = [...["ui", "transcript", "rail", "ask", "scroll", "main"]
+  .map((name) => fs.readFileSync(path.join(root, `mods/agent-ui/${name}.js`), "utf8")).join("")]
   .filter((ch) => ch.codePointAt(0) > 0x7e && !"·…—".includes(ch)
     && !/[\u4e00-\u9fff]/.test(ch));
 assert.deepEqual(glyphs, [], "icons are svg files, never glyph characters");
