@@ -27,6 +27,10 @@ herdr-app do mod.clone '{"name":"tabs","as":"hheei-tabs"}'
 - installer 对 Layout 只做两件事：**追加节点、改名**。幂等到字节级；找不到对应节点就原样吐出并说明原因，绝不重排或重写别人的布局。
 - 一个 Mod 只干自己的事：`agent-manager` 不知道 tab 栏长什么样。`hheei-tabs`、`hheei-status` 是整套 mods 的**总 tab 栏 / 总状态栏**（克隆官方 + 自己的按钮），自己的新 Mod 要位置就往这两个文件里加一行，不要另起一个去抢同一条。
 
+## 类型
+
+Mod 是 JavaScript，`main.js` 是 Herdr 写死的入口，运行时没有 bundler/transpiler。类型靠 `// @ts-check` + 仓库根的 `jsconfig.json`，宿主声明放在 `types/`（App 只在装了 Herdr 的机器上生成，`sh scripts/sync-host-types.sh` 从 `~/.config/herdr-app` 同步）。CI 跑 `tsc -p jsconfig.json`。别改 `mods/agent-ui/bridge/` 下的 Pi extension 来凑这个检查：那是 Node 侧代码，被 jsconfig 排除在外。
+
 ## 测试
 
 `tests/*.test.cjs` 是单文件 assert 脚本，没有框架；`tests/*.test.sh` 跑端到端安装。

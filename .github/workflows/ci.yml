@@ -1,7 +1,7 @@
 name: CI
 on: [push, pull_request]
 jobs:
-  shell-and-mod:
+  check:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -13,34 +13,18 @@ jobs:
           node-version: '22'
       - name: Static checks
         run: |
-          sh tests/syntax-check.sh mods/project-open/main.js \
-            mods/agent-ui/main.js \
-            mods/agent-ui/fixtures.js \
-            mods/agent-ui/model.js \
-            mods/agent-ui/state.js \
-            mods/agent-ui/bridge/herdr-agent-ui.js \
-            mods/agent-ui/bridge-source.js
-          node --check tests/project-open.test.cjs
-          node --check tests/agent-ui.test.cjs
-          node --check tests/agent-ui-state.test.cjs
-          node --check tests/agent-ui-bridge.test.cjs
-          node --check tests/agent-ui-bridge-source.test.cjs
-          node -e "const f=require('fs'); for(const p of ['mods/project-open/mod.json','mods/project-open/layout.json','mods/agent-ui/mod.json','mods/agent-ui/layout.json','layouts/herdr-mods.json']) JSON.parse(f.readFileSync(p))"
-          sh -n scripts/install.sh
-          sh -n scripts/tui.sh
-          awk -v mods=mods -f scripts/compose-layout.awk layouts/herdr-mods.json > /dev/null
-          awk -f scripts/patch-status.awk layouts/herdr-mods.json > /dev/null || [ $? -eq 3 ]
+          sh tests/syntax-check.sh
+          for file in tests/*.cjs; do node --check "$file"; done
+          node -e "const f = require('fs'); for (const p of [...f.readdirSync('mods').flatMap((m) => ['mods/' + m + '/mod.json', 'mods/' + m + '/layout.json']), 'layouts/herdr-mods.json']) JSON.parse(f.readFileSync(p))"
+          for file in scripts/*.sh; do sh -n "$file"; done
+          awk -v from=workspace-status -v to=hheei-status -f scripts/patch-mod.awk layouts/herdr-mods.json > /dev/null
           awk -v name=probe -f scripts/patch-sidebar.awk layouts/herdr-mods.json > /dev/null
+          awk -v mod=probe -f scripts/patch-panel.awk layouts/herdr-mods.json > /dev/null
           awk -f scripts/demo-layout.awk layouts/herdr-mods.json > /dev/null
-      - name: Behavior and layout tests
+      - name: Types
+        run: npx -y -p typescript@5 tsc -p jsconfig.json
+      - name: Tests
         run: |
-          node tests/project-open.test.cjs
-          node tests/agent-ui.test.cjs
-          node tests/agent-ui-state.test.cjs
-          node tests/agent-ui-bridge.test.cjs
-          node tests/agent-ui-bridge-source.test.cjs
-          node tests/layout-status.test.cjs
-      - name: Installer test
-        run: |
+          for file in tests/*.test.cjs; do node "$file"; done
           sh tests/install-smoke.sh
           sh tests/agent-ui-demo-install.test.sh

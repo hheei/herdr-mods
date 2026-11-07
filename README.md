@@ -100,6 +100,7 @@ Future mods follow the same structure and can be installed by name. Every instal
 ## Development checks
 
 ~~~sh
+tsc -p jsconfig.json      # types, from the copy in types/
 node tests/hheei-status.test.cjs
 node tests/agent-manager.test.cjs
 node tests/agent-manager-panel.test.cjs

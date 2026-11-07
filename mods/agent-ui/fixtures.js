@@ -1,3 +1,4 @@
+// @ts-check
 // Native Agent UI fixtures. Synthetic only: no Pi session files or commands.
 // The scripted turns are also the contract the tests drive; the shipped demo
 // appends generated turns so a long history (bucketed rail, real scrolling)

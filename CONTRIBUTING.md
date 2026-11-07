@@ -1,33 +1,46 @@
 # Contributing
 
-Add independent mods under mods/<name>/, each with main.js, mod.json, assets and README.md. Do not edit shipped Herdr App layouts.
+Add independent mods under `mods/<name>/`, each with `main.js`, `mod.json`, assets and `README.md`. Do not edit shipped Herdr App mods: they are replaced whole on every start.
 
-`scripts/install.sh` knows no mod by name: it copies the mod folders, then applies whatever each `mod.json` declares:
+## Wiring
 
-~~~json
-{"place": "none", "install": "status"}
-~~~
+`mod.json` holds Herdr's own contract (`place`, `size`, `title`, `overlay`) and nothing else. What the installer should do is declared separately in `layout.json`, so the Mod itself never knows about layouts:
 
-- `install: "status"` — the mod replaces the status bar renderer; `scripts/patch-status.awk` patches the personal layout once.
-- `install: "sidebar"` — a sidebar footer button with the mod's own id is inserted (`scripts/patch-sidebar.awk`).
-- `install: "derive:<layout name>"` — a preview layout `<layout name>.json` is derived from the personal layout (`scripts/demo-layout.awk`).
-- no `install` key — the mod needs no layout wiring.
+| `layout.json` | Effect |
+| --- | --- |
+| `{ "status": "workspace-status" }` | Point the Status Bar at this Mod (`scripts/patch-mod.awk`) |
+| `{ "tabs": "tabs" }` | Same, for the tab bar |
+| `{ "panel": true }` | Append a block to `panel-body` (`scripts/patch-panel.awk`) |
+| `{ "sidebar": true }` | Append a sidebar footer button (`scripts/patch-sidebar.awk`) |
+| `{ "derive": "<layout>" }` | Copy a demo layout from the personal one (`scripts/demo-layout.awk`) |
+| `{ "pi": "<file>" }` | Install a Pi extension into `~/.pi/extensions` |
 
-Wiring is applied after every mod folder is copied, status/sidebar first and derived layouts second, so order never matters. Modules never edit layout JSON from shell hooks: a new shape belongs in one awk patcher that prints the layout unchanged and exits 3 when it cannot apply it.
+Patchers do two things and nothing else: **append a node** or **point a value at another Mod**. They are byte-idempotent and print the layout back unchanged when they cannot apply, so nobody's layout is ever rewritten or reordered. A new shape belongs in one awk patcher, never in ad-hoc JSON editing.
 
-Use the official Herdr App mod API and validate with:
+## JavaScript, with types
+
+Mods are JavaScript. `main.js` is the entry Herdr looks for (`src/mods.rs`), and the runtime has no bundler or transpiler, so TypeScript would only add a build step whose output can drift from the source.
+
+Types come from Herdr instead. The App writes `herdr.d.ts` and `gpui-kit.d.ts` for mod authors; `types/` keeps a copy so the checkout type-checks on machines without the App:
 
 ~~~sh
-node tests/hheei-status.test.cjs
-`node --check` parses a `.js` file with `import`/`export` as CommonJS and passes on real syntax errors, so check the Mods with `sh tests/syntax-check.sh <files...>` (it parses a `.mjs` copy); CI does.
+sh scripts/sync-host-types.sh   # after a Herdr update: copies both files from ~/.config/herdr-app
+tsc -p jsconfig.json            # what CI runs
+~~~
 
-```sh
-sh tests/install-smoke.sh
+Every Mod file starts with `// @ts-check`. That is what catches a host API that does not exist or an option that is silently ignored — a broken Mod otherwise loads and renders nothing.
+
+## Checks
+
+~~~sh
+sh tests/syntax-check.sh              # every Mod file, ESM-parsed
+tsc -p jsconfig.json
+for file in tests/*.test.cjs; do node "$file"; done
+sh tests/install-smoke.sh             # installs into a throwaway HERDR_APP_HOME
+sh tests/agent-ui-demo-install.test.sh
 herdr-app check ~/.config/herdr-app/mods/hheei-status
 ~~~
 
-`tests/install-smoke.sh` installs into a throwaway `HERDR_APP_HOME`, so it never touches your real config.
-
-Node is used only by maintainers for tests, never for installation. Always test UI interactions in an actual Herdr App before marking the mod release-ready.
+Tests are single-file assert scripts, no framework. Node is a maintainer dependency for tests and type checking only, never for installation. Always try UI changes in an actual Herdr App before marking a Mod release-ready.
 
 Pull requests should describe motivation, platform and Herdr version, test output, and screenshots for UI changes. Never commit secrets, private SSH configs or live app shared-state files. By contributing, you agree to release changes under Apache-2.0.

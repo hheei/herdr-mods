@@ -1,3 +1,4 @@
+// @ts-check
 // The reader half of the bridge: two state files per Pi process, watched.
 // The diff here is pure, so the host glue in main.js is the only part a test
 // cannot reach.

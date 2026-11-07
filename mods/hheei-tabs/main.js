@@ -1,3 +1,4 @@
+// @ts-check
 // Herdr's built-in tabs mod (Apache-2.0), cloned: this collection's tab bar.
 // A shipped Mod is read-only -- Herdr replaces mods/tabs/ whole on start -- so a
 // change has to live under its own name, and the Layout points here instead.
@@ -52,7 +53,7 @@ export default class Tabs extends View {
   }
 
   render() {
-    const t = theme();
+    const t = /** @type {Record<string, import("gpui-kit").Color>} */ (theme());
     const space = spaces().find(p => p.active);
     const shown = space?.tabs ?? [];
     const stop = (_e, cx) => cx.stop_propagation();
@@ -77,13 +78,16 @@ export default class Tabs extends View {
         .when(c.status === "blocked" || c.status === "done", el => el.child(div().size(6).rounded(3).bg(t[c.status])))
         .when(c.active, el => el.child(div().id(`close-${c.id}`).text_color(t.dim).on_mouse_down("left", stop).on_click((_e, cx) => { cx.stop_propagation(); run("tab.close", { id: c.id }); }).child(svg("mods/pane/close.svg").size(12))));
     };
-    const root = layout(), sidebar = find(root, "sidebar"), w = window();
+    // The Layout is plain JSON; the generated declarations do not model its optional
+    // keys, and this file is a fork of the shipped tabs mod rather than new code.
+    const root = /** @type {any} */ (layout()), sidebar = find(root, "sidebar"), w = window();
     // Old saved rails and a dragged-narrow sidebar can be smaller than the window buttons.
     const lightsPadding = w?.platform === "macos" && w.titlebar === "none" && !w.fullscreen && root?.traffic_lights
-      ? Math.max(10, (root.traffic_lights[0] + 64) / settings().zoom - (sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
+      ? Math.max(10, (root.traffic_lights[0] + 64) / Number(settings().zoom) - (sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
       : 10;
     const panel = find(root, "panel"), body = find(root, "panel-body");
-    const enabled = [...new Set([...(shared("workspace.panels") ?? ["files", "changes"]), "agent-manager"])];
+    const panels = /** @type {string[] | undefined} */ (shared("workspace.panels"));
+    const enabled = [...new Set([...(panels ?? ["files", "changes"]), "agent-manager"])];
     this.syncPanel(space, panel, body, enabled);
     const panelButton = (id, label, icon) => {
       const on = panel && !panel.hidden && body?.active === id;

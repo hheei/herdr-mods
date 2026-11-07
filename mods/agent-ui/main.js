@@ -1,3 +1,4 @@
+// @ts-check
 // Agent UI · standalone synthetic GPUI demo. NEVER starts or controls Pi.
 import { View, div, svg, PathBuilder, Background } from "gpui-kit";
 import { h_flex, v_flex, TextView, TextareaState, Textarea } from "gpui-base";
@@ -737,7 +738,7 @@ export default class AgentUi extends View {
   }
 
   render(cx) {
-    const t = theme();
+    const t = /** @type {Record<string, import("gpui-kit").Color>} */ (theme());
     const fadeBase = /^#[0-9a-f]{6}$/i.test(t.background) ? t.background : "#000000";
     const compact = this.width < 520;
     // The strip needs both room and height; without them the list takes over.

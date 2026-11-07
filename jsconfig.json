@@ -1,0 +1,20 @@
+// Types for the Mods: // @ts-check in each file, checked by `tsc -p jsconfig.json`.
+// types/ is a copy of what Herdr writes for mod authors; `sh scripts/sync-host-types.sh`
+// moves it forward after a Herdr update.
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "paths": { "herdr": ["./types/herdr.d.ts"] }
+  },
+  "include": ["mods/**/*.js", "types/*.d.ts"],
+  // bridge/ is the Pi extension: Node, not gpui-shell. agent-manager is mid-rewrite;
+  // both join the check when their own tests are green.
+  "exclude": ["mods/agent-ui/bridge/**", "mods/agent-manager/**"]
+}

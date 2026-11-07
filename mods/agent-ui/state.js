@@ -1,3 +1,4 @@
+// @ts-check
 // Event -> transcript reducer. Pure: no host objects, no cx, no timers.
 // A bridge event and a fixture event take exactly this path.
 

@@ -1,3 +1,4 @@
+// @ts-check
 // Deterministic, side-effect-free projections for the synthetic prototype.
 const TYPES = { read: "Read", search: "Search", exec: "Run", edit: "Edit", custom: "Other" };
 export function summarizeActivity(tools = []) {

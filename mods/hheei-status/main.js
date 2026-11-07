@@ -1,3 +1,4 @@
+// @ts-check
 // Herdr's built-in workspace-status mod (31 lines), cloned: this collection's status
 // bar. A shipped Mod is read-only -- Herdr replaces mods/workspace-status/ whole on
 // start -- and its render root is size_full(), so a second block beside it in the
@@ -36,7 +37,7 @@ function uiOverlay() {
 
 function lastAction() {
   const saved = shared(LAST_ACTION_KEY);
-  return ACTIONS.includes(saved) ? saved : "vscode";
+  return typeof saved === "string" && ACTIONS.includes(saved) ? saved : "vscode";
 }
 
 function target() {
@@ -102,7 +103,7 @@ export default class HheeiStatus extends View {
   }
 
   render(cx) {
-    const t = theme();
+    const t = /** @type {Record<string, import("gpui-kit").Color>} */ (theme());
     const p = props() || {};
     if (p.menu) {
       const row = (action, label) =>
