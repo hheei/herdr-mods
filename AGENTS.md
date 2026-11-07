@@ -29,7 +29,7 @@ herdr-app do mod.clone '{"name":"tabs","as":"hheei-tabs"}'
 
 ## 类型
 
-Mod 是 JavaScript，`main.js` 是 Herdr 写死的入口，运行时没有 bundler/transpiler。类型靠 `// @ts-check` + 仓库根的 `jsconfig.json`，宿主声明放在 `types/`（App 只在装了 Herdr 的机器上生成，`sh scripts/sync-host-types.sh` 从 `~/.config/herdr-app` 同步）。CI 跑 `tsc -p jsconfig.json`。别改 `mods/agent-ui/bridge/` 下的 Pi extension 来凑这个检查：那是 Node 侧代码，被 jsconfig 排除在外。
+Mod 是 JavaScript，`main.js` 是 Herdr 写死的入口，运行时没有 bundler/transpiler。类型靠 `// @ts-check` + 仓库根的 `jsconfig.json`，宿主声明是 App 生成物：`types/herdr.d.ts`（22 KB，进仓库——这是 Mod 真正会踩的接口面，版本变化在 diff 里看得见）和 `types/gpui-kit.d.ts`（800 KB 组件注册表，**不进仓库**，装了 App 的机器用 `sh scripts/sync-host-types.sh` 同步，CI 用 `sh scripts/host-types-stub.sh` 生成宽松替身）。CI 跑 `tsc -p jsconfig.json`。别改 `mods/agent-ui/bridge/` 下的 Pi extension 来凑这个检查：那是 Node 侧代码，被 jsconfig 排除在外。
 
 ## 测试
 

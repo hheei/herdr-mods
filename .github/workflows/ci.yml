@@ -22,7 +22,9 @@ jobs:
           awk -v mod=probe -f scripts/patch-panel.awk layouts/herdr-mods.json > /dev/null
           awk -f scripts/demo-layout.awk layouts/herdr-mods.json > /dev/null
       - name: Types
-        run: npx -y -p typescript@5 tsc -p jsconfig.json
+        run: |
+          [ -f types/gpui-kit.d.ts ] || sh scripts/host-types-stub.sh > types/gpui-kit.d.ts
+          npx -y -p typescript@5 tsc -p jsconfig.json
       - name: Tests
         run: |
           for file in tests/*.test.cjs; do node "$file"; done

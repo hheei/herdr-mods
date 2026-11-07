@@ -21,11 +21,14 @@ Patchers do two things and nothing else: **append a node** or **point a value at
 
 Mods are JavaScript. `main.js` is the entry Herdr looks for (`src/mods.rs`), and the runtime has no bundler or transpiler, so TypeScript would only add a build step whose output can drift from the source.
 
-Types come from Herdr instead. The App writes `herdr.d.ts` and `gpui-kit.d.ts` for mod authors; `types/` keeps a copy so the checkout type-checks on machines without the App:
+Types come from Herdr instead. The App generates `herdr.d.ts` and `gpui-kit.d.ts` for mod authors, so nothing here is hand-written:
+
+- `types/herdr.d.ts` is committed: 22 KB, and the surface Mods actually misuse (an option that does not exist, a function that changed shape). Bumping it is a visible diff, which is the point.
+- `types/gpui-kit.d.ts` is generated from Herdr's component registry, 800 KB, and stays out of git. A machine with the App gets it from `scripts/sync-host-types.sh`; CI, which has no App, writes loose stand-ins from `scripts/host-types-stub.sh`. Elements go unchecked there, `herdr` does not.
 
 ~~~sh
-sh scripts/sync-host-types.sh   # after a Herdr update: copies both files from ~/.config/herdr-app
-tsc -p jsconfig.json            # what CI runs
+sh scripts/sync-host-types.sh   # after a Herdr update: copies both from ~/.config/herdr-app
+tsc -p jsconfig.json            # what CI runs (with the stub where the real one is missing)
 ~~~
 
 Every Mod file starts with `// @ts-check`. That is what catches a host API that does not exist or an option that is silently ignored — a broken Mod otherwise loads and renders nothing.
