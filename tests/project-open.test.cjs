@@ -40,10 +40,7 @@ const state = {
   spaces: [{ id: "s1", folder: "/home/user", machine: null, active: true }],
   platform: "linux",
   props: {},
-  layout: { id: "root", children: [{ id: "some-stack", type: "stack", active: "some-terminal", children: [
-    { id: "some-ui", type: "block", content: { mod: "agent-ui" } },
-    { id: "some-terminal", type: "block", content: { tab: "active" } },
-  ] }] },
+  agents: [],
 };
 const box = {
   View: class {},
@@ -53,7 +50,7 @@ const box = {
   window: () => ({ platform: state.platform }),
   focused: () => state.focused,
   spaces: () => state.spaces,
-  agents: () => [],
+  agents: () => state.agents,
   keys: () => [],
   run: (action, args) => calls.push(["run", action, args]),
   layout: () => state.layout,
@@ -141,32 +138,42 @@ async function main() {
   assert.ok(calls.some((x) => Array.isArray(x) && x[0] === "code"
     && x[1][0] === "--remote" && x[1][1] === "ssh-remote+gpu-server"));
 
-  // One canonical Agent UI demo, one SVG button, no segmented legacy toggle.
+  // The Agent UI is a view of the focused pane's agent: offered only while such an
+  // agent has focus, and opened as a window over that pane, never as a layout change.
   calls.length = 0;
-  const previewStatus = mod.render(cx);
-  assert.ok(findButton(previewStatus), "Project Open remains available");
-  assert.equal(findById(previewStatus, "agent-ui-demo-toggle"), null,
+  const withoutAgent = mod.render(cx);
+  assert.ok(findButton(withoutAgent), "Project Open remains available");
+  assert.equal(findById(withoutAgent, "agent-ui-demo-toggle"), null,
     "legacy segmented control must not exist");
-  let switcher = findById(previewStatus, "agent-ui-mode");
-  assert.ok(switcher, "one mode icon in the existing Status Bar");
+  assert.equal(findById(withoutAgent, "agent-ui-mode"), null,
+    "no focused agent, no Agent UI to offer");
+  state.agents = [{ address: "a1", status: "working", focused: true }];
+  let switcher = findById(mod.render(cx), "agent-ui-mode");
+  assert.ok(switcher, "a focused agent gets one mode icon");
   assert.equal(switcher.kids.length, 1);
   assert.equal(switcher.kids[0].icon, "mods/project-open/agent-ui.svg");
   switcher.handlers.on_click(null, cx);
-  assert.ok(calls.some(x => x[0] === "run" && x[1] === "layout.select"
-    && x[2].stack === "some-stack" && x[2].child === "some-ui"));
-  state.layout.children[0].active = "some-ui";
-  switcher = findById(mod.render(cx), "agent-ui-mode");
-  assert.equal(switcher.kids[0].icon, "mods/project-open/agent-terminal.svg");
+  const opened = calls.find((x) => x[0] === "overlay" && x[1].mod === "agent-ui");
+  assert.ok(opened, "the button opens the Agent UI as an overlay");
+  assert.equal(opened[1].kind, "window", "a window over the pane, not a dialog");
+  assert.equal(opened[1].width, 0.62);
+  assert.equal(preferences["project-open.agent-ui-overlay"], "overlay-1");
+  assert.equal(calls.some((x) => x[0] === "run" && x[1] === "layout.select"), false,
+    "no layout is switched to show the Agent UI");
   calls.length = 0;
+  switcher = findById(mod.render(cx), "agent-ui-mode");
+  assert.equal(switcher.kids[0].icon, "mods/project-open/agent-terminal.svg",
+    "while it is up, the icon goes back to the terminal");
   switcher.handlers.on_click(null, cx);
-  assert.ok(calls.some(x => x[0] === "run" && x[1] === "layout.select"
-    && x[2].child === "some-terminal"));
-  assert.equal(calls.some(x => x[0] === "terminal.kill" || x[0] === "pane.close"), false);
-  const kept = state.layout;
-  state.layout = { id: "root", children: [{ id: "work", type: "row", children: [] }] };
-  assert.equal(findById(mod.render(cx), "agent-ui-mode"), null,
-    "no agent-ui block in the Layout means no switch to offer");
-  state.layout = kept;
+  assert.ok(calls.some((x) => x[0] === "close" && x[1] === "overlay-1"));
+  assert.equal(preferences["project-open.agent-ui-overlay"], null);
+  assert.equal(calls.some((x) => x[0] === "terminal.kill" || x[0] === "pane.close"), false);
+  // The agent may exit first; the window still has to be closable.
+  state.agents = [];
+  preferences["project-open.agent-ui-overlay"] = "overlay-2";
+  assert.ok(findById(mod.render(cx), "agent-ui-mode"),
+    "an open window stays closable after its agent is gone");
+  preferences["project-open.agent-ui-overlay"] = null;
   // svg() has no intrinsic size of its own: an asset without width/height draws
   // nothing at any .size(), and a stroke that is not currentColor ignores the
   // theme. The status-bar icons are the ones this Mod owns, so check them here.
@@ -177,7 +184,7 @@ async function main() {
     assert.match(svg, /height="\d+"/, `${file} needs a height`);
     assert.match(svg, /currentColor/, `${file} must take its colour from the theme`);
   }
-  console.log("PASS: default click; popup; preference+icon; local opener; remote guard; remote VS Code.");
+  console.log("PASS: default click; popup; preference+icon; local opener; remote guard; remote VS Code; Agent UI window.");
 }
 
 main().catch((err) => { console.error(err); process.exitCode = 1; });

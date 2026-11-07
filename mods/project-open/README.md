@@ -10,13 +10,16 @@ Minimal one-icon launcher for Herdr App, **embedded directly inside the bottom S
 
 Initial choice is **VS Code**. The icon is 15 px inside a 22 px button integrated into the original Status Bar row, with no permanent label, arrow, tooltip, hover highlight or separated background. Long-press is not included because Herdr's documented GPUI API does not guarantee a long-press recognizer.
 
-### Agent UI demo control in the same renderer
+### Agent UI switch in the same renderer
 
-Any Layout that puts `agent-ui` in a Stack of its own shows a **single SVG button** (15px icon inside a 22px target) next to the Commands hint. When Terminal is visible, its conversation icon switches to the Agent UI; when UI is visible, its Terminal icon switches back. The old two-button segmented control has been removed.
+When the **focused pane is running a recognised agent** — Pi reports itself, as do Claude Code and the others in Herdr's program table — a second 22px icon appears beside Project Open. Pressing it opens the **Agent UI as a window over that pane**; pressing it again closes the window and the icon returns to the terminal glyph. No agent in focus, no button.
 
-The button is found by what the Layout holds, not by its name: this Mod walks the tree for a Stack with an `agent-ui` child and switches that Stack, so `agent-ui-demo` is one example rather than a requirement — your own Layout gets the button by putting `agent-ui` in a Stack. Layouts without it hide the icon and Project Open works normally.
+It is a window and not a Layout change on purpose:
 
-This is still a **Tab-display chrome-stack preview**, not a per-model split-Pane switch. It does not start or stop Pi. See [Agent UI limitations](../agent-ui/README.md).
+- Herdr has no command that swaps a pane's terminal for a Mod in place. `pane.split {mod}` makes *another* pane; `terminal.show` swaps one terminal for another.
+- A Layout Stack would tie the button to one layout file, which is what an earlier version did — the button then existed only in `agent-ui-demo`, and only for people who had that file.
+
+The window touches neither the Layout nor the PTY: closing it leaves the terminal exactly as it was, and no running process is ever stopped.
 
 ## Install
 

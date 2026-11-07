@@ -3,7 +3,7 @@
 import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import {
-  theme, window, focused, spaces, agents, keys, run, layout, exec, shared, setShared,
+  theme, window, focused, spaces, agents, keys, run, exec, shared, setShared,
   notify, openOverlay, closeOverlay, props,
 } from "herdr";
 
@@ -14,34 +14,18 @@ const ICON = {
   finder: "mods/project-open/finder.svg",
 };
 
-// Demo only: a Layout that holds agent-ui in a Stack of its own has a *chrome
-// stack*, not a model-pane replacement API, so switching means picking the other
-// child of that Stack. Never modify the current pane or the PTY inside it.
-// Any Layout qualifies, and none of its ids are assumed: the Stack is the one
-// holding agent-ui, whatever the file calls it.
-function demoStack() {
-  const visit = (tree) => {
-    if (!tree || typeof tree !== "object") return null;
-    if (tree.type === "stack") {
-      const children = tree.children ?? [];
-      const modOf = (child) => child.content?.mod ?? child.mod;
-      const ui = children.find((child) => modOf(child) === "agent-ui");
-      const other = children.find((child) => child !== ui);
-      if (ui && other) return { stack: tree, ui: ui.id, other: other.id };
-    }
-    for (const child of tree.children ?? []) {
-      const found = visit(child);
-      if (found) return found;
-    }
-    return null;
-  };
-  return visit(layout());
+// The Agent UI is a view of what an agent is doing in the focused pane, so the
+// Status Bar offers it only while such a pane is focused, and shows it as a window
+// over that pane. Herdr has no way to swap a pane's terminal for a mod in place
+// (`pane.split {mod}` makes a new pane), and a Layout's Stack would tie the button
+// to one layout, so this stays a window: no layout is touched, no PTY is replaced.
+const UI_OVERLAY_KEY = "project-open.agent-ui-overlay";
+function agentPane() {
+  return agents().find((agent) => agent.focused) ?? null;
 }
-
-function demoMode() {
-  const split = demoStack();
-  if (!split) return null;
-  return split.stack.active === split.ui ? "ui" : "terminal";
+function uiOverlay() {
+  const id = shared(UI_OVERLAY_KEY);
+  return typeof id === "string" ? id : null;
 }
 
 function lastAction() {
@@ -135,23 +119,29 @@ export default class ProjectOpen extends View {
         ]);
     }
 
-    const mode = demoMode();
-    const modeToggle = mode === null ? null :
+    const agent = agentPane();
+    const open = uiOverlay() !== null;
+    // One icon like project-open, no hover tooltip or extra Status Bar slot.
+    const modeToggle = agent === null && !open ? null :
       div().id("agent-ui-mode").size(22).flex_none()
         .flex().items_center().justify_center()
         .cursor_pointer().text_color(t.muted)
-        // One icon like project-open, no hover tooltip or extra Status Bar slot.
         .on_click((_e, context) => {
           context.stop_propagation();
-          const split = demoStack();
-          if (!split) return;
-          run("layout.select", {
-            stack: split.stack.id,
-            child: split.stack.active === split.ui ? split.other : split.ui,
-          });
+          const id = uiOverlay();
+          if (id !== null) {
+            setShared(UI_OVERLAY_KEY, null);
+            closeOverlay(id);
+            return;
+          }
+          if (!agentPane()) return;
+          setShared(UI_OVERLAY_KEY, openOverlay({
+            mod: "agent-ui", kind: "window", key: "agent-ui-view",
+            width: 0.62, height: 0.8,
+          }));
         })
-        .child(svg(mode === "terminal"
-          ? "mods/project-open/agent-ui.svg" : "mods/project-open/agent-terminal.svg").size(15));
+        .child(svg(open ? "mods/project-open/agent-terminal.svg"
+          : "mods/project-open/agent-ui.svg").size(15));
     const action = lastAction();
     const button = div().id("project-open-button").size(22).flex_none()
       .flex().items_center().justify_center()
@@ -183,7 +173,7 @@ export default class ProjectOpen extends View {
         // a new far-right slot after the Commands hint.
         .child(button))
       .child(div().flex_1())
-      .when(mode !== null, (el) => el.child(modeToggle))
+      .when(modeToggle !== null, (el) => el.child(modeToggle))
       .child(div().id("palette").text_color(t.dim)
         .on_click(() => run("app.palette")).child(this.hint()));
   }
