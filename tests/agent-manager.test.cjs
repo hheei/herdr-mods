@@ -102,6 +102,8 @@ async function main() {
   const iconNodes = new Set(["skills-header", "mcp-header"].flatMap((id) => find(loadedTree, id).kids.slice(-4)));
   const sourceNodes = allNodes(loadedTree).filter((node) => /^skills-source-\d+$/.test(node.id || ""));
   assert.ok(sourceNodes.length > 0 && sourceNodes.every((node) => node.tooltipText), "Skill prefix icons retain source hints");
+  assert.equal(find(loadedTree, "skills-source-0").tooltipText, "Already in sync");
+  assert.equal(find(loadedTree, "skills-source-1").tooltipText, "Download to local library");
   const withoutIcons = allNodes(loadedTree).filter((node) => !iconNodes.has(node) && !sourceNodes.includes(node));
   assert.ok(withoutIcons.every((node) => !Object.hasOwn(node, "tooltipText")), "status cells and buttons stay tooltip-free");
   assert.equal(find(mod.render(cx), "skills-row-2"), undefined, "Mac-only Skill lives in Import, not main list");
@@ -305,6 +307,9 @@ async function main() {
   state.spaces[0].folder = "/work/other";
   remote.library.beta = "d".repeat(64);
   mod.refresh(cx);
+  await Promise.all(pending.splice(0));
+  const changedBeta = mod.skills.filter((skill) => skill.remote).findIndex((skill) => skill.id === "beta");
+  assert.equal(find(mod.render(cx), `skills-source-${changedBeta}`).tooltipText, "Choose version to keep");
   await Promise.all(pending.splice(0));
   mod.syncOne(cx, mod.skills.find((skill) => skill.id === "beta"));
   assert.ok(state.calls.some((call) => call[0] === "overlay" && call[1].props.conflict?.id === "beta"), "conflict prompts instead of overwriting");

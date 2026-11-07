@@ -5,12 +5,14 @@ const { spawnSync } = require("node:child_process");
 const vm = require("node:vm");
 const root = path.join(__dirname, "..");
 const get = (node, id) => node?.children?.find((item) => item.id === id);
-const patch = (script, text) => spawnSync("awk", ["-f", path.join(root, "scripts", script)],
+const patch = (script, text, vars = {}) => spawnSync("awk",
+  [...Object.entries(vars).flatMap(([key, value]) => ["-v", `${key}=${value}`]), "-f", path.join(root, "scripts", script)],
   { input: text, encoding: "utf8" }).stdout;
+const point = (text, from, to) => patch("patch-mod.awk", text, { from, to });
 
 // The panel block is appended to panel-body and never reordered.
 const template = fs.readFileSync(path.join(root, "layouts/herdr-mods.json"), "utf8");
-const patched = patch("patch-panel.awk", template);
+const patched = patch("patch-panel.awk", template, { mod: "agent-manager" });
 const changed = JSON.parse(patched);
 const work = get(changed, "work");
 const panel = get(get(work, "work-body"), "panel");
@@ -18,16 +20,18 @@ const body = get(panel, "panel-body");
 assert.deepEqual(body.children.map((item) => item.id), ["files", "changes", "agent-manager"]);
 assert.equal(body.children[0].content.mod, "files", "the Files block is left exactly as it was");
 assert.equal(panel.hidden, true, "panel starts closed, opens only on click");
-assert.equal(patch("patch-panel.awk", patched), patched, "a second pass changes nothing");
-
-// The tab bar is renamed in the Layout, since Herdr re-owns mods/tabs/ on start.
-const retabbed = patch("patch-tabs.awk", patched);
-assert.equal(get(get(JSON.parse(retabbed), "work"), "tabs").content.mod, "hheei-tabs");
-assert.equal(patch("patch-tabs.awk", retabbed), retabbed, "the tabs patch is idempotent");
+assert.equal(patch("patch-panel.awk", patched, { mod: "agent-manager" }), patched, "a second pass changes nothing");
+// Shipped Mods stay read-only: the Layout points at ours instead, tab bar and bar.
+const retabbed = point(point(patched, "tabs", "hheei-tabs"), "workspace-status", "hheei-status");
+const bar = JSON.parse(retabbed);
+assert.equal(get(bar, "work").children.find((x) => x.id === "tabs").content.mod, "hheei-tabs");
+assert.equal(get(bar, "work").children.find((x) => x.id === "status").content.mod, "hheei-status");
+assert.equal(point(retabbed, "tabs", "hheei-tabs"), retabbed, "pointing again changes nothing");
+assert.equal(point(retabbed, "some-one-elses-mod", "x"), retabbed, "only the named shipped Mod moves");
 
 // A Layout without a panel belongs to its owner: printed back byte for byte.
 const bare = JSON.stringify({ id: "root", type: "row", children: [{ id: "work", type: "column", children: [] }] }, null, 2) + "\n";
-assert.equal(patch("patch-panel.awk", bare), bare);
+assert.equal(patch("patch-panel.awk", bare, { mod: "agent-manager" }), bare, "a Layout without a panel is its owner's");
 
 {
   const stored = new Map();
@@ -78,5 +82,5 @@ assert.equal(patch("patch-panel.awk", bare), bare);
   assert.equal(JSON.parse(stored.get("panels")).a, "agent-manager", "remember Manager per space");
   find(tabs.render(), "panel-agent-manager").handlers.click();
   assert.equal(panel.hidden, true, "same button closes panel");
-  console.log("PASS: panel block appended beside Files and Changes, tab bar renamed in the Layout, both idempotent, a bare Layout untouched, Manager toggles per space");
+  console.log("PASS: panel block appended beside Files and Changes, tab bar and status bar pointed at ours, both idempotent, a bare Layout untouched, Manager toggles per space");
 }

@@ -126,7 +126,7 @@ const LONG_PROMPTS = [
 const LONG_ANSWERS = [
   "1. 呈現層與 runtime 分離\n2. 設定與內容各自獨立\n3. 失敗只影響該次執行",
   "窄視窗下 Rail 會保留圓點，只有 **極短的 viewport** 才整條隱藏，避免溢出。\n\n主要內容區仍以文字寬度為先，不為了塞控件犧牲閱讀空間。",
-  "```sh\nsh scripts/install.sh agent-ui project-open\nnode tests/agent-ui.test.cjs\n```",
+  "```sh\nsh scripts/install.sh agent-ui hheei-status\nnode tests/agent-ui.test.cjs\n```",
   "因為 **Layout Stack** 只換 chrome，不動 model Pane；另開 Pane 會讓同一份 Agent 出現兩個呈現者。",
   "在展開後的工具列點開該項，錯誤字串在 `detail` 的第一行，不會出現在折疊摘要裡。",
   "```\nrail: anchor dots in one centred column\n```\n\n只描述行為，不寫入未驗證的宿主能力。",

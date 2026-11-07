@@ -169,9 +169,12 @@
         },
         {
           "id": "status",
-          "type": "row",
+          "type": "block",
           "size": {
             "px": 28
+          },
+          "content": {
+            "mod": "workspace-status"
           }
         }
       ]

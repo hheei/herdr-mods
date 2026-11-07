@@ -4,9 +4,9 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 const path = require("node:path");
 
-const fullSource = fs.readFileSync(path.join(__dirname, "../mods/project-open/main.js"), "utf8");
+const fullSource = fs.readFileSync(path.join(__dirname, "../mods/hheei-status/main.js"), "utf8");
 const source = fullSource.slice(fullSource.indexOf("const LAST_ACTION_KEY"))
-  .replace("export default class ProjectOpen", "class ProjectOpen");
+  .replace("export default class HheeiStatus", "class HheeiStatus");
 
 // Models enough of the chainable GPUI nodes to exercise event handlers.
 function node() {
@@ -62,7 +62,7 @@ const box = {
   closeOverlay: (id) => { calls.push(["close", id]); },
   props: () => state.props,
 };
-vm.runInNewContext(source + "\nthis.ProjectOpen = ProjectOpen;", box);
+vm.runInNewContext(source + "\nthis.HheeiStatus = HheeiStatus;", box);
 
 async function drain() {
   for (let i = 0; i < 5; i++) {
@@ -80,15 +80,15 @@ function findById(node, id) {
   }
   return null;
 }
-function findButton(node) { return findById(node, "project-open-button"); }
+function findButton(node) { return findById(node, "hheei-status-button"); }
 
 async function main() {
-  const mod = new box.ProjectOpen();
+  const mod = new box.HheeiStatus();
   const status = mod.render(cx);
   assert.ok(status.kids.length >= 4, "integrated status bar should include labels, agents, palette and icon");
   let button = findButton(status);
   assert.ok(button, "button must be nested inside status bar, not a separate layout block");
-  assert.equal(button.kids[0].icon, "mods/project-open/vscode.svg");
+  assert.equal(button.kids[0].icon, "mods/hheei-status/vscode.svg");
   assert.equal(fullSource.includes(".tooltip("), false, "main icon should not show hover tooltips");
   assert.equal(fullSource.includes(".hover((s) => s.bg(t.hover).text_color(t.foreground))"), false, "main icon should not show a hover highlight");
   button.handlers.on_click(null, cx);
@@ -105,13 +105,13 @@ async function main() {
   assert.equal(menu.kids.length, 2);
   menu.kids[1].handlers.on_click(null, cx); // file manager
   await drain();
-  assert.equal(preferences["project-open.last-action"], "finder");
+  assert.equal(preferences["hheei-status.last-action"], "finder");
   assert.equal(calls.some((x) => Array.isArray(x) && x[0] === "xdg-open"), false,
     "right-click choice must not launch an application");
 
   state.props = {};
   button = findButton(mod.render(cx));
-  assert.equal(button.kids[0].icon, "mods/project-open/finder.svg");
+  assert.equal(button.kids[0].icon, "mods/hheei-status/finder.svg");
 
   calls.length = 0;
   button.handlers.on_click(null, cx);
@@ -131,7 +131,7 @@ async function main() {
   await drain();
   assert.equal(calls.some((x) => Array.isArray(x) && x[0] === "code"), false,
     "choosing VS Code in context menu should not launch");
-  assert.equal(preferences["project-open.last-action"], "vscode");
+  assert.equal(preferences["hheei-status.last-action"], "vscode");
   state.props = {};
   findButton(mod.render(cx)).handlers.on_click(null, cx);
   await drain();
@@ -151,7 +151,7 @@ async function main() {
   let switcher = findById(mod.render(cx), "agent-ui-mode");
   assert.ok(switcher, "a focused agent gets one mode icon");
   assert.equal(switcher.kids.length, 1);
-  assert.equal(switcher.kids[0].icon, "mods/project-open/agent-ui.svg");
+  assert.equal(switcher.kids[0].icon, "mods/hheei-status/agent-ui.svg");
   switcher.handlers.on_click(null, cx);
   const opened = calls.find((x) => x[0] === "overlay" && x[1].mod === "agent-ui");
   assert.ok(opened, "the button opens the Agent UI as an overlay");
@@ -159,28 +159,28 @@ async function main() {
   assert.equal(opened[1].modal, true, "a click beside it must not close the Agent UI");
   assert.equal(opened[1].frame, "none", "the Mod draws its own frame");
   assert.equal(opened[1].width, 0.62);
-  assert.equal(preferences["project-open.agent-ui-overlay"], "overlay-1");
+  assert.equal(preferences["hheei-status.agent-ui-overlay"], "overlay-1");
   assert.equal(calls.some((x) => x[0] === "run" && x[1] === "layout.select"), false,
     "no layout is switched to show the Agent UI");
   calls.length = 0;
   switcher = findById(mod.render(cx), "agent-ui-mode");
-  assert.equal(switcher.kids[0].icon, "mods/project-open/agent-terminal.svg",
+  assert.equal(switcher.kids[0].icon, "mods/hheei-status/agent-terminal.svg",
     "while it is up, the icon goes back to the terminal");
   switcher.handlers.on_click(null, cx);
   assert.ok(calls.some((x) => x[0] === "close" && x[1] === "overlay-1"));
-  assert.equal(preferences["project-open.agent-ui-overlay"], null);
+  assert.equal(preferences["hheei-status.agent-ui-overlay"], null);
   assert.equal(calls.some((x) => x[0] === "terminal.kill" || x[0] === "pane.close"), false);
   // The agent may exit first; the window still has to be closable.
   state.agents = [];
-  preferences["project-open.agent-ui-overlay"] = "overlay-2";
+  preferences["hheei-status.agent-ui-overlay"] = "overlay-2";
   assert.ok(findById(mod.render(cx), "agent-ui-mode"),
     "an open window stays closable after its agent is gone");
-  preferences["project-open.agent-ui-overlay"] = null;
+  preferences["hheei-status.agent-ui-overlay"] = null;
   // svg() has no intrinsic size of its own: an asset without width/height draws
   // nothing at any .size(), and a stroke that is not currentColor ignores the
   // theme. The status-bar icons are the ones this Mod owns, so check them here.
   for (const file of ["vscode", "finder", "agent-ui", "agent-terminal"]
-    .map((name) => path.join(__dirname, "../mods/project-open", `${name}.svg`))) {
+    .map((name) => path.join(__dirname, "../mods/hheei-status", `${name}.svg`))) {
     const svg = fs.readFileSync(file, "utf8");
     assert.match(svg, /width="\d+"/, `${file} needs a width, or .size(15) has no basis`);
     assert.match(svg, /height="\d+"/, `${file} needs a height`);

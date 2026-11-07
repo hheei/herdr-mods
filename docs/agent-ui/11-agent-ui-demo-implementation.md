@@ -8,7 +8,7 @@
 在 **Herdr App GUI 所在的機器**，從 `herdr-mods` checkout 執行：
 
 ```sh
-sh scripts/install.sh agent-ui project-open
+sh scripts/install.sh agent-ui hheei-status
 ```
 
 然後在 Herdr App Layout 選擇器選 **`agent-ui-demo`**。Status Bar 上切換入口是一個小 SVG：Terminal 目前顯示對話 icon（點擊進 UI）；UI 顯示 Terminal icon（點擊返回）。主程式仍在原 Terminal／PTY 裡，**Demo 不會傳送任何 Pi 指令**。
@@ -24,8 +24,8 @@ sh scripts/install.sh agent-ui project-open
 | `mods/agent-ui/model.js` | 純函式：工具數量與狀態摘要、極短問題 preview、rail node、window target |
 | `mods/agent-ui/mod.json` | `place:none`, `focusable:true`（Herdr 的键） |
 | `mods/agent-ui/layout.json` | `derive: agent-ui-demo` + `pi: herdr-agent-ui.js`（installer 的键，Herdr 不读） |
-| `mods/project-open/main.js` | **僅在 agent-ui-demo Layout** 嵌入原 Status Bar 的單一 SVG 按鈕；不再有舊式 segmented 控制 |
-| `mods/project-open/agent-ui.svg`、`agent-terminal.svg` | 同一顆切換按鈕的兩個 icon 狀態（一次只顯示一個） |
+| `mods/hheei-status/main.js` | **僅在 agent-ui-demo Layout** 嵌入原 Status Bar 的單一 SVG 按鈕；不再有舊式 segmented 控制 |
+| `mods/hheei-status/agent-ui.svg`、`agent-terminal.svg` | 同一顆切換按鈕的兩個 icon 狀態（一次只顯示一個） |
 | `scripts/demo-layout.awk` | **既有**的 derive 工具產生唯一 `agent-ui-demo.json`（未重寫安裝流程） |
 | `tests/agent-ui.test.cjs`、`tests/agent-ui-demo-install.test.sh` | 模擬 GPUI 互動及隔離安裝測試 |
 
@@ -82,7 +82,7 @@ sh scripts/install.sh agent-ui project-open
 
 ## 安裝與不干擾要求
 
-- `sh scripts/install.sh agent-ui project-open`：使用唯一的 `agent-ui-demo` Layout，不覆蓋 `main`、一般個人 Layout 或原 Terminal 模型；若標準 `herdr-mods` Status Bar 尚未整合 `project-open`，安裝器按其既有規則 patch 並留 `.bak`。
+- `sh scripts/install.sh agent-ui hheei-status`：使用唯一的 `agent-ui-demo` Layout，不覆蓋 `main`、一般個人 Layout 或原 Terminal 模型；若標準 `herdr-mods` Status Bar 尚未整合 `project-open`，安裝器按其既有規則 patch 並留 `.bak`。
 - Demo Layout 的切換仍使用 **chrome stack 包住整個 active Tab renderer**，不是最終要求的**每個 split model Pane 都能各自切換**。如果 Tab 有多個 model Panes，顯示 UI 時它們會一起隱藏，**不是**執行停止。
 - 沒有 Pi Session JSONL Reader、沒有真正的 Pi Extension、沒有 subprocess、沒有修改正在跑的 Pi。
 - 所有更動預設**只在本地 checkout**，不是 GitHub release；要驗收前不要把這個 Demo 宣告為產品。
@@ -91,7 +91,7 @@ sh scripts/install.sh agent-ui project-open
 
 ```sh
 node tests/agent-ui.test.cjs
-node tests/project-open.test.cjs
+node tests/hheei-status.test.cjs
 sh tests/agent-ui-demo-install.test.sh
 ```
 

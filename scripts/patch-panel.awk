@@ -1,4 +1,5 @@
 # Puts this Mod in the right-hand panel beside Files and Changes, in the Layout.
+#   awk -v mod=agent-manager -f patch-panel.awk layout.json
 # The block is appended and never reordered, so a panel somebody already arranged
 # stays theirs. Nothing else in the tree is inspected or moved.
 function bracket_delta(line, x, a, b) {
@@ -22,12 +23,12 @@ END {
   }
   if (!aclose) passthrough()
   for (i = aopen + 1; i < aclose; i++)
-    if (lines[i] ~ /"mod":[ ]*"agent-manager"/) present = 1
+    if (lines[i] ~ ("\"mod\":[ ]*\"" mod "\"")) present = 1
   if (present) passthrough()
 
   indent = indent_of(lines[aopen + 1])
   if (indent == "" || lines[aopen + 1] ~ /^[ \t]*\]/) indent = indent_of(lines[aopen]) "  "
-  entry = indent "{ \"id\": \"agent-manager\", \"type\": \"block\", \"content\": { \"mod\": \"agent-manager\" } }"
+  entry = indent "{ \"id\": \"" mod "\", \"type\": \"block\", \"content\": { \"mod\": \"" mod "\" } }"
   last = aclose - 1
   while (last > aopen && lines[last] ~ /^[ \t]*$/) last--
   if (last > aopen && lines[last] !~ /\][ \t]*$/ && lines[last] !~ /,[ \t]*$/) lines[last] = lines[last] ","

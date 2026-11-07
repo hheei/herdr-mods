@@ -23,7 +23,7 @@ done
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 repo_dir=$(dirname "$script_dir")
 # Piped one-liner: no checkout around us, so stage the source archive instead.
-if [ ! -f "$script_dir/patch-status.awk" ]; then
+if [ ! -f "$script_dir/patch-mod.awk" ]; then
   stage=$(mktemp -d)
   trap 'rm -rf "$stage"' EXIT HUP INT TERM
   printf '  fetching herdr-mods\n'
@@ -80,12 +80,12 @@ install_kind() {
   decl="$home_dir/mods/$1/layout.json"
   [ -f "$decl" ] || decl="$repo_dir/mods/$1/layout.json"
   [ -f "$decl" ] || return 0
-  grep -q '"status-bar"' "$decl" && printf 'status '
+  sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/status:\1/p' "$decl"
+  sed -n 's/.*"tabs"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/tabs:\1/p' "$decl"
   grep -q '"sidebar"' "$decl" && printf 'sidebar '
+  grep -q '"panel"' "$decl" && printf 'panel '
   sed -n 's/.*"derive"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/derive:\1/p' "$decl"
   sed -n 's/.*"pi"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/pi:\1/p' "$decl"
-  grep -q '"tabs"' "$decl" && printf 'tabs '
-  grep -q '"panel"' "$decl" && printf 'panel '
   return 0
 }
 mods_todo=''
@@ -163,18 +163,12 @@ wire_personal() {
   trap 'rm -f "$tmp"' EXIT HUP INT TERM
   patched=yes
   case "$kind" in
-    status)
-      awk -f "$script_dir/patch-status.awk" "$layout_dst" > "$tmp" 2>/dev/null || cp "$layout_dst" "$tmp"
-      # Which Mods sit in the bar is each Mod's own layout.json decision, so this
-      # runs even when nothing needed patching: a Mod that asks for the bar joins
-      # on its own, and adding one never means editing a Layout by hand.
-      awk -v mods="$home_dir/mods" -f "$script_dir/compose-layout.awk" "$tmp" > "$tmp.slot" || patched=no
-      mv "$tmp.slot" "$tmp"
+    # A shipped Mod being replaced: status:<shipped name>, tabs:<shipped name>.
+    status:*|tabs:*)
+      awk -v from="${kind#*:}" -v to="$mod" -f "$script_dir/patch-mod.awk" "$layout_dst" > "$tmp"
       ;;
     sidebar) awk -v name="$mod" -f "$script_dir/patch-sidebar.awk" "$layout_dst" > "$tmp" 2>/dev/null || { patched=no; cp "$layout_dst" "$tmp"; } ;;
-    # The tab bar is a shipped Mod, so its replacement is a rename in the Layout.
-    tabs) awk -f "$script_dir/patch-tabs.awk" "$layout_dst" > "$tmp" ;;
-    panel) awk -f "$script_dir/patch-panel.awk" "$layout_dst" > "$tmp" || cp "$layout_dst" "$tmp" ;;
+    panel) awk -v mod="$mod" -f "$script_dir/patch-panel.awk" "$layout_dst" > "$tmp" || cp "$layout_dst" "$tmp" ;;
   esac
   if cmp -s "$layout_dst" "$tmp"; then
     rm -f "$tmp"
@@ -240,7 +234,7 @@ else
   for mod in $mods; do
     for kind in $(install_kind "$mod"); do
       case "$kind" in
-        status|sidebar|tabs|panel) wire_personal "$mod" "$kind"; wired=yes ;;
+        status:*|tabs:*|sidebar|panel) wire_personal "$mod" "$kind"; wired=yes ;;
       esac
     done
   done

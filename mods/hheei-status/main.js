@@ -1,4 +1,9 @@
-// Minimal Herdr App project opener. Left click: last choice; right click: menu.
+// Herdr's built-in workspace-status mod (31 lines), cloned: this collection's status
+// bar. A shipped Mod is read-only -- Herdr replaces mods/workspace-status/ whole on
+// start -- and its render root is size_full(), so a second block beside it in the
+// Layout would be squeezed to nothing. A clone is the only place an icon can go.
+// ponytail: the two buttons below are hardcoded on purpose; another Mod author's
+// status icon belongs in that author's own clone, not here.
 // This module runs in Herdr's gpui-kit runtime, NOT a browser.
 import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
@@ -7,11 +12,11 @@ import {
   notify, openOverlay, closeOverlay, props,
 } from "herdr";
 
-const LAST_ACTION_KEY = "project-open.last-action";
+const LAST_ACTION_KEY = "hheei-status.last-action";
 const ACTIONS = ["vscode", "finder"];
 const ICON = {
-  vscode: "mods/project-open/vscode.svg",
-  finder: "mods/project-open/finder.svg",
+  vscode: "mods/hheei-status/vscode.svg",
+  finder: "mods/hheei-status/finder.svg",
 };
 
 // The Agent UI is a view of what an agent is doing in the focused pane, so the
@@ -20,7 +25,7 @@ const ICON = {
 // design does not. Herdr has no way to swap a pane's terminal for a mod in place
 // (`pane.split {mod}` makes a new pane), and a Layout's Stack would tie the button
 // to one layout, so no layout is touched and no PTY is replaced.
-const UI_OVERLAY_KEY = "project-open.agent-ui-overlay";
+const UI_OVERLAY_KEY = "hheei-status.agent-ui-overlay";
 function agentPane() {
   return agents().find((agent) => agent.focused) ?? null;
 }
@@ -79,7 +84,7 @@ async function openAction(action) {
   }
 }
 
-export default class ProjectOpen extends View {
+export default class HheeiStatus extends View {
   // Keep the official workspace-status content and layout, with a single
   // extra icon inside the same status bar (no separate layout block).
   hint() {
@@ -112,7 +117,7 @@ export default class ProjectOpen extends View {
           })
           .child(svg(ICON[action]).size(17).flex_none())
           .child(div().text_size(12.5).child(label));
-      return v_flex().id("project-open-menu").w_full().p(5)
+      return v_flex().id("hheei-status-menu").w_full().p(5)
         .gap(2).bg(t.popover)
         .children([
           row("vscode", "Open in VS Code"),
@@ -122,7 +127,7 @@ export default class ProjectOpen extends View {
 
     const agent = agentPane();
     const open = uiOverlay() !== null;
-    // One icon like project-open, no hover tooltip or extra Status Bar slot.
+    // One icon, same size and treatment as the launcher beside it.
     const modeToggle = agent === null && !open ? null :
       div().id("agent-ui-mode").size(22).flex_none()
         .flex().items_center().justify_center()
@@ -141,16 +146,16 @@ export default class ProjectOpen extends View {
             width: 0.62, height: 0.8,
           }));
         })
-        .child(svg(open ? "mods/project-open/agent-terminal.svg"
-          : "mods/project-open/agent-ui.svg").size(15));
+        .child(svg(open ? "mods/hheei-status/agent-terminal.svg"
+          : "mods/hheei-status/agent-ui.svg").size(15));
     const action = lastAction();
-    const button = div().id("project-open-button").size(22).flex_none()
+    const button = div().id("hheei-status-button").size(22).flex_none()
       .flex().items_center().justify_center()
       .text_color(t.muted).cursor_pointer()
       .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
       .on_mouse_down("right", (e, cx) => {
         cx.stop_propagation();
-        openOverlay({ mod: "project-open", kind: "popup", at: "pointer", width: 192, height: 86, props: { menu: true } });
+        openOverlay({ mod: "hheei-status", kind: "popup", at: "pointer", width: 192, height: 86, props: { menu: true } });
       })
       .on_click((_e, cx) => this.run(action, cx))
       .child(svg(ICON[action]).size(15));

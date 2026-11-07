@@ -7,7 +7,7 @@ This is a **standalone, installable native-GPUI fixture demo**. It does not use 
 From this repository checkout, **on the machine where the Herdr App GUI is running**:
 
 ```sh
-sh scripts/install.sh agent-ui project-open
+sh scripts/install.sh agent-ui hheei-status
 ```
 
 Select the **`agent-ui-demo`** layout in Herdr's Layout picker, or, if the CLI is installed:
@@ -16,9 +16,9 @@ Select the **`agent-ui-demo`** layout in Herdr's Layout picker, or, if the CLI i
 herdr-app do layout.switch '{"name":"agent-ui-demo"}'
 ```
 
-The usual Status Bar (rendered by `project-open`) shows **one small icon**. On the Terminal view, it is a conversation icon to switch to the Agent UI. In the Agent UI, it becomes a terminal icon to switch back. No tooltip, no extra status-bar slot, no two-part control. The old two-button segmented control has been removed.
+The usual Status Bar (rendered by `hheei-status`) shows **one small icon**. On the Terminal view, it is a conversation icon to switch to the Agent UI. In the Agent UI, it becomes a terminal icon to switch back. No tooltip, no extra status-bar slot, no two-part control. The old two-button segmented control has been removed.
 
-The installer derives `agent-ui-demo.json` from your own `herdr-mods.json` if available, otherwise the repo template. It does not replace `main` or the user's normal `herdr-mods` layout with the demo; it creates or refreshes `agent-ui-demo` with one `.bak` backup. However, installing `project-open` also patches the `herdr-mods` Status Bar if it is still the standard one (with its normal single `.bak`). Modified demo files and replaced Mods are backed up to one `.bak`. The installer may ask you to confirm a change in an interactive terminal.
+The installer derives `agent-ui-demo.json` from your own `herdr-mods.json` if available, otherwise the repo template. It does not replace `main` or the user's normal `herdr-mods` layout with the demo; it creates or refreshes `agent-ui-demo` with one `.bak` backup. However, installing `hheei-status` also points the `herdr-mods` Status Bar at it if the bar is still the standard one (with its normal single `.bak`). Modified demo files and replaced Mods are backed up to one `.bak`. The installer may ask you to confirm a change in an interactive terminal.
 
 ## What you can interact with
 
@@ -70,7 +70,7 @@ character appears in `main.js`.
 
 ```sh
 node tests/agent-ui.test.cjs
-node tests/project-open.test.cjs
+node tests/hheei-status.test.cjs
 sh tests/agent-ui-demo-install.test.sh
 ```
 
@@ -78,7 +78,7 @@ On a computer with Herdr App installed, additionally verify the actual runtime:
 
 ```sh
 herdr-app check "$HOME/.config/herdr-app/mods/agent-ui"
-herdr-app check "$HOME/.config/herdr-app/mods/project-open"
+herdr-app check "$HOME/.config/herdr-app/mods/hheei-status"
 herdr-app shot agent-ui.png
 ```
 

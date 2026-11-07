@@ -18,12 +18,12 @@ Wiring is applied after every mod folder is copied, status/sidebar first and der
 Use the official Herdr App mod API and validate with:
 
 ~~~sh
-node tests/project-open.test.cjs
+node tests/hheei-status.test.cjs
 `node --check` parses a `.js` file with `import`/`export` as CommonJS and passes on real syntax errors, so check the Mods with `sh tests/syntax-check.sh <files...>` (it parses a `.mjs` copy); CI does.
 
 ```sh
 sh tests/install-smoke.sh
-herdr-app check ~/.config/herdr-app/mods/project-open
+herdr-app check ~/.config/herdr-app/mods/hheei-status
 ~~~
 
 `tests/install-smoke.sh` installs into a throwaway `HERDR_APP_HOME`, so it never touches your real config.

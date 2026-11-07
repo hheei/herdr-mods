@@ -1,6 +1,6 @@
 # AGENTS.md
 
-herdr-mods：Herdr App 的 Mod 合集（project-open、agent-ui、agent-manager、hheei-tabs）。
+herdr-mods：Herdr App 的 Mod 合集（hheei-status、hheei-tabs、agent-ui、agent-manager）。
 
 ## 现在是什么阶段
 
@@ -23,9 +23,9 @@ herdr-app do mod.clone '{"name":"tabs","as":"hheei-tabs"}'
 
 ## 仓库约定
 
-- `mod.json` 只放 Herdr 自己的契约（`place`、`size`、`title`、`overlay`）。installer 私有的声明放同目录的 `layout.json`，例如 `{ "status-bar": {...} }`、`{ "tabs": true }`、`{ "panel": true }`。
+- `mod.json` 只放 Herdr 自己的契约（`place`、`size`、`title`、`overlay`）。installer 私有的声明放同目录的 `layout.json`，例如 `{ "status": "workspace-status" }`、`{ "tabs": "tabs" }`、`{ "panel": true }`、`{ "sidebar": true }`。
 - installer 对 Layout 只做两件事：**追加节点、改名**。幂等到字节级；找不到对应节点就原样吐出并说明原因，绝不重排或重写别人的布局。
-- 一个 Mod 只干自己的事：`agent-manager` 不知道 tab 栏长什么样，`hheei-tabs` 里那一个按钮是硬编码的例外，别的 Mod 要按钮就去克隆自己的 tab 栏。
+- 一个 Mod 只干自己的事：`agent-manager` 不知道 tab 栏长什么样。`hheei-tabs`、`hheei-status` 是整套 mods 的**总 tab 栏 / 总状态栏**（克隆官方 + 自己的按钮），自己的新 Mod 要位置就往这两个文件里加一行，不要另起一个去抢同一条。
 
 ## 测试
 

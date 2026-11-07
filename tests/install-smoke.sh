@@ -10,14 +10,12 @@ export PI_CODING_AGENT_DIR="$tmp/pihome"
 mkdir -p "$tmp/repo/mods/another-mod" "$tmp/repo/layouts" "$tmp/repo/scripts"
 cp "$repo/scripts/install.sh" "$tmp/repo/scripts/install.sh"
 cp "$repo/scripts/tui.sh" "$tmp/repo/scripts/tui.sh"
-cp "$repo/scripts/patch-status.awk" "$tmp/repo/scripts/patch-status.awk"
+cp "$repo/scripts/patch-mod.awk" "$tmp/repo/scripts/patch-mod.awk"
 cp "$repo/scripts/patch-sidebar.awk" "$tmp/repo/scripts/patch-sidebar.awk"
 cp "$repo/scripts/demo-layout.awk" "$tmp/repo/scripts/demo-layout.awk"
-cp "$repo/scripts/compose-layout.awk" "$tmp/repo/scripts/compose-layout.awk"
-cp "$repo/scripts/patch-tabs.awk" "$tmp/repo/scripts/patch-tabs.awk"
 cp "$repo/scripts/patch-panel.awk" "$tmp/repo/scripts/patch-panel.awk"
 cp "$repo/layouts/herdr-mods.json" "$tmp/repo/layouts/herdr-mods.json"
-cp -R "$repo/mods/project-open" "$tmp/repo/mods/"
+cp -R "$repo/mods/hheei-status" "$tmp/repo/mods/"
 mkdir -p "$tmp/repo/mods/pi-mod/bridge"
 printf '%s\n' 'export default class Pi {}' > "$tmp/repo/mods/pi-mod/main.js"
 printf '%s\n' '{"place":"none"}' > "$tmp/repo/mods/pi-mod/mod.json"
@@ -29,7 +27,7 @@ printf '%s\n' '{"sidebar": true}' > "$tmp/repo/mods/another-mod/layout.json"
 mkdir -p "$tmp/repo/mods/tab-mod"
 printf '%s\n' 'export default class Tab {}' > "$tmp/repo/mods/tab-mod/main.js"
 printf '%s\n' '{"place":"none"}' > "$tmp/repo/mods/tab-mod/mod.json"
-printf '%s\n' '{"tabs": true, "panel": true}' > "$tmp/repo/mods/tab-mod/layout.json"
+printf '%s\n' '{"tabs": "tabs", "panel": true}' > "$tmp/repo/mods/tab-mod/layout.json"
 install() { sh "$tmp/repo/scripts/install.sh" --yes "$@" >/dev/null; }
 layout="$HERDR_APP_HOME/layouts/herdr-mods.json"
 
@@ -37,12 +35,12 @@ layout="$HERDR_APP_HOME/layouts/herdr-mods.json"
 # run never installs something nobody asked for.
 out=$(sh "$tmp/repo/scripts/install.sh" 2>&1 || true)
 case "$out" in *"re-run with --yes"*) ;; *) echo "FAIL: no-terminal run did not ask for --yes"; exit 1 ;; esac
-[ ! -e "$HERDR_APP_HOME/mods/project-open" ]
+[ ! -e "$HERDR_APP_HOME/mods/hheei-status" ]
 
 # Nothing installed: the starting set is the whole checkout, so the same command
 # that later refreshes also does the first install.
 install
-[ -f "$HERDR_APP_HOME/mods/project-open/main.js" ]
+[ -f "$HERDR_APP_HOME/mods/hheei-status/main.js" ]
 [ -f "$HERDR_APP_HOME/mods/another-mod/main.js" ]
 rm -rf "$HERDR_APP_HOME/mods" "$HERDR_APP_HOME/layouts" "$tmp/pihome/extensions"
 
@@ -50,9 +48,9 @@ rm -rf "$HERDR_APP_HOME/mods" "$HERDR_APP_HOME/layouts" "$tmp/pihome/extensions"
 
 # No argument installs every mod folder and applies each declared wiring.
 install --all
-[ -f "$HERDR_APP_HOME/mods/project-open/main.js" ]
+[ -f "$HERDR_APP_HOME/mods/hheei-status/main.js" ]
 [ -f "$HERDR_APP_HOME/mods/another-mod/main.js" ]
-[ "$(grep -c '"mod": "project-open"' "$layout")" -eq 1 ]
+[ "$(grep -c '"mod": "hheei-status"' "$layout")" -eq 1 ]
 [ "$(grep -c '"id":"another-mod"' "$layout")" -eq 1 ]
 [ -f "$layout.bak" ]
 [ -f "$tmp/pihome/extensions/herdr-agent-ui.js" ]
@@ -66,9 +64,9 @@ install
 [ ! -e "$HERDR_APP_HOME/mods/late-mod" ]
 install late-mod
 [ -f "$HERDR_APP_HOME/mods/late-mod/main.js" ]
-printf '%s\n' '// refreshed' >> "$tmp/repo/mods/project-open/main.js"
+printf '%s\n' '// refreshed' >> "$tmp/repo/mods/hheei-status/main.js"
 install
-grep -q refreshed "$HERDR_APP_HOME/mods/project-open/main.js"
+grep -q refreshed "$HERDR_APP_HOME/mods/hheei-status/main.js"
 
 # Re-running is idempotent: one backup per asset, and no backup in mods/, where
 # Herdr would read it as a Mod.
@@ -76,14 +74,14 @@ out=$(sh "$tmp/repo/scripts/install.sh" 2>&1)
 case "$out" in *"mod updated"*) echo "FAIL: second run reported an update"; exit 1 ;; esac
 case "$out" in *"mod unchanged"*) ;; *) echo "FAIL: second run did not report unchanged"; exit 1 ;; esac
 install
-[ "$(grep -c '"mod": "project-open"' "$layout")" -eq 1 ]
+[ "$(grep -c '"mod": "hheei-status"' "$layout")" -eq 1 ]
 [ "$(grep -c '"id":"another-mod"' "$layout")" -eq 1 ]
 [ "$(find "$HERDR_APP_HOME/layouts" -maxdepth 1 -name 'herdr-mods.json.bak*' | wc -l | tr -d ' ')" -eq 1 ]
-[ -f "$HERDR_APP_HOME/backups/project-open/main.js" ]
+[ -f "$HERDR_APP_HOME/backups/hheei-status/main.js" ]
 [ "$(find "$HERDR_APP_HOME/mods" -maxdepth 1 -name '*.bak*' | wc -l | tr -d ' ')" -eq 0 ]
 if command -v jq >/dev/null 2>&1; then
   jq -e '.children[]|select(.id=="work")|.children[]|select(.id=="status")
-    | .type=="row" and ([.children[].content.mod]|index("project-open")!=null)' "$layout" >/dev/null
+    | .type=="block" and .content.mod=="hheei-status"' "$layout" >/dev/null
   jq empty "$layout"
 fi
 
@@ -95,18 +93,18 @@ install
 rm -rf "$HERDR_APP_HOME/mods" "$HERDR_APP_HOME/layouts"
 install another-mod
 [ -f "$HERDR_APP_HOME/mods/another-mod/main.js" ]
-[ ! -e "$HERDR_APP_HOME/mods/project-open" ]
+[ ! -e "$HERDR_APP_HOME/mods/hheei-status" ]
 [ -f "$layout" ]
 
 # layout.json is the user's call: what they edited survives a reinstall, so taking a
 # Mod out of the bar sticks instead of coming back with the checkout's default.
-install project-open
-printf '%s\n' '{ "status-bar": { "order": 99 } }' > "$HERDR_APP_HOME/mods/project-open/layout.json"
-install project-open
-[ "$(cat "$HERDR_APP_HOME/mods/project-open/layout.json")" = '{ "status-bar": { "order": 99 } }' ]
-printf '%s\n' '{ }' > "$HERDR_APP_HOME/mods/project-open/layout.json"
-install project-open
-[ "$(cat "$HERDR_APP_HOME/mods/project-open/layout.json")" = '{ }' ]
+install hheei-status
+printf '%s\n' '{ "status": "some-other-bar" }' > "$HERDR_APP_HOME/mods/hheei-status/layout.json"
+install hheei-status
+[ "$(cat "$HERDR_APP_HOME/mods/hheei-status/layout.json")" = '{ "status": "some-other-bar" }' ]
+printf '%s\n' '{ }' > "$HERDR_APP_HOME/mods/hheei-status/layout.json"
+install hheei-status
+[ "$(cat "$HERDR_APP_HOME/mods/hheei-status/layout.json")" = '{ }' ]
 
 # A Mod asks for the tab bar and the panel through its own layout.json: the tab bar
 # is renamed in place and the panel block is appended, once.
@@ -120,11 +118,11 @@ def find(n, i):
         r = find(c, i)
         if r: return r
 w = find(d, 'work')
-assert find(w, 'tabs')['content']['mod'] == 'hheei-tabs'
-assert [c['id'] for c in find(d, 'panel-body')['children']] == ['files', 'changes', 'agent-manager']
+assert find(w, 'tabs')['content']['mod'] == 'tab-mod'
+assert [c['id'] for c in find(d, 'panel-body')['children']] == ['files', 'changes', 'tab-mod']
 " "$layout"
 install tab-mod
-[ "$(grep -c 'agent-manager' "$layout")" -ge 1 ]
+[ "$(grep -c '"tab-mod"' "$layout")" -ge 2 ]
 
 # A customized status bar is left alone; the mods still install.
 mkdir -p "$HERDR_APP_HOME/layouts"
@@ -138,8 +136,8 @@ fs.writeFileSync(process.argv[2], JSON.stringify(json, null, 2) + "\n");
 ' "$repo/layouts/herdr-mods.json" "$layout"
 install
 grep -q '"mod": "my-status"' "$layout"
-[ "$(grep -c '"mod": "project-open"' "$layout")" -eq 0 ]
-[ -f "$HERDR_APP_HOME/mods/project-open/main.js" ]
+[ "$(grep -c '"mod": "hheei-status"' "$layout")" -eq 0 ]
+[ -f "$HERDR_APP_HOME/mods/hheei-status/main.js" ]
 
 # The Pi extension is not layout wiring: it installs with --no-layout too.
 HERDR_APP_HOME="$tmp/bare2" sh "$tmp/repo/scripts/install.sh" pi-mod --no-layout --yes >/dev/null
@@ -148,7 +146,7 @@ HERDR_APP_HOME="$tmp/bare2" sh "$tmp/repo/scripts/install.sh" pi-mod --no-layout
 
 # --no-layout writes files and nothing else.
 HERDR_APP_HOME="$tmp/bare" sh "$tmp/repo/scripts/install.sh" --all --no-layout --yes >/dev/null
-[ -f "$tmp/bare/mods/project-open/main.js" ]
+[ -f "$tmp/bare/mods/hheei-status/main.js" ]
 [ ! -e "$tmp/bare/layouts" ]
 sh "$tmp/repo/scripts/install.sh" --help >/dev/null
 sh "$tmp/repo/scripts/install.sh" --nope 2>/dev/null && exit 1 || true
@@ -165,7 +163,7 @@ cp -R "$tmp/repo/." "$tmp/src/herdr-mods-main/"
 tar -czf "$tmp/src.tgz" -C "$tmp/src" herdr-mods-main
 HERDR_APP_HOME="$tmp/pipehome" HERDR_MODS_ARCHIVE_URL="file://$tmp/src.tgz" \
   sh -s -- --all --yes < "$tmp/repo/scripts/install.sh" >/dev/null 2>&1
-[ -f "$tmp/pipehome/mods/project-open/main.js" ]
+[ -f "$tmp/pipehome/mods/hheei-status/main.js" ]
 [ -f "$tmp/pipehome/layouts/herdr-mods.json" ]
 
 echo "PASS: --yes required without a terminal, refresh default, --all, named scope, declared status/sidebar/tabs/panel wiring, unchanged is not rewritten, customized status untouched, no-layout, env fallback, piped one-liner."
