@@ -35,7 +35,7 @@ assert.equal(stack.active, "agent-ui-demo-terminal");
 assert.equal(stack.children.find(x => x.id === "agent-ui-demo-ui").content.mod, "agent-ui");
 assert.equal(stack.children.find(x => x.id === "agent-ui-demo-terminal").content.tab, "active");
 const status = work.children.find(x => x.id === "status");
-assert.equal(status.slot, "status-bar", "the demo Layout keeps the status slot");
+assert.equal(status.type, "row", "the demo Layout keeps the shared status row");
 assert.equal(status.children.some(x => x.content.mod === "project-open"), true);
 NODE
 

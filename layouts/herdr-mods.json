@@ -172,8 +172,7 @@
           "type": "row",
           "size": {
             "px": 28
-          },
-          "slot": "status-bar"
+          }
         }
       ]
     }

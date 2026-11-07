@@ -31,7 +31,7 @@ Install [Herdr App](https://github.com/herdrdev/herdr-app#install) first. Run **
 curl -fsSL https://raw.githubusercontent.com/hheei/herdr-mods/main/scripts/install.sh | sh
 ~~~
 
-With no mod name it installs **every** mod under `mods/` and applies the layout wiring each `mod.json` declares; name mods to install a subset. The same installer runs two ways: from a checkout it installs the local files, and when piped it downloads a temporary source archive, installs, and deletes the archive. It is [scripts/install.sh](scripts/install.sh); review any downloaded script before execution. Requires `sh`, curl and tar.
+With no mod name it installs **every** mod under `mods/` and applies the layout wiring each mod's `layout.json` declares; name mods to install a subset. The same installer runs two ways: from a checkout it installs the local files, and when piped it downloads a temporary source archive, installs, and deletes the archive. It is [scripts/install.sh](scripts/install.sh); review any downloaded script before execution. Requires `sh`, curl and tar.
 
 **Windows:** there is no PowerShell installer. Run the same commands from **Git Bash** or **WSL** — the Mod files go to the same `~/.config/herdr-app` folder.
 
@@ -64,7 +64,7 @@ The official Herdr App home is **~/.config/herdr-app**, even on Windows. XDG_CON
 ## Repository layout
 
 ~~~text
-mods/<name>/        each mod is self-contained (main.js, mod.json, assets, README)
+mods/<name>/        each mod is self-contained (main.js, mod.json, layout.json, assets, README)
 layouts/herdr-mods.json fallback base for the shared personal layout
 scripts/            sh installer (local or piped), layout patchers, shared tui.sh
 tests/              developer checks
@@ -77,6 +77,10 @@ Future mods follow the same structure and can be installed by name. Every instal
 
 ~~~sh
 node tests/project-open.test.cjs
+node tests/agent-manager.test.cjs
+node tests/agent-manager-panel.test.cjs
+node tests/agent-manager-remote.test.cjs
+sh scripts/.agent-manager-sync-test.sh # local-only, ignored by Git
 node tests/layout-status.test.cjs
 node tests/agent-ui.test.cjs
 node --check mods/project-open/main.js

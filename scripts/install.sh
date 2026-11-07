@@ -1,6 +1,6 @@
 #!/bin/sh
 # Install or refresh Herdr mods. Each mod declares its own layout wiring in
-# mod.json ("install": "status" | "sidebar" | "derive:<layout>" | "pi:<file>"), so this script
+# layout.json ("status-bar" | "sidebar" | "derive": "<layout>" | "pi": "<file>"), so this script
 # only applies the wiring shapes it knows and no mod by name.
 # Checkout: sh scripts/install.sh [mod...] [--no-layout]
 # Piped:    curl -fsSL .../install.sh | sh
@@ -54,7 +54,13 @@ for mod in $mods; do
   step "mod $verb ${dim}→ $dst${off}"
 done
 install_kind() {
-  sed -n 's/.*"install"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$home_dir/mods/$1/mod.json"
+  decl="$home_dir/mods/$1/layout.json"
+  [ -f "$decl" ] || return 0
+  grep -q '"status-bar"' "$decl" && printf 'status '
+  grep -q '"sidebar"' "$decl" && printf 'sidebar '
+  sed -n 's/.*"derive"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/derive:\1/p' "$decl"
+  sed -n 's/.*"pi"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/pi:\1/p' "$decl"
+  return 0
 }
 wire_personal() {
   mod=$1 kind=$2
@@ -73,11 +79,11 @@ wire_personal() {
   case "$kind" in
     status)
       awk -f "$script_dir/patch-status.awk" "$layout_dst" > "$tmp" 2>/dev/null || cp "$layout_dst" "$tmp"
-      # The status area is a slot, filled from every Mod's own mod.json. This also
-      # runs when nothing needed patching: a Mod that declares the slot joins on
-      # its own, so adding one never means editing a Layout by hand.
-      HERDR_MODS_MODS_DIR="$home_dir/mods" sh "$script_dir/compose-layout.sh" "$tmp" || patched=no
-      rm -f "$tmp.bak"
+      # Which Mods sit in the bar is each Mod's own layout.json decision, so this
+      # runs even when nothing needed patching: a Mod that asks for the bar joins
+      # on its own, and adding one never means editing a Layout by hand.
+      awk -v mods="$home_dir/mods" -f "$script_dir/compose-layout.awk" "$tmp" > "$tmp.slot" || patched=no
+      mv "$tmp.slot" "$tmp"
       ;;
     sidebar) awk -v name="$mod" -f "$script_dir/patch-sidebar.awk" "$layout_dst" > "$tmp" 2>/dev/null || { patched=no; cp "$layout_dst" "$tmp"; } ;;
   esac
@@ -129,10 +135,11 @@ wire_pi() {
   step "extension $verb ${dim}→ $dst${off}"
 }
 for mod in $mods; do
-  kind=$(install_kind "$mod")
-  case "$kind" in
-    *pi:*) wire_pi "$mod" "${kind##*pi:}" ;;
-  esac
+  for kind in $(install_kind "$mod"); do
+    case "$kind" in
+      pi:*) wire_pi "$mod" "${kind#pi:}" ;;
+    esac
+  done
 done
 if [ "$no_layout" = yes ]; then
   warn "layout untouched (--no-layout); wire the mods by hand"
@@ -141,14 +148,14 @@ else
   # derived layout must inherit the already-wired base, not the shipped one.
   wired=no
   for mod in $mods; do
-    for kind in $(install_kind "$mod" | tr ',' ' '); do
+    for kind in $(install_kind "$mod"); do
       case "$kind" in
         status|sidebar) wire_personal "$mod" "$kind"; wired=yes ;;
       esac
     done
   done
   for mod in $mods; do
-    for kind in $(install_kind "$mod" | tr ',' ' '); do
+    for kind in $(install_kind "$mod"); do
       case "$kind" in
         derive:*) wire_derive "$mod" "${kind#derive:}"; wired=yes ;;
       esac

@@ -25,10 +25,9 @@ jobs:
           node --check tests/agent-ui-state.test.cjs
           node --check tests/agent-ui-bridge.test.cjs
           node --check tests/agent-ui-bridge-source.test.cjs
-          node -e "const f=require('fs'); for(const p of ['mods/project-open/mod.json','mods/agent-ui/mod.json','layouts/herdr-mods.json']) JSON.parse(f.readFileSync(p))"
+          node -e "const f=require('fs'); for(const p of ['mods/project-open/mod.json','mods/project-open/layout.json','mods/agent-ui/mod.json','mods/agent-ui/layout.json','layouts/herdr-mods.json']) JSON.parse(f.readFileSync(p))"
           sh -n scripts/install.sh
           sh -n scripts/tui.sh
-          sh -n scripts/compose-layout.sh
           awk -v mods=mods -f scripts/compose-layout.awk layouts/herdr-mods.json > /dev/null
           awk -f scripts/patch-status.awk layouts/herdr-mods.json > /dev/null || [ $? -eq 3 ]
           awk -v name=probe -f scripts/patch-sidebar.awk layouts/herdr-mods.json > /dev/null

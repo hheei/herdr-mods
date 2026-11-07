@@ -35,10 +35,10 @@ mods/
     model.js                  Tool activity and rail projections (current)
     mod.json                  place:none; focusable:true
     README.md                 Install, use, safety, known limitations
-    mod.json                  install: "derive:agent-ui-demo"
+    layout.json               derive: "agent-ui-demo"
   project-open/
     main.js                   Existing status renderer + demo-only toggle
-    mod.json                  install: "status"
+    layout.json               status-bar: { order: 10 }
 
 scripts/
   install.sh                  Copies mods, then applies their declared wiring

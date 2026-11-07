@@ -1,7 +1,8 @@
-# Patch Project Open into the existing status block without adding layout space.
-# Handles the stock status block and the old split-row implementation; also
-# removes the old sidebar button. When the status area is customized the layout
-# is printed unchanged and the exit status is 3, so existing layouts are safe.
+# Patch the status area so Mods can share it without adding layout space.
+# Handles the stock status block, the old split-row implementation and the slot
+# form written by an earlier version; also removes the old sidebar button. When the
+# status area is customized the layout is printed unchanged and the exit status is
+# 3, so existing layouts are safe.
 function brace_delta(line, x, a, b) {
   x=line; a=gsub(/\{/, "", x)
   x=line; b=gsub(/\}/, "", x)
@@ -50,34 +51,31 @@ END {
   }
   if (skipped) bail()
 
-  isRow=isBlock=hasOriginal=hasProject=hasWorkspace=0
+  # A bar that already holds only status-bar-* blocks is the current form: leave the
+  # node alone (compose-layout.sh fills in whatever is missing).
+  isRow=isBlock=hasWorkspace=hasProject=foreign=0
   for (i=start; i<=stop; i++) {
+    if (lines[i] ~ /"id"[ \t]*:[ \t]*"status-bar-/) continue
+    if (lines[i] ~ /"id"[ \t]*:[ \t]*"status"[ \t]*,?[ \t]*$/) continue
+    if (lines[i] ~ /"id"[ \t]*:[ \t]*"[^"]*"/) foreign=1
     if (lines[i] ~ /"type"[ \t]*:[ \t]*"row"/) isRow=1
     if (lines[i] ~ /"type"[ \t]*:[ \t]*"block"/) isBlock=1
-    if (lines[i] ~ /"id"[ \t]*:[ \t]*"status-original"/) hasOriginal=1
-    if (lines[i] ~ /"mod"[ \t]*:[ \t]*"project-open"/) hasProject=1
     if (lines[i] ~ /"mod"[ \t]*:[ \t]*"workspace-status"/) hasWorkspace=1
+    if (lines[i] ~ /"mod"[ \t]*:[ \t]*"project-open"/) hasProject=1
   }
-  if (isRow) {
-    if (!hasOriginal || !hasProject || !hasWorkspace) skip("customized status row left unchanged")
-  } else if (!isBlock || (!hasWorkspace && !hasProject)) {
-    skip("status bar is customized; leaving it unchanged")
-  }
+  if (!isRow && (!isBlock || (!hasWorkspace && !hasProject))) skip("status bar is customized; leaving it unchanged")
   if (skipped) bail()
+  migrate = !isRow || foreign
 
-  # The status area becomes a slot, not a Mod: which Mods fill it is decided by
-  # their own mod.json declarations (compose-layout.sh). Works the same whether the
-  # Layout had the stock block or the old split row, and leaves a customized one be.
   for (i=1; i<=NR; i++) {
     if (oldSidebarStart && i>=oldSidebarStart && i<=oldSidebarEnd) continue
-    if (i==start) {
+    if (i==start && migrate) {
       pad=indent(lines[start])
       suffix=(lines[stop] ~ /,[ \t]*$/ ? "," : "")
       print pad "{"
       print pad "  \"id\": \"status\","
       print pad "  \"type\": \"row\","
-      print pad "  \"size\": {\"px\": 28},"
-      print pad "  \"slot\": \"status-bar\""
+      print pad "  \"size\": {\"px\": 28}"
       print pad "}" suffix
       i=stop
       continue

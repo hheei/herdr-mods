@@ -22,7 +22,8 @@ sh scripts/install.sh agent-ui project-open
 | `mods/agent-ui/main.js` | 新的 Native GPUI View、工具群組／行／細節、Markdown、Rail、模擬 Composer |
 | `mods/agent-ui/fixtures.js` | 60 輪合成對話（7 輪腳本 + 53 輪長度不一的生成輪次），含 Markdown、工具類型、failed／pending／working；`DEMO_TURNS` 給人工感受、`FIXTURE_TURNS`（前 7 輪）供測試固定 |
 | `mods/agent-ui/model.js` | 純函式：工具數量與狀態摘要、極短問題 preview、rail node、window target |
-| `mods/agent-ui/mod.json` | `place:none` + `install:derive:agent-ui-demo` |
+| `mods/agent-ui/mod.json` | `place:none`, `focusable:true`（Herdr 的键） |
+| `mods/agent-ui/layout.json` | `derive: agent-ui-demo` + `pi: herdr-agent-ui.js`（installer 的键，Herdr 不读） |
 | `mods/project-open/main.js` | **僅在 agent-ui-demo Layout** 嵌入原 Status Bar 的單一 SVG 按鈕；不再有舊式 segmented 控制 |
 | `mods/project-open/agent-ui.svg`、`agent-terminal.svg` | 同一顆切換按鈕的兩個 icon 狀態（一次只顯示一個） |
 | `scripts/demo-layout.awk` | **既有**的 derive 工具產生唯一 `agent-ui-demo.json`（未重寫安裝流程） |

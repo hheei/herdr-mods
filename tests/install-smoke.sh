@@ -13,16 +13,17 @@ cp "$repo/scripts/tui.sh" "$tmp/repo/scripts/tui.sh"
 cp "$repo/scripts/patch-status.awk" "$tmp/repo/scripts/patch-status.awk"
 cp "$repo/scripts/patch-sidebar.awk" "$tmp/repo/scripts/patch-sidebar.awk"
 cp "$repo/scripts/demo-layout.awk" "$tmp/repo/scripts/demo-layout.awk"
-cp "$repo/scripts/compose-layout.sh" "$tmp/repo/scripts/compose-layout.sh"
 cp "$repo/scripts/compose-layout.awk" "$tmp/repo/scripts/compose-layout.awk"
 cp "$repo/layouts/herdr-mods.json" "$tmp/repo/layouts/herdr-mods.json"
 cp -R "$repo/mods/project-open" "$tmp/repo/mods/"
 mkdir -p "$tmp/repo/mods/pi-mod/bridge"
 printf '%s\n' 'export default class Pi {}' > "$tmp/repo/mods/pi-mod/main.js"
-printf '%s\n' '{"place":"none","install":"pi:herdr-agent-ui.js"}' > "$tmp/repo/mods/pi-mod/mod.json"
+printf '%s\n' '{"place":"none"}' > "$tmp/repo/mods/pi-mod/mod.json"
+printf '%s\n' '{"pi": "herdr-agent-ui.js"}' > "$tmp/repo/mods/pi-mod/layout.json"
 printf '%s\n' 'export default function (pi) {}' > "$tmp/repo/mods/pi-mod/bridge/herdr-agent-ui.js"
 printf '%s\n' 'export default class Another {}' > "$tmp/repo/mods/another-mod/main.js"
-printf '%s\n' '{"place":"none","install":"sidebar"}' > "$tmp/repo/mods/another-mod/mod.json"
+printf '%s\n' '{"place":"none"}' > "$tmp/repo/mods/another-mod/mod.json"
+printf '%s\n' '{"sidebar": true}' > "$tmp/repo/mods/another-mod/layout.json"
 install() { sh "$tmp/repo/scripts/install.sh" "$@" >/dev/null; }
 layout="$HERDR_APP_HOME/layouts/herdr-mods.json"
 
@@ -46,7 +47,7 @@ install
 [ "$(find "$HERDR_APP_HOME/mods" -maxdepth 1 -name '*.bak*' | wc -l | tr -d ' ')" -eq 0 ]
 if command -v jq >/dev/null 2>&1; then
   jq -e '.children[]|select(.id=="work")|.children[]|select(.id=="status")
-    | .type=="row" and .slot=="status-bar" and ([.children[].content.mod]|index("project-open")!=null)' "$layout" >/dev/null
+    | .type=="row" and ([.children[].content.mod]|index("project-open")!=null)' "$layout" >/dev/null
   jq empty "$layout"
 fi
 
