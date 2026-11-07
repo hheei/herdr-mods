@@ -27,11 +27,14 @@ printf '%s\n' '{"sidebar": true}' > "$tmp/repo/mods/another-mod/layout.json"
 install() { sh "$tmp/repo/scripts/install.sh" "$@" >/dev/null; }
 layout="$HERDR_APP_HOME/layouts/herdr-mods.json"
 
-# With nothing installed there is nothing to refresh: it says so and writes nothing.
+# Nothing installed: the starting set is the whole checkout, so the same command
+# that later refreshes also does the first install.
 install
-[ ! -e "$HERDR_APP_HOME/mods/another-mod" ]
+[ -f "$HERDR_APP_HOME/mods/project-open/main.js" ]
+[ -f "$HERDR_APP_HOME/mods/another-mod/main.js" ]
+rm -rf "$HERDR_APP_HOME/mods" "$HERDR_APP_HOME/layouts" "$tmp/pihome/extensions"
 
-# --all installs every Mod this checkout has.
+# --all means the same set once something is installed.
 
 # No argument installs every mod folder and applies each declared wiring.
 install --all
@@ -134,4 +137,4 @@ HERDR_APP_HOME="$tmp/pipehome" HERDR_MODS_ARCHIVE_URL="file://$tmp/src.tgz" \
 [ -f "$tmp/pipehome/mods/project-open/main.js" ]
 [ -f "$tmp/pipehome/layouts/herdr-mods.json" ]
 
-echo "PASS: --all, update-only default, named scope, declared wiring, idempotence, one .bak each, customized status untouched, no-layout, env fallback, piped one-liner."
+echo "PASS: refresh default, --all, named scope, declared wiring, idempotence, one .bak each, customized status untouched, no-layout, env fallback, piped one-liner."

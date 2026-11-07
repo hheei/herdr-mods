@@ -31,25 +31,26 @@ if [ ! -f "$script_dir/patch-status.awk" ]; then
 fi
 . "$script_dir/tui.sh"
 home_dir=$(app_home)
-# What is installed is what sits in the App Home already: no bookkeeping of our own,
-# and nothing of ours in Herdr's folder. A named Mod always wins; --all means every
-# Mod in this checkout; otherwise this refreshes only what is already there.
+# One verb: bring what belongs here up to date. What that means is the App Home
+# already -- no bookkeeping file of ours, nothing of ours in Herdr's folder. Naming
+# Mods narrows it, --all widens it, and with nothing installed there is nothing to
+# refresh yet, so the whole checkout is the starting set.
 mods=''
 if [ -n "$named" ]; then
   mods=$named
-elif [ "$install_all" = yes ]; then
-  for dir in "$repo_dir"/mods/*/; do mods="$mods $(basename "$dir")"; done
 else
-  for dir in "$home_dir"/mods/*/; do
-    [ -d "$dir" ] || continue
-    name=$(basename "$dir")
-    [ -f "$repo_dir/mods/$name/main.js" ] || continue
-    mods="$mods $name"
-  done
-fi
-if [ -z "$mods" ]; then
-  warn "nothing installed yet: name a mod, or pass --all"
-  exit 0
+  if [ "$install_all" = no ]; then
+    for dir in "$home_dir"/mods/*/; do
+      [ -d "$dir" ] || continue
+      name=$(basename "$dir")
+      [ -f "$repo_dir/mods/$name/main.js" ] || continue
+      mods="$mods $name"
+    done
+  fi
+  if [ "$install_all" = yes ] || [ -z "$mods" ]; then
+    mods=''
+    for dir in "$repo_dir"/mods/*/; do mods="$mods $(basename "$dir")"; done
+  fi
 fi
 printf '\n  %sherdr-mods%s %s·%s%s\n\n' "$bold" "$off" "$dim" "$off" "$mods"
 mkdir -p "$home_dir/mods"
