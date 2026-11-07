@@ -51,6 +51,7 @@ export default class AgentUi extends View {
     this.asking = null;
     this.askPicks = {};
     this.askTyping = -1;
+    this.askCursor = 0;
     this.answer = TextareaState.new({ value: "", rows: 2, placeholder: "Type your answer…" });
     this.answer.on("change", (_event, cx) => cx.notify());
     // null until the check runs: "unknown" is not "not installed".
@@ -839,49 +840,53 @@ export default class AgentUi extends View {
     const asked = this.asking.questions ?? [];
     const picks = (index) => this.askPicks[index] ?? [];
     const rows = [];
+    let flat = 0;
     for (const [index, question] of asked.entries()) {
-      if (asked.length > 1)
-        rows.push(h_flex().id(`agent-ui-ask-head-${index}`).gap(8).items_center()
-          .pt(index ? 10 : 0)
-          .child(div().flex_none().text_size(10).text_color(t.dim)
-            .child(`${index + 1}/${asked.length}`))
-          .child(div().flex_1().min_w(0).text_size(12).text_color(t.foreground)
-            .child(question.question)));
-      else
-        rows.push(h_flex().id("agent-ui-ask-head-0").gap(8).items_center()
-          .child(div().flex_none().text_size(11).text_color(t.blocked).child("?"))
-          .child(div().flex_1().min_w(0).text_size(12.5).text_color(t.foreground)
-            .child(question.question)));
+      const numbered = asked.length > 1;
+      rows.push(h_flex().id(`agent-ui-ask-head-${index}`).h(18).gap(6).items_center()
+        .pt(index ? 5 : 0)
+        .child(div().flex_none().text_size(11.5)
+          .text_color(numbered ? t.dim : t.blocked)
+          .child(numbered ? `${index + 1}/${asked.length}` : "?"))
+        .child(div().flex_1().min_w(0).text_size(11.5).text_color(t.foreground)
+          .child(question.question)));
       if (question.context)
-        rows.push(div().id(`agent-ui-ask-context-${index}`).text_size(10.5)
+        rows.push(div().id(`agent-ui-ask-context-${index}`).pl(16).text_size(10.5)
           .text_color(t.dim).child(question.context));
       for (const [slot, option] of (question.options ?? []).entries()) {
         const on = picks(index).includes(option.title);
-        rows.push(h_flex().id(`agent-ui-ask-${index}-${slot}`).h(27).px(8).gap(9)
-          .items_center().rounded(6).cursor_pointer()
-          .when(on, (el) => el.bg(t.raised))
+        const cursor = flat++;
+        const focus = this.askCursor === cursor;
+        const style = focus || on ? t.accent : t.foreground;
+        rows.push(h_flex().id(`agent-ui-ask-${index}-${slot}`).h(17).pl(1).gap(6)
+          .items_center().cursor_pointer()
+          .when(focus, (el) => el.bg(t.raised))
           .on_click((_event, context) => this.pickAnswer(index, option.title, context))
-          .child(div().w(12).flex_none().text_size(10.5)
-            .text_color(on ? t.accent : t.dim).child(String(slot + 1)))
-          .child(div().flex_none().text_size(12)
-            .text_color(on ? t.accent : t.foreground).child(option.title))
-          .when(Boolean(option.description), (el) => el.child(div().flex_1().min_w(0)
-            .truncate().text_size(10.5).text_color(t.dim).child(option.description))));
+          .child(div().w(9).flex_none().text_size(11)
+            .text_color(t.accent).child(focus ? "▸" : ""))
+          .child(div().w(17).flex_none().text_size(11).text_color(t.dim)
+            .child(question.allowMultiple ? (on ? "[x]" : "[ ]") : `${slot + 1}.`))
+          .child(div().flex_none().text_size(11.5).text_color(style).child(option.title)));
+        if (option.description)
+          rows.push(div().id(`agent-ui-ask-desc-${index}-${slot}`).pl(33)
+            .text_size(10.5).text_color(t.dim).child(option.description));
       }
-      if (question.allowFreeform)
-        rows.push(this.askTyping === index
-          ? Textarea.new(this.answer).id(`agent-ui-ask-input-${index}`).w_full()
-            .h(compact ? 46 : 52).p(8).rounded(6).border_1().border_color(t.input)
-            .bg(t.background).text_color(t.foreground).text_size(12)
-          : h_flex().id(`agent-ui-ask-free-${index}`).h(27).px(8).gap(9).items_center()
-            .rounded(6).cursor_pointer()
-            .on_click((_event, context) => {
-              this.askTyping = index;
-              context.notify();
-            })
-            .child(div().w(12).flex_none().text_size(10.5).text_color(t.dim).child("✎"))
-            .child(div().flex_none().text_size(12).text_color(t.dim)
-              .child("Type your own answer")));
+      if (!question.allowFreeform) continue;
+      const typing = this.askTyping === index;
+      const onFree = this.askCursor === flat;
+      rows.push(typing
+        ? Textarea.new(this.answer).id(`agent-ui-ask-input-${index}`).w_full()
+          .h(compact ? 44 : 50).p(7).bg(t.background)
+          .text_color(t.foreground).text_size(11.5)
+        : h_flex().id(`agent-ui-ask-free-${index}`).h(17).pl(1).gap(6).items_center()
+          .cursor_pointer()
+          .when(onFree, (el) => el.bg(t.raised))
+          .on_click((_event, context) => this.typeAnswer(index, context))
+          .child(div().w(9).flex_none().text_size(11).text_color(t.accent)
+            .child(onFree ? "▸" : ""))
+          .child(div().w(17).flex_none())
+          .child(div().text_size(11.5).text_color(t.dim).child("type your own answer")));
+      flat += 1;
     }
 
     const one = asked.length === 1 ? asked[0] : null;
@@ -890,19 +895,27 @@ export default class AgentUi extends View {
       picks(index).length > 0 || (this.askTyping === index
         && String(this.answer.value() ?? "").trim() !== ""));
     return v_flex().id("agent-ui-composer").flex_none().px(compact ? 13 : 21)
-      .pt(10).pb(12).gap(8).border_t(1).border_color(t.border).bg(t.chrome)
-      .child(v_flex().id("agent-ui-ask").w_full().gap(2).p(8).rounded(8)
-        .border_1().border_color(t.blocked).bg(t.background)
+      .pt(10).pb(12).gap(7).border_t(1).border_color(t.border).bg(t.chrome)
+      .child(v_flex().id("agent-ui-ask").w_full().gap(1).pl(8)
+        .border_l(2).border_color(t.blocked)
         .children(rows))
-      .child(h_flex().items_center().gap(9)
-        .child(div().flex_1().text_size(10.5).text_color(t.dim)
+      .child(h_flex().items_center().gap(12).pl(10)
+        .child(div().flex_1().text_size(10).text_color(t.dim)
           .child(this.asking.heading && asked.length > 1 ? this.asking.heading
-            : instant ? "Click an option · or type your own"
-            : "Click to pick · 1-9 works too"))
-        .when(!instant, (el) => el.child(control(t, "agent-ui-ask-enter",
-          "Answer in the Terminal", (context) => this.cancelAsk(context), true)))
-        .when(!instant, (el) => el.child(control(t, "agent-ui-ask-send",
-          "Send answer", (context) => this.sendAnswer(context), ready))));
+            : instant ? "1-9 · click · esc declines"
+            : one?.allowMultiple ? "space ticks · ⏎ sends" : "↑↓ · ⏎ · esc"))
+        .when(!instant, (el) => el.child(this.keyCap(t, "agent-ui-ask-send", "[ send ]",
+          (context) => this.sendAnswer(context), ready))));
+  }
+
+  // A key cap, not a button: TUI affordances are text, and a rounded widget in the
+  // middle of a list reads as a web form.
+  keyCap(t, id, label, onClick, enabled) {
+    return h_flex().id(id).h(17).px(4).items_center()
+      .when(enabled, (el) => el.cursor_pointer().bg(t.raised)
+        .on_click((_event, context) => onClick(context)))
+      .child(div().text_size(10.5)
+        .text_color(enabled ? t.accent : t.dim).child(label));
   }
 
   // A click is the answer. For one single-choice question it goes out at once; a
@@ -952,6 +965,7 @@ export default class AgentUi extends View {
     this.asking = null;
     this.askPicks = {};
     this.askTyping = -1;
+    this.askCursor = 0;
     this.answer.set_value("");
     cx.notify();
     if (!dir) return;
@@ -960,15 +974,58 @@ export default class AgentUi extends View {
     });
   }
 
-  // Keys answer the same question the panel shows: 1-9 pick, escape declines.
+  // The rows the cursor can land on, in render order: an option, then the freeform
+  // row, question by question. Keys and clicks both resolve through this, so the
+  // pointer on screen is always the row the keys would act on.
+  askTargets() {
+    const targets = [];
+    for (const [index, question] of (this.asking?.questions ?? []).entries()) {
+      for (const option of question.options ?? []) targets.push({ index, title: option.title });
+      if (question.allowFreeform) targets.push({ index, freeform: true });
+    }
+    return targets;
+  }
+
   askKey(key, cx) {
     if (key === "escape") {
       this.cancelAsk(cx);
       return;
     }
-    const slot = Number.parseInt(key, 10);
-    if (!Number.isInteger(slot) || slot < 1) return;
-    const option = this.asking?.questions?.[0]?.options?.[slot - 1];
-    if (option) this.pickAnswer(0, option.title, cx);
+    const targets = this.askTargets();
+    if (!targets.length) return;
+    const at = Math.min(Math.max(this.askCursor, 0), targets.length - 1);
+    const asked = this.asking?.questions ?? [];
+    const digit = Number.parseInt(key, 10);
+    if (Number.isInteger(digit) && digit >= 1) {
+      if (!targets[digit - 1]) return;
+      this.askCursor = digit - 1;
+      this.choose(targets[digit - 1], cx);
+      return;
+    }
+    if (key === "up" || key === "down") {
+      this.askCursor = (at + (key === "up" ? targets.length - 1 : 1)) % targets.length;
+      cx.notify();
+      return;
+    }
+    if (key === " " || key === "space") {
+      this.choose(targets[at], cx);
+      return;
+    }
+    if (key !== "enter" && key !== "return") return;
+    // Enter commits: a tick list needs it because ticking is not answering.
+    if (asked.length > 1 || asked.some((question) => question.allowMultiple))
+      this.sendAnswer(cx);
+    else this.choose(targets[at], cx);
+  }
+
+  choose(target, cx) {
+    if (target.freeform) this.typeAnswer(target.index, cx);
+    else this.pickAnswer(target.index, target.title, cx);
+  }
+
+  typeAnswer(index, cx) {
+    this.askTyping = index;
+    this.askCursor = this.askTargets().findIndex((target) => target.freeform && target.index === index);
+    cx.notify();
   }
 }

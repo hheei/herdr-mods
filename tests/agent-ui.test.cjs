@@ -778,6 +778,18 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
   assert.deepEqual(JSON.parse(box.written.at(-1)[1]),
     { response: { kind: "selection", selections: ["sqlite"] } }, "1-9 picks the n-th option");
 
+  bridged.apply({ type: "asking", asking: multiAsk });
+  bridged.askKey("space", context);
+  bridged.askKey("space", context);
+  assert.equal((bridged.askPicks[0] ?? []).length, 0, "space ticks and unticks");
+  bridged.askKey("down", context);
+  assert.equal(bridged.askCursor, 1, "the pointer follows the arrow keys");
+  bridged.askKey("space", context);
+  bridged.askKey("enter", context);
+  await context.task();
+  assert.deepEqual(JSON.parse(box.written.at(-1)[1]),
+    { response: { kind: "selection", selections: ["b"] } }, "enter sends what is ticked");
+
   bridged.apply({ type: "asking", asking: openAsk });
   bridged.askKey("escape", context);
   await context.task();
