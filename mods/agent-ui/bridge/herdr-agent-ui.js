@@ -8,8 +8,8 @@
 //   done.json   {version, epoch, revision, turns}   settled turns, capped like the view
 //   live.json   {version, epoch, revision, turn, asking}  the turn in flight, or null
 //
-// `asking` is the question @hheei/pi-ask-user is waiting on: its id, heading, and
-// the questions with their options, taken from the `pi-ask-user:question` event it
+// `asking` is the question @hheei/pi-ask-user is waiting on: its heading and the
+// questions with their options, taken from the `pi-ask-user:question` event it
 // emits. Pi has no "the agent is waiting for you" event of its own, so we adapt to
 // the plugin that does rather than guessing from punctuation. An answer comes back
 // as answer.json in this same directory and is handed to the plugin's
@@ -68,14 +68,7 @@ export function usageOf(message) {
 export function askState(current, channel, data) {
   if (channel !== "pi-ask-user:question") return current;
   if (!data?.questions) return null;
-  return { id: data.id, heading: data.heading ?? null, questions: data.questions };
-}
-
-// Only an answer to the question actually on screen counts; anything else is a
-// stale file from a prompt that has already closed.
-export function answerFor(asking, data) {
-  if (!asking || !data || data.id !== asking.id) return null;
-  return data.response === undefined ? null : { id: data.id, response: data.response };
+  return { heading: data.heading ?? null, questions: data.questions };
 }
 
 export function clip(value, max) {
@@ -306,27 +299,24 @@ export default function (pi) {
     if (ticker) clearInterval(ticker);
     ticker = null;
   };
+  const answerFile = () => (box ? path.join(box.dir, "answer.json") : null);
   const pollAnswer = () => {
-    if (!box) return;
-    const file = path.join(box.dir, "answer.json");
-    let text;
-    try {
-      text = fs.readFileSync(file, "utf8");
-    } catch {
-      return;
-    }
+    const file = answerFile();
+    if (!file) return;
     let data;
     try {
-      data = JSON.parse(text);
+      data = JSON.parse(fs.readFileSync(file, "utf8"));
     } catch {
       return;
     }
     guard(() => fs.rmSync(file, { force: true })); // one answer, one use
-    const answer = answerFor(asking, data);
-    if (answer) guard(() => pi.events.emit("pi-ask-user:answer", answer));
+    if (data?.response !== undefined) guard(() => pi.events.emit("pi-ask-user:answer", data));
   };
   const startTicker = () => {
     if (ticker || !box) return;
+    // A click that lost the race to the terminal would otherwise answer the next
+    // prompt instead of this one: the file is state, and stale state is dropped.
+    guard(() => fs.rmSync(answerFile(), { force: true }));
     ticker = setInterval(pollAnswer, 250);
   };
 

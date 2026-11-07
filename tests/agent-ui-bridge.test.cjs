@@ -77,25 +77,16 @@ function messageEntry(id, message) {
     cost: { input: 0.001, output: 0.002, cacheRead: 0, cacheWrite: 0, total: 0.003 } } });
   assert.deepEqual({ ...usage }, { input: 10, output: 5, cacheRead: 100, total: 115, cost: 0.003 });
   assert.equal(project.usageOf({ role: "assistant" }), null, "no usage is null, not zeroes");
-  const openQuestion = { id: "q-1", heading: "Pick one",
+  const openQuestion = { heading: "Pick one",
     questions: [{ index: 0, total: 1, question: "which db?", options: [{ title: "postgres" }],
       allowMultiple: false, allowFreeform: true }] };
   assert.deepEqual(project.askState(null, "pi-ask-user:question", openQuestion), {
-    id: "q-1", heading: "Pick one", questions: openQuestion.questions },
-    "the plugin announces the question, its options and an id");
-  assert.equal(project.askState({ id: "q-1" }, "pi-ask-user:question", { id: "q-1", questions: null }),
+    heading: "Pick one", questions: openQuestion.questions },
+    "the plugin announces the question and its options");
+  assert.equal(project.askState({ heading: "Pick one" }, "pi-ask-user:question", { questions: null }),
     null, "and closes it with null questions");
-  assert.deepEqual(project.askState({ id: "q-1" }, "pi-ask-user:blocked", { active: true }),
-    { id: "q-1" }, "an unrelated channel cannot clear a question");
-
-  assert.deepEqual(project.answerFor({ id: "q-1" },
-    { id: "q-1", response: { kind: "selection", selections: ["postgres"] } }),
-    { id: "q-1", response: { kind: "selection", selections: ["postgres"] } },
-    "an answer for the open prompt is passed through");
-  assert.equal(project.answerFor({ id: "q-1" }, { id: "q-0", response: { kind: "freeform", text: "x" } }),
-    null, "a stale answer for a closed prompt is dropped");
-  assert.equal(project.answerFor(null, { id: "q-1", response: {} }), null,
-    "and nothing is answered when no prompt is open");
+  assert.deepEqual(project.askState({ heading: "Pick one" }, "pi-ask-user:blocked", { active: true }),
+    { heading: "Pick one" }, "an unrelated channel cannot clear a question");
 
   const long = project.entriesToTurns([
     messageEntry("u9", { role: "user", content: "big", timestamp: 0 }),

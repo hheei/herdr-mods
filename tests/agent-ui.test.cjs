@@ -729,7 +729,7 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
 
   box.notes.length = 0;
   bridged.turns = [];
-  const openAsk = { id: "q-1", heading: null, questions: [{ index: 0, total: 1,
+  const openAsk = { heading: null, questions: [{ index: 0, total: 1,
     question: "which db?", allowMultiple: false, allowFreeform: true,
     options: [{ title: "postgres" }, { title: "sqlite" }] }] };
   bridged.apply({ type: "asking", asking: openAsk });
@@ -745,11 +745,11 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
   await context.task();
   assert.equal(bridged.asking, null, "answering closes the banner at once");
   assert.deepEqual(box.written.at(-1), ["/bridge/9/answer.json",
-    JSON.stringify({ id: "q-1", response: { kind: "selection", selections: ["sqlite"] } })],
+    JSON.stringify({ response: { kind: "selection", selections: ["sqlite"] } })],
     "the click becomes the one file the bridge hands back to the plugin");
   assert.equal(find(bridged.render(context), "agent-ui-asking"), null, "and it goes away");
 
-  bridged.apply({ type: "asking", asking: { id: "q-2", heading: null,
+  bridged.apply({ type: "asking", asking: { heading: null,
     questions: [{ index: 0, total: 1, question: "type a name", allowMultiple: false,
       allowFreeform: true, options: [] }] } });
   const freeform = bridged.render(context);

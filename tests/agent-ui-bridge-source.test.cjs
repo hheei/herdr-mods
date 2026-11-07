@@ -66,10 +66,10 @@ const meta = (extra = {}) => ({ version: 2, epoch: "e1", revision: 1,
   result = source.readBridge(askState, {
     meta: meta(), done: { version: 2, epoch: "e1", revision: 6,
       turns: [turn("t-1", "done", { status: "done" }), turn("t-2", "half a sentence more", { status: "done" })] },
-    live: { version: 2, epoch: "e1", revision: 8, turn: turn("t-2", "half a sentence more", { status: "done" }), asking: { id: "q-1", questions: [{ question: "which database?" }] } },
+    live: { version: 2, epoch: "e1", revision: 8, turn: turn("t-2", "half a sentence more", { status: "done" }), asking: { heading: null, questions: [{ question: "which database?" }] } },
   });
   assert.deepEqual(result.events.filter((event) => event.type === "asking"),
-    [{ type: "asking", asking: { id: "q-1", questions: [{ question: "which database?" }] } }],
+    [{ type: "asking", asking: { heading: null, questions: [{ question: "which database?" }] } }],
     "a question arrives even when no turn changed shape");
   assert.equal(result.events.some((event) => event.type === "snapshot"), false,
     "asking does not reshuffle the transcript");
@@ -78,10 +78,11 @@ const meta = (extra = {}) => ({ version: 2, epoch: "e1", revision: 1,
   result = source.readBridge(askState, {
     meta: meta(), done: { version: 2, epoch: "e1", revision: 6,
       turns: [turn("t-1", "done", { status: "done" }), turn("t-2", "half a sentence more", { status: "done" })] },
-    live: { version: 2, epoch: "e1", revision: 8, turn: turn("t-2", "half a sentence more", { status: "done" }), asking: { id: "q-1", questions: [{ question: "which database?" }] } },
+    live: { version: 2, epoch: "e1", revision: 8, turn: turn("t-2", "half a sentence more", { status: "done" }), asking: { heading: null, questions: [{ question: "which database?" }] } },
   });
   assert.deepEqual(result.events, [], "the same question is not re-announced");
-  assert.equal(askState.asking.id, "q-1", "the reader remembers what it reported");
+  assert.equal(askState.asking.questions[0].question, "which database?",
+    "the reader remembers what it reported");
 
   result = source.readBridge(askState, {
     meta: meta(), done: { version: 2, epoch: "e1", revision: 6,

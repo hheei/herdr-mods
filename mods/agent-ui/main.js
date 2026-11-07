@@ -200,8 +200,7 @@ export default class AgentUi extends View {
   answerOption(option, cx) {
     const dir = this.bridge?.dir;
     if (!dir || !this.asking) return;
-    const text = JSON.stringify({ id: this.asking.id,
-      response: { kind: "selection", selections: [option.title] } });
+    const text = JSON.stringify({ response: { kind: "selection", selections: [option.title] } });
     this.asking = null;
     cx.spawn(async () => {
       await writeTextFile(`${dir}/answer.json`, text, null);
