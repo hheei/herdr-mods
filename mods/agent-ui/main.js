@@ -1,5 +1,5 @@
 // Agent UI · standalone synthetic GPUI demo. NEVER starts or controls Pi.
-import { View, div } from "gpui-kit";
+import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex, TextView, TextareaState, Textarea } from "gpui-base";
 import { theme, appHome, exec, home, notify, readTextFile, shared, watchFolder, writeTextFile } from "herdr";
 import { DEMO_TURNS, fixtureSource } from "./fixtures.js";
@@ -16,6 +16,12 @@ const STATUSES = {
   done: ["Completed", "muted"],
   "needs-input": ["Needs attention", "blocked"],
 };
+
+// Herdr's own mods ship Lucide outline icons and tint them with text_color; a
+// glyph from a Nerd Font instead depends on the reader having that font.
+function icon(name, size) {
+  return svg(`mods/agent-ui/icons/${name}.svg`).size(size).flex_none();
+}
 
 function control(t, id, title, onClick, enabled = true) {
   return h_flex().id(id).h(29).px(11).flex_none().items_center()
@@ -591,13 +597,15 @@ export default class AgentUi extends View {
       .child(h_flex().id(`agent-ui-tool-trigger-${tool.id}`).h(29).w_full().gap(9)
         .items_center().cursor_pointer()
         .on_click((_event, cx) => this.toggleTool(tool.id, cx))
-        .child(div().w(10).text_color(color).text_size(11)
-          .child(tool.status === "failed" ? "!" : tool.status === "done" ? "✓" : "·"))
+        .child(h_flex().w(10).flex_none().items_center().text_color(color)
+          .child(tool.status === "done" ? icon("check", 11)
+            : div().text_size(11).child(tool.status === "failed" ? "!" : "·")))
         .child(div().w(41).flex_none().text_size(11).text_color(t.dim).child(toolLabel(tool)))
         .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.foreground)
           .child(tool.target || tool.title))
         .child(div().text_size(10.5).text_color(color).child(status))
-        .child(div().w(10).text_color(t.dim).child(expanded ? "⌄" : "›")))
+        .child(h_flex().w(10).flex_none().items_center().text_color(t.dim)
+          .child(icon(expanded ? "chevron-down" : "chevron-right", 11))))
       .when(expanded, (el) => el.child(this.toolDetail(t, tool)));
   }
 
@@ -611,7 +619,8 @@ export default class AgentUi extends View {
       .child(h_flex().id(`agent-ui-group-trigger-${turn.id}`).h(29)
         .w_full().gap(9).items_center().cursor_pointer()
         .on_click((_event, cx) => this.toggleGroup(turn.id, cx))
-        .child(div().w(12).text_color(t.dim).child(open ? "⌄" : "›"))
+        .child(h_flex().w(12).flex_none().items_center().text_color(t.dim)
+          .child(icon(open ? "chevron-down" : "chevron-right", 11)))
         .child(div().flex_1().min_w(0).truncate().text_size(11.5)
           .text_color(t.muted).child(summary)))
       .when(open, (el) => el.child(v_flex().id(`agent-ui-group-list-${turn.id}`)
@@ -702,7 +711,7 @@ export default class AgentUi extends View {
       .child(div().text_size(11.5).text_color(t.foreground)
         .truncate().child(shortPrompt(node.preview, 39) + grouped))
       .when(node.actionable, (el) => el.child(
-        div().text_size(10.5).text_color(t.blocked).child("! 需要處理")));
+        div().text_size(10.5).text_color(t.blocked).child("! Needs you")));
   }
 
   // No turns is a real state, not a spinner forever; say what is missing.
@@ -801,8 +810,9 @@ export default class AgentUi extends View {
           .child(h_flex().id("agent-ui-new-turns-pill").h(24).px(10).gap(6)
             .items_center().rounded(12).bg(t.accent).cursor_pointer()
             .on_click((_event, context) => this.jumpToBottom(context))
+            .child(icon("arrow-down", 10).text_color(t.background))
             .child(div().text_size(10.5).text_color(t.background)
-              .child(this.live > 0 ? "↓ live" : `↓ ${this.newTurns} new`))))))
+              .child(this.live > 0 ? "live" : `${this.newTurns} new`))))))
       .child(this.asking !== null
         ? this.askPanel(t, compact)
         : this.composerArea(t, compact));
@@ -822,7 +832,9 @@ export default class AgentUi extends View {
             ? "Synthetic data · no live Pi connection"
             : "Read-only in this state · the draft is kept")))
         .when(this.width >= 520 && this.demo === "demo", (el) => el.child(control(t,
-          "agent-ui-stream", this.source.streaming() ? "⏭ finish" : "▶ stream",
+          "agent-ui-stream", h_flex().gap(5).items_center()
+            .child(icon(this.source.streaming() ? "square" : "play", 11))
+            .child(div().child(this.source.streaming() ? "finish" : "stream")),
           (context) => {
             if (this.source.streaming()) this.source.finish();
             else this.source.replay();
@@ -873,8 +885,8 @@ export default class AgentUi extends View {
             .text_color(on ? t.accent : t.foreground).child(option.title))
           .when(Boolean(option.description), (el) => el.child(div().flex_1().min_w(0)
             .truncate().text_size(11).text_color(t.dim).child(option.description)))
-          .when(on && !question.allowMultiple, (el) => el.child(div().flex_none()
-            .text_size(12).text_color(t.accent).child("✓"))));
+          .when(on && !question.allowMultiple, (el) =>
+            el.child(icon("check", 12).text_color(t.accent))));
       }
       if (question.allowFreeform) {
         const focus = this.askCursor === flat++;
@@ -887,7 +899,7 @@ export default class AgentUi extends View {
             .bg(focus ? t.popover : t.background)
             .border_1().border_color(focus ? t.accent : t.border)
             .on_click((_event, context) => this.typeAnswer(index, context))
-            .child(div().flex_none().text_size(11).text_color(t.dim).child("✎"))
+            .child(icon("pencil", 11).text_color(t.dim))
             .child(div().text_size(12.5).text_color(t.dim)
               .child("Type your own answer")));
       }

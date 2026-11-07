@@ -185,6 +185,10 @@ Pi 套件：`@earendil-works/pi-coding-agent` **1.5.0**。官方 tag `v1.5.0` �
 
 ### P5
 
+### P6
+
+Herdr 自帶 mods（`agents`、`menu`、`machine-add`、`files`）全部 `import { svg } from "gpui-kit"`，以 `svg("mods/<mod>/icons/x.svg").size(14).text_color(t.muted)` 描邊上色，資源路徑相對 `~/.config/herdr-app`；`defaults/AGENTS.md` 也寫明 `svg(path)` 上色、`image(path)` 保留原色。沒有任何自帶 mod 依賴 Nerd Font／私有區字元畫圖示，因此本專案的圖示一律走 `icons/*.svg`，並在測試裡禁止 `main.js` 出現圖形字元。
+
 [RPC mode](https://github.com/earendil-works/pi/blob/f9a26365568127461c47a07a37dcb42c140a3ac5/packages/coding-agent/docs/rpc.md)：另啟 subprocess；stdout 必須持續讀取；accepted 不等於工作完成；`agent_settled` 與 `agent_end` 不同。完整讀取。
 
 ## 7. 可重現性與保密

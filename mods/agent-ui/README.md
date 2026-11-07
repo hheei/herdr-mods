@@ -49,6 +49,14 @@ The installer derives `agent-ui-demo.json` from your own `herdr-mods.json` if av
 
 ### Scope limits
 
+**Icons are SVG, not glyphs.** Every icon in this view (`check`, the tool chevrons,
+`arrow-down` on the new-turns pill, `play` / `square` on the stream control, the
+`pencil` on the freeform row) is a Lucide outline under `icons/`, drawn with
+`svg("mods/agent-ui/icons/<name>.svg").size(n).text_color(...)` — the same call
+Herdr's own mods use. A font glyph would make the view depend on the reader having
+that font installed; `tests/agent-ui.test.cjs` fails the build if any picture
+character appears in `main.js`.
+
 - **Layout Stack, not an independent Pane:** The optional layout wraps the active Tab block in a **chrome Layout Stack**. Agent UI is a Stack child, not a newly created model Pane. Existing PTYs/agents keep running; sibling split Panes are hidden together while the demo is shown. This does not yet provide independent per-split presentation.
 - **Dots-only scrolling:** The rail dots themselves indicate the reading position, so there is **no separately rendered scrollbar track, thumb, or highlight window**. Wheel, dot jump, drag-to-scrub, viewport resize and tool expansion share the same measured transcript `scrollY`. A short press on a dot jumps on release; moving 5px or more converts that gesture to scrubbing. Space above and below the column can also be clicked or dragged to scroll. In an extremely short viewport the entire rail hides instead of overflowing. **Dense histories merge turns into buckets** (`perDot = ceil(turns / maxDots)`, where `maxDots` is what the 40% column holds) rather than sampling turns away: every turn stays reachable, a dot jumps to its bucket's first turn and its hover appends `+N`. This follows the usual editor-scrollbar answer to saturated markers (proportional position plus merging), not the minimap answer of shrinking every marker. True out-of-view pointer capture, keyboard and screen-reader support still need target-App validation.
 - **Markdown:** The tests verify that the original Markdown text is passed to `TextView.markdown`. Rendering fidelity, code blocks, links, selection, mathematics and import/export availability must be verified using your **actual Herdr App version**.

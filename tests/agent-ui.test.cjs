@@ -32,6 +32,15 @@ function find(root, id) {
   }
   return null;
 }
+function svgOf(n) {
+  if (!n || typeof n !== "object") return null;
+  if (typeof n.svg === "string") return n.svg;
+  for (const child of n.kids || []) {
+    const found = svgOf(child);
+    if (found) return found;
+  }
+  return null;
+}
 function textOf(n) {
   if (typeof n === "string") return n;
   if (!n || typeof n !== "object") return "";
@@ -77,6 +86,7 @@ const box = {
   notify: (note) => { box.notes.push(note); },
   notes: [],
   Textarea: { new: () => node() },
+  svg: (file) => { const n = node(); n.svg = file; return n; },
 };
 const modelSrc = fs.readFileSync(path.join(root, "mods/agent-ui/model.js"), "utf8").replace(/^export /gm, "");
 const stateSrc = fs.readFileSync(path.join(root, "mods/agent-ui/state.js"), "utf8")
@@ -365,12 +375,12 @@ find(tree, "agent-ui-rail").handlers.on_hover(false, context);
 assert.equal(find(ui.render(context), "agent-ui-rail-preview"), null, "hover exit removes preview");
 moveToPin("t-failure");
 const failurePreview = find(ui.render(context), "agent-ui-rail-preview");
-assert.doesNotMatch(textOf(failurePreview), /需要處理/,
+assert.doesNotMatch(textOf(failurePreview), /Needs you/,
   "a failed tool is NOT an actionable approval request");
 const originalPinColor = find(ui.render(context), "agent-ui-rail-marker-t-failure").kids[0].style.bg[0];
 ui.turns[5].requiresUserAction = true;
 let actionPreview = find(ui.render(context), "agent-ui-rail-preview");
-assert.match(textOf(actionPreview), /需要處理/,
+assert.match(textOf(actionPreview), /Needs you/,
   "explicit user action can create a second hover line");
 assert.ok(actionPreview.style.top[0] >= 4 &&
   actionPreview.style.top[0] + 52 <= ui.viewportHeight - 4,
@@ -604,7 +614,9 @@ assert.equal(ui.source.streaming(), true, "the source reports a live stream");
 const streamId = ui.turns.at(-1).id;
 const streamed = () => ui.turns.find((turn) => turn.id === streamId);
 assert.equal(streamed().status, "working");
-assert.equal(textOf(find(ui.render(context), "agent-ui-stream")), "⏭ finish");
+assert.equal(textOf(find(ui.render(context), "agent-ui-stream")).trim(), "finish");
+assert.equal(svgOf(find(ui.render(context), "agent-ui-stream")),
+  "mods/agent-ui/icons/square.svg", "a running stream offers stop, drawn as an icon");
 for (let i = 0; i < 4; i += 1) context.tick(context);
 assert.ok(streamed().messages[0].text.length > 0, "chunks land in the message");
 assert.equal(ui.scrollY, 0, "a stream never yanks a reader who is above");
@@ -756,6 +768,8 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
   const freeform = bridged.render(context);
   assert.ok(find(freeform, "agent-ui-ask"), "a question without options still shows");
   assert.ok(find(freeform, "agent-ui-ask-free-0"), "and offers the freeform row");
+  assert.equal(svgOf(find(freeform, "agent-ui-ask-free-0")),
+    "mods/agent-ui/icons/pencil.svg", "freeform is an icon, not a glyph");
   bridged.apply({ type: "asking", asking: null });
   assert.equal(bridged.asking, null);
 
@@ -821,7 +835,19 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
   demoOnly.init({}, context);
   assert.equal(demoOnly.bridge, null, "without the shared flag the demo source stays");
 
-  console.log("PASS: dots-only scroll rail, scrubbing, dot jump, keyboard focus, narrow turn list, empty and offline states, sticky bottom, streaming replay, bounded hover, tool detail edges, Markdown and Stack view, bounded history, bridge reader.");
+  // Herdr's bundled mods draw Lucide SVGs and tint them with text_color. A font
+// glyph would depend on the reader having that font, so nothing in this view may
+// be a picture character.
+const glyphs = [...fs.readFileSync(path.join(root, "mods/agent-ui/main.js"), "utf8")]
+  .filter((ch) => ch.codePointAt(0) > 0x7e && !"·…—".includes(ch)
+    && !/[\u4e00-\u9fff]/.test(ch));
+assert.deepEqual(glyphs, [], "icons are svg files, never glyph characters");
+for (const name of ["check", "chevron-down", "chevron-right", "arrow-down", "play",
+  "square", "pencil"])
+  assert.ok(fs.existsSync(path.join(root, "mods/agent-ui/icons", `${name}.svg`)),
+    `icons/${name}.svg ships with the mod`);
+
+console.log("PASS: dots-only scroll rail, scrubbing, dot jump, keyboard focus, narrow turn list, empty and offline states, sticky bottom, streaming replay, bounded hover, tool detail edges, Markdown and Stack view, bounded history, bridge reader.");
 })().catch((error) => {
   console.error(error);
   process.exit(1);
