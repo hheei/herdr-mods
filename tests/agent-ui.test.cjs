@@ -750,6 +750,10 @@ assert.equal(typeof bridgeContext.task, "function", "the bridge runs on cx.spawn
   const panel = bridged.render(context);
   assert.ok(find(panel, "agent-ui-ask"), "the question takes the composer's slot");
   assert.ok(find(panel, "agent-ui-ask-0-1"), "each option is its own row");
+  const shell = find(bridged.render(context), "agent-ui-composer");
+  assert.equal(shell.kids.length, 2, "the composer holds its input area and one footer");
+  assert.equal(shell.kids[0].nodeId, "agent-ui-ask",
+    "the question occupies the slot the textarea occupies, with no card around it");
   bridged.apply({ type: "asking", asking: openAsk });
   assert.equal(box.notes.length, 1, "the same question is not announced twice");
 

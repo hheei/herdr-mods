@@ -856,9 +856,9 @@ export default class AgentUi extends View {
     for (const [index, question] of asked.entries()) {
       const multi = asked.length > 1;
       rows.push(h_flex().id(`agent-ui-ask-head-${index}`).gap(8).items_center()
-        .pt(index ? 6 : 0)
+        .pt(index ? 7 : 0)
         .child(h_flex().flex_none().h(19).min_w(19).px(6).rounded(5)
-          .items_center().bg(t.background)
+          .items_center().bg(t.raised)
           .child(div().text_size(10.5).text_color(t.blocked)
             .child(multi ? `${index + 1}/${asked.length}` : "?")))
         .child(div().flex_1().min_w(0).text_size(13).font_semibold()
@@ -870,16 +870,15 @@ export default class AgentUi extends View {
       for (const [slot, option] of (question.options ?? []).entries()) {
         const on = picks(index).includes(option.title);
         const focus = this.askCursor === flat++;
-        list.push(h_flex().id(`agent-ui-ask-${index}-${slot}`).h(34).px(10).gap(10)
-          .items_center().rounded(8).cursor_pointer()
-          .bg(focus || on ? t.popover : t.background)
-          .border_1().border_color(focus ? t.accent : t.border)
+        list.push(h_flex().id(`agent-ui-ask-${index}-${slot}`).h(32).px(9).gap(9)
+          .items_center().rounded(6).cursor_pointer()
+          .when(focus || on, (el) => el.bg(t.raised))
           .on_click((_event, context) => this.pickAnswer(index, option.title, context))
           .child(question.allowMultiple
             ? h_flex().flex_none().h(15).w(15).rounded(4).items_center()
               .border_1().border_color(on ? t.accent : t.border)
               .when(on, (el) => el.bg(t.accent))
-            : div().flex_none().text_size(11).text_color(focus ? t.accent : t.dim)
+            : div().flex_none().w(12).text_size(11).text_color(focus ? t.accent : t.dim)
               .child(`${slot + 1}`))
           .child(div().flex_none().text_size(12.5)
             .text_color(on ? t.accent : t.foreground).child(option.title))
@@ -892,20 +891,17 @@ export default class AgentUi extends View {
         const focus = this.askCursor === flat++;
         list.push(this.askTyping === index
           ? Textarea.new(this.answer).id(`agent-ui-ask-input-${index}`).w_full()
-            .h(compact ? 48 : 54).p(9).rounded(8).border_1().border_color(t.input)
-            .bg(t.background).text_color(t.foreground).text_size(12)
-          : h_flex().id(`agent-ui-ask-free-${index}`).h(34).px(10).gap(10).items_center()
-            .rounded(8).cursor_pointer()
-            .bg(focus ? t.popover : t.background)
-            .border_1().border_color(focus ? t.accent : t.border)
+            .h(compact ? 46 : 52).p(8).rounded(6).border_1().border_color(t.input)
+            .bg(t.chrome).text_color(t.foreground).text_size(12)
+          : h_flex().id(`agent-ui-ask-free-${index}`).h(32).px(9).gap(9).items_center()
+            .rounded(6).cursor_pointer()
+            .when(focus, (el) => el.bg(t.raised))
             .on_click((_event, context) => this.typeAnswer(index, context))
             .child(icon("pencil", 11).text_color(t.dim))
             .child(div().text_size(12.5).text_color(t.dim)
               .child("Type your own answer")));
       }
-      if (list.length)
-        rows.push(v_flex().id(`agent-ui-ask-list-${index}`).w_full().gap(3).pt(2)
-          .children(list));
+      if (list.length) rows.push(...list);
     }
 
     const one = asked.length === 1 ? asked[0] : null;
@@ -915,8 +911,8 @@ export default class AgentUi extends View {
         && String(this.answer.value() ?? "").trim() !== ""));
     return v_flex().id("agent-ui-composer").flex_none().px(compact ? 13 : 21)
       .pt(10).pb(12).gap(8).border_t(1).border_color(t.border).bg(t.chrome)
-      .child(v_flex().id("agent-ui-ask").w_full().gap(3).p(11).rounded(10)
-        .border_1().border_color(t.blocked).bg(t.raised)
+      .child(v_flex().id("agent-ui-ask").w_full().flex_none().gap(1).p(10)
+        .rounded(8).border_1().border_color(t.input).bg(t.background)
         .children(rows))
       .child(h_flex().items_center().gap(9)
         .child(div().flex_1().text_size(10.5).text_color(t.dim)
